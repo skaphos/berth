@@ -1,0 +1,5 @@
+replicaCount: 1
+image:
+  repository: berth-apiserver
+  tag: latest
+  pullPolicy: IfNotPresent

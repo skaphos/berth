@@ -1,0 +1,9 @@
+version = 1
+SPDX-PackageName = "berth"
+SPDX-PackageDownloadLocation = "https://github.com/skaphos/berth"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Skaphos"
+SPDX-License-Identifier = "MIT"
