@@ -1,6 +1,3 @@
-// Package v1alpha1 contains API schema definitions for the Berth v1alpha1 API.
-// +kubebuilder:object:generate=true
-// +groupName=berth.skaphos.io
 package v1alpha1
 
 import (

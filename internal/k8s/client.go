@@ -6,6 +6,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// NewClientset builds a Kubernetes clientset. When kubeconfig is empty, it
+// uses in-cluster configuration; otherwise it reads the specified kubeconfig
+// file.
 func NewClientset(kubeconfig string) (*kubernetes.Clientset, error) {
 	var (
 		cfg *rest.Config

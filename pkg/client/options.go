@@ -5,14 +5,18 @@ import (
 	"net/http"
 )
 
+// Option configures a [Client].
 type Option func(*Client)
 
+// WithAPIKey sets the API key used for bearer token authentication.
 func WithAPIKey(key string) Option {
 	return func(c *Client) {
 		c.apiKey = key
 	}
 }
 
+// WithHTTPClient replaces the default HTTP client. If httpClient is nil,
+// the default is retained.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) {
 		if httpClient != nil {
@@ -21,6 +25,8 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	}
 }
 
+// WithTLSConfig sets a custom TLS configuration on the client's HTTP
+// transport. If cfg is nil, this option is a no-op.
 func WithTLSConfig(cfg *tls.Config) Option {
 	return func(c *Client) {
 		if cfg == nil {

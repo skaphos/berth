@@ -4,50 +4,78 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // BerthLeaseSpec declares the desired state for a Berth lease.
 type BerthLeaseSpec struct {
+	// LeaseName is the unique identifier for this lease within its namespace.
 	LeaseName string `json:"leaseName"`
 
+	// HolderIdentity identifies the entity requesting or holding the lease.
 	HolderIdentity string `json:"holderIdentity"`
 
+	// TTLSeconds is the time-to-live for the lease in seconds. The lease
+	// expires if not renewed within this duration.
 	TTLSeconds int32 `json:"ttlSeconds"`
 
+	// HeartbeatIntervalSeconds is the interval at which the holder must
+	// renew the lease to prevent TTL expiration.
 	HeartbeatIntervalSeconds int32 `json:"heartbeatIntervalSeconds"`
 
+	// Semantics controls the lease acquisition mode: "at-most-once"
+	// guarantees exclusive access, "at-least-once" permits concurrent holders.
 	// +kubebuilder:validation:Enum=at-most-once;at-least-once
 	Semantics string `json:"semantics"`
 
+	// Target is an optional reference to a workload the operator manages
+	// in response to lease state transitions.
 	Target *TargetRef `json:"target,omitempty"`
 
+	// AcquireAction defines the action applied to the target workload when
+	// the lease is acquired.
 	AcquireAction *LeaseAction `json:"acquireAction,omitempty"`
 
+	// ReleaseAction defines the action applied to the target workload when
+	// the lease is released or expires.
 	ReleaseAction *LeaseAction `json:"releaseAction,omitempty"`
 }
 
-// TargetRef identifies an optional workload target managed by the operator.
+// TargetRef identifies a workload target managed by the operator in response
+// to lease state transitions. All three fields are required.
 type TargetRef struct {
+	// APIVersion is the API group and version of the target resource (e.g. "apps/v1").
 	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Name       string `json:"name"`
+	// Kind is the resource kind of the target (e.g. "Deployment").
+	Kind string `json:"kind"`
+	// Name is the name of the target resource in the same namespace as the lease.
+	Name string `json:"name"`
 }
 
-// LeaseAction describes an action the operator may take on a target workload.
+// LeaseAction describes an action the operator may take on a target workload
+// when a lease state transition occurs.
 type LeaseAction struct {
+	// Suspend, when non-nil, sets the suspend field on the target workload.
+	// Setting this to true pauses the workload; false resumes it.
 	Suspend *bool `json:"suspend,omitempty"`
 }
 
 // BerthLeaseStatus reports the observed state of a Berth lease.
 type BerthLeaseStatus struct {
+	// LeaseState is the current state of the lease (e.g. "held", "released", "expired").
 	LeaseState string `json:"leaseState,omitempty"`
 
+	// CurrentHolder is the identity of the entity currently holding the lease.
 	CurrentHolder string `json:"currentHolder,omitempty"`
 
+	// Tenant is the resolved tenant identifier for the current holder.
 	Tenant string `json:"tenant,omitempty"`
 
+	// AcquiredAt is the timestamp when the lease was last acquired.
 	AcquiredAt *metav1.Time `json:"acquiredAt,omitempty"`
 
+	// ExpiresAt is the timestamp when the lease will expire if not renewed.
 	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
 
+	// LastHeartbeat is the timestamp of the most recent lease renewal.
 	LastHeartbeat *metav1.Time `json:"lastHeartbeat,omitempty"`
 
+	// Conditions represent the latest observations of the lease's state.
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
