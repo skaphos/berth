@@ -1,0 +1,31 @@
+# Binaries
+/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test output
+coverage.out
+coverage*.out
+*.coverprofile
+*.test
+
+# Build artifacts
+.tmp/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local tooling
+.gocache
+.cache/
+.sisyphus/
