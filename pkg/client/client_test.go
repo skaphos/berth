@@ -18,8 +18,11 @@ func TestNewAppliesOptionsAndTrimsBaseURL(t *testing.T) {
 	if client.baseURL != "https://example.com" {
 		t.Fatalf("baseURL = %q, want %q", client.baseURL, "https://example.com")
 	}
-	if client.apiKey != "token" {
-		t.Fatalf("apiKey = %q, want %q", client.apiKey, "token")
+	if client.apiKeyFunc == nil {
+		t.Fatal("apiKey getter was not configured")
+	}
+	if got := client.apiKeyFunc(); got != "token" {
+		t.Fatalf("apiKey getter returned %q, want %q", got, "token")
 	}
 	if client.httpClient != httpClient {
 		t.Fatal("http client was not preserved")

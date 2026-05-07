@@ -21,6 +21,7 @@ build:
 	$(GO) build -o "$(BIN_DIR)/apiserver" ./cmd/apiserver
 	$(GO) build -o "$(BIN_DIR)/operator" ./cmd/operator
 	$(GO) build -o "$(BIN_DIR)/berth" ./cmd/berth
+	$(GO) build -o "$(BIN_DIR)/berth-oidc-broker" ./cmd/berth-oidc-broker
 
 test:
 	$(GO) test ./...

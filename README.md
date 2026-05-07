@@ -304,8 +304,51 @@ Berth fetches `<issuer>/.well-known/openid-configuration` at startup,
 validates JWT signature against the JWKS, and rejects tokens with the
 wrong `iss`/`aud`/`exp` or missing required claims.
 
-The operator side — sourcing short-lived JWTs from the IdP and presenting
-them on each request — is documented separately under the operator setup.
+The operator side then uses a sidecar token broker. Berth ships a
+reference broker as `berth-oidc-broker`:
+
+```yaml
+# operator pod sketch
+spec:
+  containers:
+    - name: token-broker
+      image: ghcr.io/skaphos/berth-oidc-broker:latest
+      args:
+        - --oidc-issuer-url=https://your-org.okta.com/oauth2/default
+        - --oidc-client-id=$(OIDC_CLIENT_ID)
+        - --oidc-client-secret-file=/etc/berth-oidc/secret
+        - --oidc-audience=berth-api
+        - --output=/var/run/berth/token
+      env:
+        - { name: OIDC_CLIENT_ID, valueFrom: { secretKeyRef: { name: berth-oidc, key: client-id } } }
+      volumeMounts:
+        - { name: token, mountPath: /var/run/berth }
+        - { name: oidc-secret, mountPath: /etc/berth-oidc, readOnly: true }
+    - name: operator
+      image: ghcr.io/skaphos/berth-operator:latest
+      args:
+        - --berth-api-server=https://berth.example.com:8443
+        - --berth-api-key-file=/var/run/berth/token
+        - --cluster-id=cluster-east
+      volumeMounts:
+        - { name: token, mountPath: /var/run/berth, readOnly: true }
+  volumes:
+    - { name: token, emptyDir: { medium: Memory } }
+    - { name: oidc-secret, secret: { secretName: berth-oidc } }
+```
+
+The broker performs OAuth2 client credentials against the IdP, writes
+the access token atomically to the shared `Memory`-backed volume, and
+refreshes well before expiry. The operator picks up rotations via its
+`--berth-api-key-file` watcher (1-second cache TTL).
+
+For Entra/Azure AD, AWS Cognito, Google Cloud, and other IdPs that need
+extra parameters on the token request, the broker accepts
+`--oidc-audience` (passed as the `audience` form parameter, which is what
+Auth0 and some Okta authorization servers require) and `--oidc-scopes`.
+For more exotic flows (token exchange, certificate-bound tokens) you can
+substitute your own broker — the operator only cares that the file at
+`--berth-api-key-file` contains a valid bearer token.
 
 ### Operator Flags
 
@@ -313,7 +356,13 @@ them on each request — is documented separately under the operator setup.
 --metrics-bind-address       Metrics endpoint (default ":8080")
 --health-probe-bind-address  Health probe endpoint (default ":8081")
 --berth-api-server           Berth API server base URL (required)
---berth-api-key              Bearer token for authenticating to the API server
+--berth-api-key              Static bearer token. Mutually exclusive with
+                             --berth-api-key-file.
+--berth-api-key-file         Path to a file containing the bearer token.
+                             Re-read on each request (cached briefly), so an
+                             external sidecar (typically the OIDC broker)
+                             can rotate it without restarting the operator.
+                             Mutually exclusive with --berth-api-key.
 --cluster-id                 Cluster-distinct holder identity. When set,
                              overrides spec.holderIdentity on every Acquire
                              call. Required for the cross-cluster singleton

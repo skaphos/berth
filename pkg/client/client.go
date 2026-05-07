@@ -12,7 +12,12 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	apiKey     string
+
+	// apiKeyFunc, when non-nil, is invoked on every request to get the
+	// current bearer token. A static-string [WithAPIKey] is implemented
+	// as a closure over the string; [WithAPIKeyFunc] takes any getter
+	// (typically backed by a file the operator periodically refreshes).
+	apiKeyFunc func() string
 }
 
 // New creates a Client targeting the given base URL. Configure the client

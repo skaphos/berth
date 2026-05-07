@@ -99,6 +99,37 @@ func TestClientWithAPIKeyAuthenticatesAgainstStaticKeys(t *testing.T) {
 	}
 }
 
+func TestClientWithAPIKeyFuncReadsTokenPerRequest(t *testing.T) {
+	t.Parallel()
+
+	// Two valid keys; the getter rotates between them. Each Acquire call
+	// should pick up the current value, not a snapshot taken at New time.
+	authn := auth.NewStaticAuthenticator(map[string]auth.Identity{
+		"key-v1": {Holder: "v1"},
+		"key-v2": {Holder: "v2"},
+	})
+	mgr := lease.NewManager(lease.NewMemStore())
+	srv := httptest.NewServer(api.NewMux(mgr, authn))
+	defer srv.Close()
+
+	current := "key-v1"
+	c := New(srv.URL, WithAPIKeyFunc(func() string { return current }))
+
+	if _, err := c.Acquire(context.Background(), "ns", "x", "h", 30*time.Second); err != nil {
+		t.Fatalf("Acquire with v1: %v", err)
+	}
+
+	current = "key-v2"
+	if _, err := c.Acquire(context.Background(), "ns", "y", "h", 30*time.Second); err != nil {
+		t.Fatalf("Acquire after rotation to v2: %v", err)
+	}
+
+	current = "rotated-out"
+	if _, err := c.Acquire(context.Background(), "ns", "z", "h", 30*time.Second); err == nil {
+		t.Fatal("Acquire with rotated-out key must fail")
+	}
+}
+
 func TestClientPathEscapesNamespaceAndName(t *testing.T) {
 	t.Parallel()
 
