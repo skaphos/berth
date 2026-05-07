@@ -148,6 +148,9 @@ func (r *BerthLeaseReconciler) reconcileNotHeld(ctx context.Context, log logr.Lo
 
 	lease.Status.LeaseState = StateWaiting
 	lease.Status.CurrentHolder = res.Holder
+	// We do not hold a fencing token in this state. Clearing it prevents the
+	// deletion path from sending a stale token in a Release call later.
+	lease.Status.FencingToken = 0
 	lease.Status.AcquiredAt = nil
 	lease.Status.ExpiresAt = timePtr(res.ExpiresAt)
 	setCondition(&lease.Status, ConditionAcquired, metav1.ConditionFalse, "HeldByOther", fmt.Sprintf("lease held by %q", res.Holder))

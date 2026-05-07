@@ -386,6 +386,159 @@ func TestReconcileAcquireErrorRequeues(t *testing.T) {
 	}
 }
 
+// TestReconcileAcquireErrorDoesNotMutateDeployment guards against a class of
+// failover bug where an unreachable API server would cause the operator to
+// mistakenly scale a Deployment based on stale status. When Acquire fails,
+// the operator must leave the workload alone and retry.
+func TestReconcileAcquireErrorDoesNotMutateDeployment(t *testing.T) {
+	t.Parallel()
+	scheme := newScheme(t)
+	lease := newLease(nil)
+	dep := newDeployment(3)
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&berthv1alpha1.BerthLease{}).
+		WithObjects(lease, dep).
+		Build()
+
+	leaseClient := &fakeLeaseClient{acquireErr: errors.New("connection refused")}
+	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+
+	if _, err := reconcile(t, r); err != nil {
+		t.Fatal(err)
+	}
+
+	got := &appsv1.Deployment{}
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "ns", Name: "worker"}, got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Spec.Replicas == nil || *got.Spec.Replicas != 3 {
+		t.Fatalf("replicas = %v, want 3 (Deployment must not be mutated when API server is unreachable)", got.Spec.Replicas)
+	}
+}
+
+// TestReconcileLostLeaseScalesDownAndClearsToken simulates the failover
+// scenario where this cluster previously held the lease, lost connectivity
+// long enough for the other cluster to reclaim, and is now reconciling
+// again. The reconciler must:
+//
+//   - Apply releaseAction (scale Deployment to 0).
+//   - Update status to reflect the new holder.
+//   - Clear the stale fencing token so the deletion path won't issue a
+//     Release with a token we no longer hold.
+func TestReconcileLostLeaseScalesDownAndClearsToken(t *testing.T) {
+	t.Parallel()
+	scheme := newScheme(t)
+	lease := newLease(func(l *berthv1alpha1.BerthLease) {
+		l.Status.LeaseState = StateHeld
+		l.Status.CurrentHolder = "cluster-east"
+		l.Status.FencingToken = 1
+	})
+	dep := newDeployment(3) // was running because we held the lease
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&berthv1alpha1.BerthLease{}).
+		WithObjects(lease, dep).
+		Build()
+
+	leaseClient := &fakeLeaseClient{
+		acquireResult: client.AcquireResult{
+			Acquired:     false,
+			Holder:       "cluster-west",
+			FencingToken: 2,
+			ExpiresAt:    time.Now().Add(20 * time.Second),
+		},
+	}
+	r := &BerthLeaseReconciler{
+		Client:          c,
+		Log:             logr.Discard(),
+		LeaseClient:     leaseClient,
+		ClusterIdentity: "cluster-east",
+	}
+
+	if _, err := reconcile(t, r); err != nil {
+		t.Fatal(err)
+	}
+
+	gotDep := &appsv1.Deployment{}
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "ns", Name: "worker"}, gotDep); err != nil {
+		t.Fatal(err)
+	}
+	if gotDep.Spec.Replicas == nil || *gotDep.Spec.Replicas != 0 {
+		t.Fatalf("replicas = %v, want 0 after losing the lease", gotDep.Spec.Replicas)
+	}
+
+	updated := &berthv1alpha1.BerthLease{}
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "ns", Name: "lease-a"}, updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.LeaseState != StateWaiting {
+		t.Fatalf("LeaseState = %q, want %q", updated.Status.LeaseState, StateWaiting)
+	}
+	if updated.Status.CurrentHolder != "cluster-west" {
+		t.Fatalf("CurrentHolder = %q, want cluster-west", updated.Status.CurrentHolder)
+	}
+	if updated.Status.FencingToken != 0 {
+		t.Fatalf("FencingToken = %d, want 0 (must be cleared after losing lease)", updated.Status.FencingToken)
+	}
+}
+
+func TestReacquireIntervalCaps(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		heartbeat time.Duration
+		ttl       time.Duration
+		want      time.Duration
+	}{
+		{name: "heartbeat below ttl/3", heartbeat: 5 * time.Second, ttl: 30 * time.Second, want: 5 * time.Second},
+		{name: "heartbeat equal to ttl/3", heartbeat: 10 * time.Second, ttl: 30 * time.Second, want: 10 * time.Second},
+		{name: "heartbeat above ttl/3", heartbeat: 20 * time.Second, ttl: 30 * time.Second, want: 10 * time.Second},
+		{name: "heartbeat unset falls back to ttl/3", heartbeat: 0, ttl: 30 * time.Second, want: 10 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := reacquireInterval(tc.heartbeat, tc.ttl); got != tc.want {
+				t.Fatalf("reacquireInterval(%v, %v) = %v, want %v", tc.heartbeat, tc.ttl, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestReconcileNotHeldRequeueIsBounded asserts the standby cadence so that
+// the cross-cluster failover RTO stays bounded by ttl. With ttl=30s and
+// heartbeat=10s, the standby tries to reacquire every 10s — so the worst
+// case is ~ttl + heartbeat (i.e., the full TTL elapses, then up to one
+// reacquire interval before this cluster wins).
+func TestReconcileNotHeldRequeueIsBounded(t *testing.T) {
+	t.Parallel()
+	scheme := newScheme(t)
+	lease := newLease(nil) // ttl=30s, heartbeat=10s
+	dep := newDeployment(0)
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&berthv1alpha1.BerthLease{}).
+		WithObjects(lease, dep).
+		Build()
+
+	leaseClient := &fakeLeaseClient{
+		acquireResult: client.AcquireResult{
+			Acquired: false, Holder: "cluster-west", FencingToken: 2,
+			ExpiresAt: time.Now().Add(30 * time.Second),
+		},
+	}
+	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+
+	res, err := reconcile(t, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.RequeueAfter <= 0 || res.RequeueAfter > 10*time.Second {
+		t.Fatalf("RequeueAfter = %v, want > 0 and ≤ 10s (heartbeat-bounded)", res.RequeueAfter)
+	}
+}
+
 func TestReconcileClusterIdentityOverridesSpecHolder(t *testing.T) {
 	t.Parallel()
 	scheme := newScheme(t)

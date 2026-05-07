@@ -129,6 +129,44 @@ to 0. When `--cluster-id` is not set, the operator falls back to
 `spec.holderIdentity` — useful when an external client manages identity
 itself.
 
+#### Failure modes and recovery time
+
+Failover RTO is bounded by `ttlSeconds + reacquire interval`. With the
+example above (`ttlSeconds: 30`, `heartbeatIntervalSeconds: 10`):
+
+- The holder cluster heartbeats every 10 seconds.
+- If the holder dies or is partitioned, the lease becomes reclaimable
+  30 seconds after its last successful heartbeat.
+- Standby operators retry Acquire every `min(heartbeatIntervalSeconds,
+  ttlSeconds/3)` — 10 seconds in this case — so within ~40 seconds total a
+  standby cluster acquires and scales its Deployment up.
+
+Tune `ttlSeconds` to trade off failover speed against tolerance for
+transient API-server unreachability. A 30-second TTL is a reasonable
+default; shorter TTLs (≤10s) make the system jittery under network
+hiccups, longer ones (≥60s) extend failover time.
+
+**Split-brain window.** When the holder loses connectivity to the API
+server, its Deployment continues running until that operator next
+reconciles and observes its Acquire return `Acquired=false`. During the
+window between (a) server-side TTL expiry, (b) the standby successfully
+reacquiring and scaling up, and (c) the original holder noticing it lost
+the lease and scaling down, **both clusters can be running their
+Deployment**. Two mitigations:
+
+1. **Short TTL + short heartbeat** narrow the window. With the defaults
+   above the worst case is ~10 seconds (one reconcile cycle).
+2. **Fencing tokens** are returned by Acquire/Renew. The Berth API
+   server itself rejects writes from a stale holder (the operator can't
+   accidentally Release/Renew a lease it has lost). True end-to-end
+   fencing — where the Deployment's downstream calls are also rejected
+   when stale — requires the workload to validate the token, which is
+   out of scope for the operator-as-holder pattern.
+
+For workloads where momentary overlap is unacceptable, run with a very
+short TTL or use the application-level pattern where the workload
+itself acquires the lease (and exits when it loses it).
+
 ### Using the Go Client
 
 The `pkg/client` package provides a Go client for the API server:
