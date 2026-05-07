@@ -14,6 +14,7 @@ import (
 
 	berthv1alpha1 "github.com/skaphos/berth/api/v1alpha1"
 	"github.com/skaphos/berth/internal/operator"
+	"github.com/skaphos/berth/pkg/client"
 )
 
 func main() {
@@ -22,13 +23,22 @@ func main() {
 
 func run() int {
 	var (
-		metricsAddr string
-		probeAddr   string
+		metricsAddr  string
+		probeAddr    string
+		apiServerURL string
+		apiKey       string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "address for the metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "address for the health probe endpoint")
+	flag.StringVar(&apiServerURL, "berth-api-server", "", "Berth API server base URL (required)")
+	flag.StringVar(&apiKey, "berth-api-key", "", "Berth API key for bearer authentication")
 	flag.Parse()
+
+	if apiServerURL == "" {
+		ctrl.Log.Error(nil, "--berth-api-server is required")
+		return 1
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
@@ -46,9 +56,12 @@ func run() int {
 		return 1
 	}
 
+	leaseClient := client.New(apiServerURL, client.WithAPIKey(apiKey))
+
 	reconciler := &operator.BerthLeaseReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("BerthLease"),
+		Client:      mgr.GetClient(),
+		Log:         ctrl.Log.WithName("controllers").WithName("BerthLease"),
+		LeaseClient: leaseClient,
 	}
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		ctrl.Log.Error(err, "unable to create controller", "controller", "BerthLease")

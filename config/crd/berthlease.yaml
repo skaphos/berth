@@ -234,6 +234,13 @@ spec:
                   if not renewed.
                 format: date-time
                 type: string
+              fencingToken:
+                description: |-
+                  FencingToken is the monotonic fencing token returned by the central
+                  API server on the most recent successful Acquire/Renew. It is used by
+                  the reconciler on deletion to perform a best-effort Release.
+                format: int32
+                type: integer
               lastHeartbeat:
                 description: LastHeartbeat is the timestamp of the most recent lease
                   renewal.

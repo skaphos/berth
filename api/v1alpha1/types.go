@@ -92,6 +92,11 @@ type BerthLeaseStatus struct {
 	// LastHeartbeat is the timestamp of the most recent lease renewal.
 	LastHeartbeat *metav1.Time `json:"lastHeartbeat,omitempty"`
 
+	// FencingToken is the monotonic fencing token returned by the central
+	// API server on the most recent successful Acquire/Renew. It is used by
+	// the reconciler on deletion to perform a best-effort Release.
+	FencingToken int32 `json:"fencingToken,omitempty"`
+
 	// Conditions represent the latest observations of the lease's state.
 	// +listType=map
 	// +listMapKey=type
