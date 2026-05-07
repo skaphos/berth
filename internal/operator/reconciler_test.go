@@ -386,6 +386,76 @@ func TestReconcileAcquireErrorRequeues(t *testing.T) {
 	}
 }
 
+func TestReconcileClusterIdentityOverridesSpecHolder(t *testing.T) {
+	t.Parallel()
+	scheme := newScheme(t)
+	lease := newLease(func(l *berthv1alpha1.BerthLease) {
+		l.Spec.HolderIdentity = "spec-default"
+	})
+	dep := newDeployment(0)
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&berthv1alpha1.BerthLease{}).
+		WithObjects(lease, dep).
+		Build()
+
+	leaseClient := &fakeLeaseClient{
+		acquireResult: client.AcquireResult{
+			Acquired:     true,
+			Holder:       "cluster-east",
+			FencingToken: 1,
+			ExpiresAt:    time.Now().Add(30 * time.Second),
+		},
+	}
+	r := &BerthLeaseReconciler{
+		Client:          c,
+		Log:             logr.Discard(),
+		LeaseClient:     leaseClient,
+		ClusterIdentity: "cluster-east",
+	}
+
+	if _, err := reconcile(t, r); err != nil {
+		t.Fatal(err)
+	}
+	if len(leaseClient.acquireCalls) != 1 {
+		t.Fatalf("acquire calls = %d, want 1", len(leaseClient.acquireCalls))
+	}
+	if got := leaseClient.acquireCalls[0].holder; got != "cluster-east" {
+		t.Fatalf("acquire holder = %q, want %q (ClusterIdentity must override spec.HolderIdentity)", got, "cluster-east")
+	}
+}
+
+func TestReconcileFallsBackToSpecHolderWhenClusterIdentityUnset(t *testing.T) {
+	t.Parallel()
+	scheme := newScheme(t)
+	lease := newLease(func(l *berthv1alpha1.BerthLease) {
+		l.Spec.HolderIdentity = "from-spec"
+	})
+	dep := newDeployment(0)
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&berthv1alpha1.BerthLease{}).
+		WithObjects(lease, dep).
+		Build()
+
+	leaseClient := &fakeLeaseClient{
+		acquireResult: client.AcquireResult{
+			Acquired:     true,
+			Holder:       "from-spec",
+			FencingToken: 1,
+			ExpiresAt:    time.Now().Add(30 * time.Second),
+		},
+	}
+	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+
+	if _, err := reconcile(t, r); err != nil {
+		t.Fatal(err)
+	}
+	if got := leaseClient.acquireCalls[0].holder; got != "from-spec" {
+		t.Fatalf("acquire holder = %q, want %q (should use spec.HolderIdentity)", got, "from-spec")
+	}
+}
+
 func TestSetupWithManagerRequiresLeaseClient(t *testing.T) {
 	t.Parallel()
 	r := &BerthLeaseReconciler{Log: logr.Discard()}

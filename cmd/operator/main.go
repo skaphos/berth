@@ -27,12 +27,17 @@ func run() int {
 		probeAddr    string
 		apiServerURL string
 		apiKey       string
+		clusterID    string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "address for the metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "address for the health probe endpoint")
 	flag.StringVar(&apiServerURL, "berth-api-server", "", "Berth API server base URL (required)")
 	flag.StringVar(&apiKey, "berth-api-key", "", "Berth API key for bearer authentication")
+	flag.StringVar(&clusterID, "cluster-id", "",
+		"cluster-distinct identity used as the holder for every Acquire call, overriding "+
+			"spec.HolderIdentity on the BerthLease. Required for the cross-cluster singleton "+
+			"pattern; leave empty to fall back to spec.HolderIdentity.")
 	flag.Parse()
 
 	if apiServerURL == "" {
@@ -59,9 +64,10 @@ func run() int {
 	leaseClient := client.New(apiServerURL, client.WithAPIKey(apiKey))
 
 	reconciler := &operator.BerthLeaseReconciler{
-		Client:      mgr.GetClient(),
-		Log:         ctrl.Log.WithName("controllers").WithName("BerthLease"),
-		LeaseClient: leaseClient,
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName("controllers").WithName("BerthLease"),
+		LeaseClient:     leaseClient,
+		ClusterIdentity: clusterID,
 	}
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		ctrl.Log.Error(err, "unable to create controller", "controller", "BerthLease")

@@ -95,7 +95,7 @@ metadata:
   namespace: pipeline
 spec:
   leaseName: "ingest-worker"
-  holderIdentity: "cluster-east"  # set per-cluster; see operator --cluster-id
+  holderIdentity: "ignored-when-operator-runs-with-cluster-id"
   ttlSeconds: 30
   heartbeatIntervalSeconds: 10
   semantics: "at-most-once"
@@ -111,9 +111,23 @@ spec:
       replicas: 0
 ```
 
-Apply the same manifest in each cluster (with a different `holderIdentity`).
-Only one cluster's operator will hold the lease at a time and scale its
-Deployment to 3 replicas; the others scale to 0.
+Apply the **same** manifest unchanged to every cluster. Each cluster's operator
+must run with a distinct `--cluster-id`:
+
+```bash
+# cluster-east
+operator --berth-api-server https://berth.example.com:8443 --cluster-id cluster-east
+
+# cluster-west
+operator --berth-api-server https://berth.example.com:8443 --cluster-id cluster-west
+```
+
+`--cluster-id`, when set, overrides `spec.holderIdentity` and is used as the
+holder identity for every Acquire call. Only one cluster's operator will hold
+the lease at a time and scale its Deployment to 3 replicas; the others scale
+to 0. When `--cluster-id` is not set, the operator falls back to
+`spec.holderIdentity` — useful when an external client manages identity
+itself.
 
 ### Using the Go Client
 

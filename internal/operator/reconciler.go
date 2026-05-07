@@ -47,6 +47,27 @@ type BerthLeaseReconciler struct {
 
 	// LeaseClient is the central API server client. Required.
 	LeaseClient LeaseClient
+
+	// ClusterIdentity, when non-empty, is used as the holder identity for
+	// every Acquire / Release call, overriding spec.HolderIdentity on the
+	// BerthLease. Set this to a cluster-distinct value (typically via the
+	// operator's --cluster-id flag) to enable the cross-cluster singleton
+	// pattern: the same BerthLease applied to multiple clusters competes
+	// for the lease rather than co-renewing under a shared identity.
+	//
+	// When empty, the reconciler falls back to spec.HolderIdentity. That
+	// path supports the original use case where an external client manages
+	// its own holder identity directly against the Berth API server.
+	ClusterIdentity string
+}
+
+// holderFor returns the holder identity the reconciler should use for a
+// given lease, applying the ClusterIdentity override when configured.
+func (r *BerthLeaseReconciler) holderFor(lease *berthv1alpha1.BerthLease) string {
+	if r.ClusterIdentity != "" {
+		return r.ClusterIdentity
+	}
+	return lease.Spec.HolderIdentity
 }
 
 // Reconcile implements [reconcile.Reconciler].
@@ -77,7 +98,7 @@ func (r *BerthLeaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	holder := lease.Spec.HolderIdentity
+	holder := r.holderFor(&lease)
 	ttl := time.Duration(lease.Spec.TTLSeconds) * time.Second
 	heartbeat := time.Duration(lease.Spec.HeartbeatIntervalSeconds) * time.Second
 
