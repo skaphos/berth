@@ -2,10 +2,15 @@ package api
 
 import "net/http"
 
-// NewMux returns the Phase 0 HTTP routes for the API server.
-func NewMux() *http.ServeMux {
+// NewMux returns the HTTP routes for the API server. If mgr is non-nil, the
+// lease endpoints under /v1alpha1/namespaces/{namespace}/leases/{name}/...
+// are registered. /healthz is always served.
+func NewMux(mgr LeaseManager) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
+	if mgr != nil {
+		registerLeaseRoutes(mux, mgr)
+	}
 	return mux
 }
 

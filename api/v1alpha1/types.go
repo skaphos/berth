@@ -48,11 +48,28 @@ type TargetRef struct {
 }
 
 // LeaseAction describes an action the operator may take on a target workload
-// when a lease state transition occurs.
+// when a lease state transition occurs. At most one of Suspend or Scale may
+// be set on a single action.
+// +kubebuilder:validation:XValidation:rule="!(has(self.suspend) && has(self.scale))",message="at most one of suspend or scale may be set"
 type LeaseAction struct {
 	// Suspend, when non-nil, sets the suspend field on the target workload.
-	// Setting this to true pauses the workload; false resumes it.
+	// Setting this to true pauses the workload; false resumes it. Applies to
+	// workload kinds that expose a spec.suspend field, such as CronJob.
 	Suspend *bool `json:"suspend,omitempty"`
+
+	// Scale, when non-nil, sets the replica count on the target workload's
+	// scale subresource. Applies to workload kinds that expose a scale
+	// subresource, such as Deployment, StatefulSet, and ReplicaSet.
+	Scale *ScaleAction `json:"scale,omitempty"`
+}
+
+// ScaleAction sets the replica count on the target workload's scale
+// subresource.
+type ScaleAction struct {
+	// Replicas is the desired replica count. Use 0 to scale a workload down
+	// to zero (for example, on lease release).
+	// +kubebuilder:validation:Minimum=0
+	Replicas int32 `json:"replicas"`
 }
 
 // BerthLeaseStatus reports the observed state of a Berth lease.
@@ -74,6 +91,11 @@ type BerthLeaseStatus struct {
 
 	// LastHeartbeat is the timestamp of the most recent lease renewal.
 	LastHeartbeat *metav1.Time `json:"lastHeartbeat,omitempty"`
+
+	// FencingToken is the monotonic fencing token returned by the central
+	// API server on the most recent successful Acquire/Renew. It is used by
+	// the reconciler on deletion to perform a best-effort Release.
+	FencingToken int32 `json:"fencingToken,omitempty"`
 
 	// Conditions represent the latest observations of the lease's state.
 	// +listType=map

@@ -174,6 +174,19 @@ func TestAdditionalDeepCopyHelpers(t *testing.T) {
 		t.Fatal("lease action suspend was not deeply copied")
 	}
 
+	scaleAction := &LeaseAction{Scale: &ScaleAction{Replicas: 3}}
+	scaleCopy := scaleAction.DeepCopy()
+	if scaleCopy == nil {
+		t.Fatal("scale action DeepCopy() returned nil")
+	}
+	scaleCopy.Scale.Replicas = 0
+	if scaleAction.Scale.Replicas != 3 {
+		t.Fatal("lease action scale was not deeply copied")
+	}
+	if (*ScaleAction)(nil).DeepCopy() != nil {
+		t.Fatal("nil scale action DeepCopy() should return nil")
+	}
+
 	target := &TargetRef{APIVersion: "batch/v1", Kind: "CronJob", Name: "job-a"}
 	targetCopy := target.DeepCopy()
 	if targetCopy == nil {

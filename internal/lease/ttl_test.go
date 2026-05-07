@@ -7,12 +7,11 @@ import (
 	"time"
 )
 
-func TestNewTTLEnforcer(t *testing.T) {
+func TestNewTTLEnforcerPreservesFields(t *testing.T) {
 	t.Parallel()
 
-	store := &testStore{}
+	store := NewMemStore()
 	enforcer := NewTTLEnforcer(store, time.Second)
-
 	if enforcer.store != store {
 		t.Fatal("store was not preserved")
 	}
@@ -27,8 +26,8 @@ func TestTTLEnforcerRunReturnsContextError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	enforcer := NewTTLEnforcer(&testStore{}, 0)
-	err := enforcer.Run(ctx, "default")
+	enforcer := NewTTLEnforcer(NewMemStore(), 0)
+	err := enforcer.Run(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want %v", err, context.Canceled)
 	}
@@ -37,16 +36,26 @@ func TestTTLEnforcerRunReturnsContextError(t *testing.T) {
 func TestTTLEnforcerRunCallsListOnTicker(t *testing.T) {
 	t.Parallel()
 
-	store := &testStore{}
+	store := &countingStore{Store: NewMemStore()}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
 	defer cancel()
 
 	enforcer := NewTTLEnforcer(store, 5*time.Millisecond)
-	err := enforcer.Run(ctx, "default")
+	err := enforcer.Run(ctx)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want %v", err, context.DeadlineExceeded)
 	}
 	if store.listCalls == 0 {
 		t.Fatal("expected List to be called at least once")
 	}
+}
+
+type countingStore struct {
+	Store
+	listCalls int
+}
+
+func (s *countingStore) List(ctx context.Context) ([]Record, error) {
+	s.listCalls++
+	return s.Store.List(ctx)
 }

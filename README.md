@@ -48,12 +48,20 @@ Each lease declares an acquisition mode:
 
 A lease can optionally reference a Kubernetes workload via `target`. When
 configured, the operator applies `acquireAction` and `releaseAction` to the
-target in response to lease transitions. For example, suspending a CronJob
-while a lease is held and resuming it on release.
+target in response to lease transitions. Two action shapes are supported, and
+at most one may be set per action:
+
+- `suspend` — toggles `spec.suspend` on the target. Use for CronJob.
+- `scale` — patches the target's scale subresource. Use for Deployment,
+  StatefulSet, or ReplicaSet. A typical singleton wires
+  `acquireAction.scale.replicas` to the desired running count and
+  `releaseAction.scale.replicas: 0`.
 
 ## Usage
 
 ### Defining a BerthLease
+
+**CronJob singleton (suspend action):**
 
 ```yaml
 apiVersion: berth.skaphos.io/v1alpha1
@@ -77,12 +85,87 @@ spec:
     suspend: true
 ```
 
-This lease:
-- Is held exclusively (`at-most-once`) by `worker-east-1`.
-- Expires after 30 seconds without a heartbeat.
-- Expects heartbeats every 10 seconds.
-- Unsuspends the `ingest-pipeline` CronJob when acquired, and suspends it when
-  released or expired.
+**Cross-cluster Deployment singleton (scale action):**
+
+```yaml
+apiVersion: berth.skaphos.io/v1alpha1
+kind: BerthLease
+metadata:
+  name: ingest-worker
+  namespace: pipeline
+spec:
+  leaseName: "ingest-worker"
+  holderIdentity: "ignored-when-operator-runs-with-cluster-id"
+  ttlSeconds: 30
+  heartbeatIntervalSeconds: 10
+  semantics: "at-most-once"
+  target:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ingest-worker
+  acquireAction:
+    scale:
+      replicas: 3
+  releaseAction:
+    scale:
+      replicas: 0
+```
+
+Apply the **same** manifest unchanged to every cluster. Each cluster's operator
+must run with a distinct `--cluster-id`:
+
+```bash
+# cluster-east
+operator --berth-api-server https://berth.example.com:8443 --cluster-id cluster-east
+
+# cluster-west
+operator --berth-api-server https://berth.example.com:8443 --cluster-id cluster-west
+```
+
+`--cluster-id`, when set, overrides `spec.holderIdentity` and is used as the
+holder identity for every Acquire call. Only one cluster's operator will hold
+the lease at a time and scale its Deployment to 3 replicas; the others scale
+to 0. When `--cluster-id` is not set, the operator falls back to
+`spec.holderIdentity` — useful when an external client manages identity
+itself.
+
+#### Failure modes and recovery time
+
+Failover RTO is bounded by `ttlSeconds + reacquire interval`. With the
+example above (`ttlSeconds: 30`, `heartbeatIntervalSeconds: 10`):
+
+- The holder cluster heartbeats every 10 seconds.
+- If the holder dies or is partitioned, the lease becomes reclaimable
+  30 seconds after its last successful heartbeat.
+- Standby operators retry Acquire every `min(heartbeatIntervalSeconds,
+  ttlSeconds/3)` — 10 seconds in this case — so within ~40 seconds total a
+  standby cluster acquires and scales its Deployment up.
+
+Tune `ttlSeconds` to trade off failover speed against tolerance for
+transient API-server unreachability. A 30-second TTL is a reasonable
+default; shorter TTLs (≤10s) make the system jittery under network
+hiccups, longer ones (≥60s) extend failover time.
+
+**Split-brain window.** When the holder loses connectivity to the API
+server, its Deployment continues running until that operator next
+reconciles and observes its Acquire return `Acquired=false`. During the
+window between (a) server-side TTL expiry, (b) the standby successfully
+reacquiring and scaling up, and (c) the original holder noticing it lost
+the lease and scaling down, **both clusters can be running their
+Deployment**. Two mitigations:
+
+1. **Short TTL + short heartbeat** narrow the window. With the defaults
+   above the worst case is ~10 seconds (one reconcile cycle).
+2. **Fencing tokens** are returned by Acquire/Renew. The Berth API
+   server itself rejects writes from a stale holder (the operator can't
+   accidentally Release/Renew a lease it has lost). True end-to-end
+   fencing — where the Deployment's downstream calls are also rejected
+   when stale — requires the workload to validate the token, which is
+   out of scope for the operator-as-holder pattern.
+
+For workloads where momentary overlap is unacceptable, run with a very
+short TTL or use the application-level pattern where the workload
+itself acquires the lease (and exits when it loses it).
 
 ### Using the Go Client
 
@@ -144,10 +227,15 @@ helm install berth-operator deploy/helm/berth-operator \
 ### API Server Flags
 
 ```
---listen-addr    Listen address (default ":8443")
---tls-cert-file  Path to TLS certificate (required)
---tls-key-file   Path to TLS private key (required)
---kubeconfig     Path to kubeconfig (omit for in-cluster)
+--listen-addr               Listen address (default ":8443")
+--tls-cert-file             Path to TLS certificate (required)
+--tls-key-file              Path to TLS private key (required)
+--coordination-kubeconfig   Path to a kubeconfig pointing at the coordination
+                            cluster (empty = in-cluster config)
+--coordination-namespace    Namespace in the coordination cluster where Berth
+                            Lease objects are stored. When empty, the API
+                            server falls back to an in-memory store (dev only
+                            — state is lost on restart and HA is not possible).
 ```
 
 ### Operator Flags
@@ -155,7 +243,31 @@ helm install berth-operator deploy/helm/berth-operator \
 ```
 --metrics-bind-address       Metrics endpoint (default ":8080")
 --health-probe-bind-address  Health probe endpoint (default ":8081")
+--berth-api-server           Berth API server base URL (required)
+--berth-api-key              Bearer token for authenticating to the API server
+--cluster-id                 Cluster-distinct holder identity. When set,
+                             overrides spec.holderIdentity on every Acquire
+                             call. Required for the cross-cluster singleton
+                             pattern; leave empty to fall back to
+                             spec.holderIdentity.
 ```
+
+### Lease storage backend
+
+The API server's lease state is authoritative for at-most-once semantics
+across clusters. Two backends are available:
+
+| Backend | When | Durability | HA |
+|---|---|---|---|
+| **K8s coordination cluster** (default in production) | `--coordination-namespace` is set | State persists in `coordination.k8s.io/v1.Lease` objects in the named namespace | API server can be scaled to multiple replicas; they share state via the kube-apiserver |
+| **In-memory** (dev/demo only) | `--coordination-namespace` is empty | None — state is lost on restart | Single replica only |
+
+For the production backend, point `--coordination-kubeconfig` at a small
+dedicated cluster — **not** at one of the tenant clusters that Berth
+coordinates Deployments on, since losing that cluster would also lose the
+lease store. A managed control plane (EKS/GKE/AKS) is fine. Berth pools all
+leases for all tenants under `--coordination-namespace`; the coordination
+cluster does not need per-tenant namespaces.
 
 ## Build
 
