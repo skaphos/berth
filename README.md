@@ -236,7 +236,43 @@ helm install berth-operator deploy/helm/berth-operator \
                             Lease objects are stored. When empty, the API
                             server falls back to an in-memory store (dev only
                             — state is lost on restart and HA is not possible).
+--auth-mode                 'none' or 'static-keys'. Defaults to 'static-keys'
+                            when --coordination-namespace is set; defaults to
+                            'none' otherwise. Use 'none' only for dev — the
+                            server logs a loud warning at startup.
+--api-keys-file             Path to a file of '<key-id>:<sha256-hex>' entries.
+                            Required when --auth-mode=static-keys. SIGHUP
+                            reloads the file in place (no restart needed).
 ```
+
+### Authentication
+
+The API server accepts bearer-token auth on the `/v1alpha1/*` endpoints when
+`--auth-mode=static-keys` is set (the default in production). `/healthz`
+remains unauthenticated.
+
+The `--api-keys-file` is a plain-text file with one entry per line:
+
+```
+# Berth API keys — comments and blank lines ignored.
+team-a:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+team-b:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+```
+
+The hash is the SHA-256 of the raw token. The API server only stores hashes;
+the raw token lives only on the client side (operator-mounted Secret).
+Generate a key like this:
+
+```bash
+RAW=$(openssl rand -hex 32)
+HASH=$(printf '%s' "$RAW" | sha256sum | awk '{print $1}')
+echo "team-a:$HASH"   # add to the keys file
+echo "$RAW"           # distribute via the operator's --berth-api-key Secret
+```
+
+Rotate keys by editing the file and sending `SIGHUP` to the API server pod.
+The current key set is replaced atomically; if the new file is malformed,
+the previous key set is preserved.
 
 ### Operator Flags
 

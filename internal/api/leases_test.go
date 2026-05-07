@@ -9,12 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/skaphos/berth/internal/auth"
 	"github.com/skaphos/berth/internal/lease"
 )
 
 func newTestServer() (*httptest.Server, *lease.Manager) {
 	mgr := lease.NewManager(lease.NewMemStore())
-	srv := httptest.NewServer(NewMux(mgr))
+	// These tests focus on lease HTTP semantics; auth is exercised in
+	// middleware_test.go. Pass nil authn to bypass.
+	srv := httptest.NewServer(NewMux(mgr, nil))
 	return srv, mgr
 }
 
@@ -186,4 +189,63 @@ func TestReleaseValidatesArgs(t *testing.T) {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
+}
+
+// TestAuthIntegrationStaticKeysGatesLeaseRoutes wires a real
+// StaticAuthenticator into NewMux and exercises the three auth outcomes
+// against a lease endpoint: missing header, wrong token, valid token.
+func TestAuthIntegrationStaticKeysGatesLeaseRoutes(t *testing.T) {
+	t.Parallel()
+
+	authn := auth.NewStaticAuthenticator(map[string]auth.Identity{
+		"good-token": {Holder: "team-a", Tenant: "team-a"},
+	})
+	mgr := lease.NewManager(lease.NewMemStore())
+	srv := httptest.NewServer(NewMux(mgr, authn))
+	defer srv.Close()
+
+	url := srv.URL + "/v1alpha1/namespaces/ns/leases/a/acquire"
+	body := func() *strings.Reader {
+		return strings.NewReader(`{"holder":"h","ttlSeconds":30}`)
+	}
+
+	cases := []struct {
+		name       string
+		authHeader string
+		wantStatus int
+	}{
+		{name: "missing header", authHeader: "", wantStatus: http.StatusUnauthorized},
+		{name: "wrong token", authHeader: "Bearer wrong-token", wantStatus: http.StatusUnauthorized},
+		{name: "valid token", authHeader: "Bearer good-token", wantStatus: http.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, body())
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			if tc.authHeader != "" {
+				req.Header.Set("Authorization", tc.authHeader)
+			}
+			resp, err := srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.wantStatus)
+			}
+		})
+	}
+
+	// /healthz must remain unauthenticated even when the lease routes are gated.
+	healthResp, err := srv.Client().Get(srv.URL + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer healthResp.Body.Close()
+	if healthResp.StatusCode != http.StatusOK {
+		t.Fatalf("healthz status = %d, want 200 (must be unauthenticated)", healthResp.StatusCode)
+	}
 }

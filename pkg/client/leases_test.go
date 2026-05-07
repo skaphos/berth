@@ -8,13 +8,15 @@ import (
 	"time"
 
 	"github.com/skaphos/berth/internal/api"
+	"github.com/skaphos/berth/internal/auth"
 	"github.com/skaphos/berth/internal/lease"
 )
 
 func newTestClientServer(t *testing.T) (*Client, func()) {
 	t.Helper()
 	mgr := lease.NewManager(lease.NewMemStore())
-	srv := httptest.NewServer(api.NewMux(mgr))
+	// nil authn — these tests focus on the wire contract, not auth.
+	srv := httptest.NewServer(api.NewMux(mgr, nil))
 	c := New(srv.URL)
 	return c, srv.Close
 }
@@ -68,6 +70,32 @@ func TestClientReleaseStaleReturnsErrConflict(t *testing.T) {
 	err = c.Release(ctx, "ns", "a", "h1", first.FencingToken)
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("err = %v, want ErrConflict", err)
+	}
+}
+
+func TestClientWithAPIKeyAuthenticatesAgainstStaticKeys(t *testing.T) {
+	t.Parallel()
+
+	authn := auth.NewStaticAuthenticator(map[string]auth.Identity{
+		"good-token": {Holder: "team-a", Tenant: "team-a"},
+	})
+	mgr := lease.NewManager(lease.NewMemStore())
+	srv := httptest.NewServer(api.NewMux(mgr, authn))
+	defer srv.Close()
+
+	good := New(srv.URL, WithAPIKey("good-token"))
+	if _, err := good.Acquire(context.Background(), "ns", "x", "h1", 30*time.Second); err != nil {
+		t.Fatalf("Acquire with valid key: %v", err)
+	}
+
+	bad := New(srv.URL, WithAPIKey("wrong-token"))
+	if _, err := bad.Acquire(context.Background(), "ns", "x", "h2", 30*time.Second); err == nil {
+		t.Fatal("Acquire with wrong key must fail")
+	}
+
+	noKey := New(srv.URL)
+	if _, err := noKey.Acquire(context.Background(), "ns", "x", "h3", 30*time.Second); err == nil {
+		t.Fatal("Acquire without key must fail")
 	}
 }
 

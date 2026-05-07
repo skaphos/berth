@@ -1,16 +1,30 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
 
-// NewMux returns the HTTP routes for the API server. If mgr is non-nil, the
-// lease endpoints under /v1alpha1/namespaces/{namespace}/leases/{name}/...
-// are registered. /healthz is always served.
-func NewMux(mgr LeaseManager) *http.ServeMux {
+	"github.com/skaphos/berth/internal/auth"
+)
+
+// NewMux returns the HTTP routes for the API server.
+//
+//   - /healthz is always served unauthenticated.
+//   - The /v1alpha1/* lease endpoints are served only when mgr is non-nil.
+//   - When authn is non-nil, every lease endpoint is wrapped in
+//     [AuthMiddleware]. When authn is nil, the lease endpoints are
+//     unauthenticated — intended only for `--auth-mode=none` development
+//     setups; cmd/apiserver logs a loud warning in that case.
+func NewMux(mgr LeaseManager, authn auth.Authenticator) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
-	if mgr != nil {
-		registerLeaseRoutes(mux, mgr)
+	if mgr == nil {
+		return mux
 	}
+	var wrap func(http.Handler) http.Handler
+	if authn != nil {
+		wrap = AuthMiddleware(authn)
+	}
+	registerLeaseRoutes(mux, mgr, wrap)
 	return mux
 }
 
