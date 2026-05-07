@@ -48,12 +48,20 @@ Each lease declares an acquisition mode:
 
 A lease can optionally reference a Kubernetes workload via `target`. When
 configured, the operator applies `acquireAction` and `releaseAction` to the
-target in response to lease transitions. For example, suspending a CronJob
-while a lease is held and resuming it on release.
+target in response to lease transitions. Two action shapes are supported, and
+at most one may be set per action:
+
+- `suspend` — toggles `spec.suspend` on the target. Use for CronJob.
+- `scale` — patches the target's scale subresource. Use for Deployment,
+  StatefulSet, or ReplicaSet. A typical singleton wires
+  `acquireAction.scale.replicas` to the desired running count and
+  `releaseAction.scale.replicas: 0`.
 
 ## Usage
 
 ### Defining a BerthLease
+
+**CronJob singleton (suspend action):**
 
 ```yaml
 apiVersion: berth.skaphos.io/v1alpha1
@@ -77,12 +85,35 @@ spec:
     suspend: true
 ```
 
-This lease:
-- Is held exclusively (`at-most-once`) by `worker-east-1`.
-- Expires after 30 seconds without a heartbeat.
-- Expects heartbeats every 10 seconds.
-- Unsuspends the `ingest-pipeline` CronJob when acquired, and suspends it when
-  released or expired.
+**Cross-cluster Deployment singleton (scale action):**
+
+```yaml
+apiVersion: berth.skaphos.io/v1alpha1
+kind: BerthLease
+metadata:
+  name: ingest-worker
+  namespace: pipeline
+spec:
+  leaseName: "ingest-worker"
+  holderIdentity: "cluster-east"  # set per-cluster; see operator --cluster-id
+  ttlSeconds: 30
+  heartbeatIntervalSeconds: 10
+  semantics: "at-most-once"
+  target:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ingest-worker
+  acquireAction:
+    scale:
+      replicas: 3
+  releaseAction:
+    scale:
+      replicas: 0
+```
+
+Apply the same manifest in each cluster (with a different `holderIdentity`).
+Only one cluster's operator will hold the lease at a time and scale its
+Deployment to 3 replicas; the others scale to 0.
 
 ### Using the Go Client
 
