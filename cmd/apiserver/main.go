@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/skaphos/berth/internal/api"
+	"github.com/skaphos/berth/internal/lease"
 )
 
 func main() {
@@ -32,10 +33,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	mgr := lease.NewManager(lease.NewMemStore())
+
 	srv := api.NewServer(
 		api.WithAddress(listenAddr),
 		api.WithTLSFiles(tlsCert, tlsKey),
-		api.WithHandler(api.NewMux()),
+		api.WithHandler(api.NewMux(mgr)),
 	)
 
 	if err := srv.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
