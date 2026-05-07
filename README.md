@@ -227,10 +227,15 @@ helm install berth-operator deploy/helm/berth-operator \
 ### API Server Flags
 
 ```
---listen-addr    Listen address (default ":8443")
---tls-cert-file  Path to TLS certificate (required)
---tls-key-file   Path to TLS private key (required)
---kubeconfig     Path to kubeconfig (omit for in-cluster)
+--listen-addr               Listen address (default ":8443")
+--tls-cert-file             Path to TLS certificate (required)
+--tls-key-file              Path to TLS private key (required)
+--coordination-kubeconfig   Path to a kubeconfig pointing at the coordination
+                            cluster (empty = in-cluster config)
+--coordination-namespace    Namespace in the coordination cluster where Berth
+                            Lease objects are stored. When empty, the API
+                            server falls back to an in-memory store (dev only
+                            — state is lost on restart and HA is not possible).
 ```
 
 ### Operator Flags
@@ -238,7 +243,31 @@ helm install berth-operator deploy/helm/berth-operator \
 ```
 --metrics-bind-address       Metrics endpoint (default ":8080")
 --health-probe-bind-address  Health probe endpoint (default ":8081")
+--berth-api-server           Berth API server base URL (required)
+--berth-api-key              Bearer token for authenticating to the API server
+--cluster-id                 Cluster-distinct holder identity. When set,
+                             overrides spec.holderIdentity on every Acquire
+                             call. Required for the cross-cluster singleton
+                             pattern; leave empty to fall back to
+                             spec.holderIdentity.
 ```
+
+### Lease storage backend
+
+The API server's lease state is authoritative for at-most-once semantics
+across clusters. Two backends are available:
+
+| Backend | When | Durability | HA |
+|---|---|---|---|
+| **K8s coordination cluster** (default in production) | `--coordination-namespace` is set | State persists in `coordination.k8s.io/v1.Lease` objects in the named namespace | API server can be scaled to multiple replicas; they share state via the kube-apiserver |
+| **In-memory** (dev/demo only) | `--coordination-namespace` is empty | None — state is lost on restart | Single replica only |
+
+For the production backend, point `--coordination-kubeconfig` at a small
+dedicated cluster — **not** at one of the tenant clusters that Berth
+coordinates Deployments on, since losing that cluster would also lose the
+lease store. A managed control plane (EKS/GKE/AKS) is fine. Berth pools all
+leases for all tenants under `--coordination-namespace`; the coordination
+cluster does not need per-tenant namespaces.
 
 ## Build
 
