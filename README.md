@@ -236,13 +236,24 @@ helm install berth-operator deploy/helm/berth-operator \
                             Lease objects are stored. When empty, the API
                             server falls back to an in-memory store (dev only
                             — state is lost on restart and HA is not possible).
---auth-mode                 'none' or 'static-keys'. Defaults to 'static-keys'
-                            when --coordination-namespace is set; defaults to
-                            'none' otherwise. Use 'none' only for dev — the
-                            server logs a loud warning at startup.
+--auth-mode                 'none', 'static-keys', or 'oidc'. Defaults to
+                            'static-keys' when --coordination-namespace is set;
+                            defaults to 'none' otherwise. Use 'none' only for
+                            dev — the server logs a loud warning at startup.
 --api-keys-file             Path to a file of '<key-id>:<sha256-hex>' entries.
                             Required when --auth-mode=static-keys. SIGHUP
                             reloads the file in place (no restart needed).
+--oidc-issuer-url           OIDC issuer URL (e.g. https://your-org.okta.com/oauth2/default,
+                            https://pingfed.example.com). Required when --auth-mode=oidc.
+--oidc-audience             Expected JWT 'aud' claim. Required when --auth-mode=oidc.
+--oidc-required-claim       Repeatable key=value claim that must be present
+                            (string or string-array). Example: groups=berth-clients.
+--oidc-username-claim       JWT claim copied into the identity holder field
+                            (default 'sub').
+--oidc-tenant-claim         JWT claim copied into the identity tenant field
+                            (default 'sub'); array-valued claims use the first element.
+--oidc-jwks-url             Override the JWKS URL discovered from the issuer
+                            (rarely needed).
 ```
 
 ### Authentication
@@ -273,6 +284,28 @@ echo "$RAW"           # distribute via the operator's --berth-api-key Secret
 Rotate keys by editing the file and sending `SIGHUP` to the API server pod.
 The current key set is replaced atomically; if the new file is malformed,
 the previous key set is preserved.
+
+#### OIDC (Okta, PingFederate, Entra, etc.)
+
+For production deployments where you want short-lived, IdP-issued tokens
+instead of long-lived static keys, run the API server with OIDC:
+
+```
+berth-apiserver \
+  --auth-mode=oidc \
+  --oidc-issuer-url=https://your-org.okta.com/oauth2/default \
+  --oidc-audience=berth-api \
+  --oidc-required-claim=groups=berth-clients
+```
+
+For PingFederate, swap the issuer URL: `--oidc-issuer-url=https://pingfed.example.com`.
+For Entra (Azure AD): `https://login.microsoftonline.com/<tenant-id>/v2.0`.
+Berth fetches `<issuer>/.well-known/openid-configuration` at startup,
+validates JWT signature against the JWKS, and rejects tokens with the
+wrong `iss`/`aud`/`exp` or missing required claims.
+
+The operator side — sourcing short-lived JWTs from the IdP and presenting
+them on each request — is documented separately under the operator setup.
 
 ### Operator Flags
 

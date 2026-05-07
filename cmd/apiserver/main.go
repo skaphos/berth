@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/skaphos/berth/internal/api"
 	"github.com/skaphos/berth/internal/auth"
@@ -20,7 +22,10 @@ import (
 const (
 	authModeNone        = "none"
 	authModeStaticKeys  = "static-keys"
+	authModeOIDC        = "oidc"
 	exitCodeConfigError = 1
+
+	oidcDiscoveryTimeout = 30 * time.Second
 )
 
 func main() {
@@ -36,7 +41,13 @@ func run() int {
 		coordinationNamespace  string
 		authMode               string
 		apiKeysFile            string
+		oidcIssuerURL          string
+		oidcAudience           string
+		oidcJWKSURL            string
+		oidcUsernameClaim      string
+		oidcTenantClaim        string
 	)
+	oidcRequiredClaims := map[string]string{}
 
 	flag.StringVar(&listenAddr, "listen-addr", ":8443", "address to listen on")
 	flag.StringVar(&tlsCert, "tls-cert-file", "", "path to TLS certificate file")
@@ -47,11 +58,33 @@ func run() int {
 		"namespace in the coordination cluster where Berth Lease objects are stored. "+
 			"When empty, the API server falls back to an in-memory store (dev only — state is lost on restart).")
 	flag.StringVar(&authMode, "auth-mode", "",
-		"authentication mode: 'none' or 'static-keys'. Defaults to 'static-keys' when "+
+		"authentication mode: 'none', 'static-keys', or 'oidc'. Defaults to 'static-keys' when "+
 			"--coordination-namespace is set; defaults to 'none' otherwise.")
 	flag.StringVar(&apiKeysFile, "api-keys-file", "",
 		"path to a file of '<key-id>:<sha256-hex>' entries; required when --auth-mode=static-keys. "+
 			"SIGHUP reloads the file in place.")
+	flag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "",
+		"OIDC issuer URL (e.g. https://your-org.okta.com/oauth2/default, https://pingfed.example.com); "+
+			"required when --auth-mode=oidc")
+	flag.StringVar(&oidcAudience, "oidc-audience", "",
+		"expected JWT 'aud' claim value; required when --auth-mode=oidc")
+	flag.StringVar(&oidcJWKSURL, "oidc-jwks-url", "",
+		"override the JWKS URL discovered from the issuer (rarely needed)")
+	flag.StringVar(&oidcUsernameClaim, "oidc-username-claim", "",
+		"JWT claim copied into the authenticated identity's holder field (default 'sub')")
+	flag.StringVar(&oidcTenantClaim, "oidc-tenant-claim", "",
+		"JWT claim copied into the authenticated identity's tenant field (default 'sub'); "+
+			"array-valued claims use the first element")
+	flag.Func("oidc-required-claim",
+		"key=value claim that must be present (string or array-of-strings); repeatable",
+		func(s string) error {
+			parts := strings.SplitN(s, "=", 2)
+			if len(parts) != 2 || parts[0] == "" {
+				return fmt.Errorf("expected key=value, got %q", s)
+			}
+			oidcRequiredClaims[parts[0]] = parts[1]
+			return nil
+		})
 	flag.Parse()
 
 	authMode = resolveAuthMode(authMode, coordinationNamespace)
@@ -63,7 +96,14 @@ func run() int {
 	}
 	mgr := lease.NewManager(store)
 
-	authn, err := buildAuthenticator(authMode, apiKeysFile)
+	authn, err := buildAuthenticator(authMode, apiKeysFile, oidcConfig{
+		issuerURL:      oidcIssuerURL,
+		audience:       oidcAudience,
+		jwksURL:        oidcJWKSURL,
+		usernameClaim:  oidcUsernameClaim,
+		tenantClaim:    oidcTenantClaim,
+		requiredClaims: oidcRequiredClaims,
+	})
 	if err != nil {
 		slog.Error("build authenticator", "error", err)
 		return exitCodeConfigError
@@ -115,11 +155,21 @@ func buildStore(kubeconfig, namespace string) (lease.Store, error) {
 	return lease.NewK8sLeaseStore(clientset, namespace)
 }
 
+// oidcConfig groups the OIDC-related flag values for buildAuthenticator.
+type oidcConfig struct {
+	issuerURL      string
+	audience       string
+	jwksURL        string
+	usernameClaim  string
+	tenantClaim    string
+	requiredClaims map[string]string
+}
+
 // buildAuthenticator returns the [auth.Authenticator] for the chosen
 // mode, or nil for the explicit no-auth case (which results in
 // unauthenticated lease endpoints — used only for dev). Returns an error
 // for unknown modes or missing required configuration.
-func buildAuthenticator(mode, keysFile string) (auth.Authenticator, error) {
+func buildAuthenticator(mode, keysFile string, oidcCfg oidcConfig) (auth.Authenticator, error) {
 	switch mode {
 	case authModeNone:
 		slog.Warn("running with --auth-mode=none; the API server will accept all lease requests without authentication; do not use in production")
@@ -134,8 +184,35 @@ func buildAuthenticator(mode, keysFile string) (auth.Authenticator, error) {
 		}
 		slog.Info("authenticator configured", "mode", authModeStaticKeys, "keys-file", keysFile)
 		return a, nil
+	case authModeOIDC:
+		if oidcCfg.issuerURL == "" {
+			return nil, errors.New("--oidc-issuer-url is required when --auth-mode=oidc")
+		}
+		if oidcCfg.audience == "" {
+			return nil, errors.New("--oidc-audience is required when --auth-mode=oidc")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), oidcDiscoveryTimeout)
+		defer cancel()
+		a, err := auth.NewOIDCAuthenticator(ctx, auth.OIDCConfig{
+			IssuerURL:      oidcCfg.issuerURL,
+			Audience:       oidcCfg.audience,
+			JWKSURL:        oidcCfg.jwksURL,
+			UsernameClaim:  oidcCfg.usernameClaim,
+			TenantClaim:    oidcCfg.tenantClaim,
+			RequiredClaims: oidcCfg.requiredClaims,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("init oidc authenticator: %w", err)
+		}
+		slog.Info("authenticator configured",
+			"mode", authModeOIDC,
+			"issuer", oidcCfg.issuerURL,
+			"audience", oidcCfg.audience,
+			"required-claims", len(oidcCfg.requiredClaims))
+		return a, nil
 	default:
-		return nil, fmt.Errorf("--auth-mode must be %q or %q, got %q", authModeNone, authModeStaticKeys, mode)
+		return nil, fmt.Errorf("--auth-mode must be %q, %q, or %q; got %q",
+			authModeNone, authModeStaticKeys, authModeOIDC, mode)
 	}
 }
 
