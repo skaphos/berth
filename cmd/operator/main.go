@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -17,6 +18,8 @@ import (
 	"github.com/skaphos/berth/pkg/client"
 )
 
+const tokenFileCacheTTL = time.Second
+
 func main() {
 	os.Exit(run())
 }
@@ -27,13 +30,19 @@ func run() int {
 		probeAddr    string
 		apiServerURL string
 		apiKey       string
+		apiKeyFile   string
 		clusterID    string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "address for the metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "address for the health probe endpoint")
 	flag.StringVar(&apiServerURL, "berth-api-server", "", "Berth API server base URL (required)")
-	flag.StringVar(&apiKey, "berth-api-key", "", "Berth API key for bearer authentication")
+	flag.StringVar(&apiKey, "berth-api-key", "",
+		"static Berth API bearer token. Mutually exclusive with --berth-api-key-file.")
+	flag.StringVar(&apiKeyFile, "berth-api-key-file", "",
+		"path to a file containing the Berth API bearer token. Re-read on each request "+
+			"(cached briefly), so an external token broker (typically an OIDC sidecar) can "+
+			"refresh it without restarting the operator. Mutually exclusive with --berth-api-key.")
 	flag.StringVar(&clusterID, "cluster-id", "",
 		"cluster-distinct identity used as the holder for every Acquire call, overriding "+
 			"spec.HolderIdentity on the BerthLease. Required for the cross-cluster singleton "+
@@ -42,6 +51,10 @@ func run() int {
 
 	if apiServerURL == "" {
 		ctrl.Log.Error(nil, "--berth-api-server is required")
+		return 1
+	}
+	if apiKey != "" && apiKeyFile != "" {
+		ctrl.Log.Error(nil, "--berth-api-key and --berth-api-key-file are mutually exclusive")
 		return 1
 	}
 
@@ -61,7 +74,19 @@ func run() int {
 		return 1
 	}
 
-	leaseClient := client.New(apiServerURL, client.WithAPIKey(apiKey))
+	clientOpts := []client.Option{}
+	switch {
+	case apiKeyFile != "":
+		ts, err := operator.NewFileTokenSource(apiKeyFile, tokenFileCacheTTL)
+		if err != nil {
+			ctrl.Log.Error(err, "load Berth API key file")
+			return 1
+		}
+		clientOpts = append(clientOpts, client.WithAPIKeyFunc(ts.Get))
+	case apiKey != "":
+		clientOpts = append(clientOpts, client.WithAPIKey(apiKey))
+	}
+	leaseClient := client.New(apiServerURL, clientOpts...)
 
 	reconciler := &operator.BerthLeaseReconciler{
 		Client:          mgr.GetClient(),

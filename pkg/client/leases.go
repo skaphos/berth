@@ -85,8 +85,10 @@ func (c *Client) postJSON(ctx context.Context, path string, body, out any) error
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.apiKeyFunc != nil {
+		if key := c.apiKeyFunc(); key != "" {
+			req.Header.Set("Authorization", "Bearer "+key)
+		}
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

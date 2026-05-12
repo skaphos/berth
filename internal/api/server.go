@@ -53,7 +53,7 @@ func WithTLSFiles(certFile, keyFile string) Option {
 func NewServer(opts ...Option) *Server {
 	cfg := serverConfig{
 		address: ":8443",
-		handler: NewMux(nil),
+		handler: NewMux(nil, nil),
 	}
 
 	for _, opt := range opts {

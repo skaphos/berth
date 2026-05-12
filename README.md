@@ -236,7 +236,119 @@ helm install berth-operator deploy/helm/berth-operator \
                             Lease objects are stored. When empty, the API
                             server falls back to an in-memory store (dev only
                             — state is lost on restart and HA is not possible).
+--auth-mode                 'none', 'static-keys', or 'oidc'. Defaults to
+                            'static-keys' when --coordination-namespace is set;
+                            defaults to 'none' otherwise. Use 'none' only for
+                            dev — the server logs a loud warning at startup.
+--api-keys-file             Path to a file of '<key-id>:<sha256-hex>' entries.
+                            Required when --auth-mode=static-keys. SIGHUP
+                            reloads the file in place (no restart needed).
+--oidc-issuer-url           OIDC issuer URL (e.g. https://your-org.okta.com/oauth2/default,
+                            https://pingfed.example.com). Required when --auth-mode=oidc.
+--oidc-audience             Expected JWT 'aud' claim. Required when --auth-mode=oidc.
+--oidc-required-claim       Repeatable key=value claim that must be present
+                            (string or string-array). Example: groups=berth-clients.
+--oidc-username-claim       JWT claim copied into the identity holder field
+                            (default 'sub').
+--oidc-tenant-claim         JWT claim copied into the identity tenant field
+                            (default 'sub'); array-valued claims use the first element.
+--oidc-jwks-url             Override the JWKS URL discovered from the issuer
+                            (rarely needed).
 ```
+
+### Authentication
+
+The API server accepts bearer-token auth on the `/v1alpha1/*` endpoints when
+`--auth-mode=static-keys` is set (the default in production). `/healthz`
+remains unauthenticated.
+
+The `--api-keys-file` is a plain-text file with one entry per line:
+
+```
+# Berth API keys — comments and blank lines ignored.
+team-a:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+team-b:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+```
+
+The hash is the SHA-256 of the raw token. The API server only stores hashes;
+the raw token lives only on the client side (operator-mounted Secret).
+Generate a key like this:
+
+```bash
+RAW=$(openssl rand -hex 32)
+HASH=$(printf '%s' "$RAW" | sha256sum | awk '{print $1}')
+echo "team-a:$HASH"   # add to the keys file
+echo "$RAW"           # distribute via the operator's --berth-api-key Secret
+```
+
+Rotate keys by editing the file and sending `SIGHUP` to the API server pod.
+The current key set is replaced atomically; if the new file is malformed,
+the previous key set is preserved.
+
+#### OIDC (Okta, PingFederate, Entra, etc.)
+
+For production deployments where you want short-lived, IdP-issued tokens
+instead of long-lived static keys, run the API server with OIDC:
+
+```
+berth-apiserver \
+  --auth-mode=oidc \
+  --oidc-issuer-url=https://your-org.okta.com/oauth2/default \
+  --oidc-audience=berth-api \
+  --oidc-required-claim=groups=berth-clients
+```
+
+For PingFederate, swap the issuer URL: `--oidc-issuer-url=https://pingfed.example.com`.
+For Entra (Azure AD): `https://login.microsoftonline.com/<tenant-id>/v2.0`.
+Berth fetches `<issuer>/.well-known/openid-configuration` at startup,
+validates JWT signature against the JWKS, and rejects tokens with the
+wrong `iss`/`aud`/`exp` or missing required claims.
+
+The operator side then uses a sidecar token broker. Berth ships a
+reference broker as `berth-oidc-broker`:
+
+```yaml
+# operator pod sketch
+spec:
+  containers:
+    - name: token-broker
+      image: ghcr.io/skaphos/berth-oidc-broker:latest
+      args:
+        - --oidc-issuer-url=https://your-org.okta.com/oauth2/default
+        - --oidc-client-id=$(OIDC_CLIENT_ID)
+        - --oidc-client-secret-file=/etc/berth-oidc/secret
+        - --oidc-audience=berth-api
+        - --output=/var/run/berth/token
+      env:
+        - { name: OIDC_CLIENT_ID, valueFrom: { secretKeyRef: { name: berth-oidc, key: client-id } } }
+      volumeMounts:
+        - { name: token, mountPath: /var/run/berth }
+        - { name: oidc-secret, mountPath: /etc/berth-oidc, readOnly: true }
+    - name: operator
+      image: ghcr.io/skaphos/berth-operator:latest
+      args:
+        - --berth-api-server=https://berth.example.com:8443
+        - --berth-api-key-file=/var/run/berth/token
+        - --cluster-id=cluster-east
+      volumeMounts:
+        - { name: token, mountPath: /var/run/berth, readOnly: true }
+  volumes:
+    - { name: token, emptyDir: { medium: Memory } }
+    - { name: oidc-secret, secret: { secretName: berth-oidc } }
+```
+
+The broker performs OAuth2 client credentials against the IdP, writes
+the access token atomically to the shared `Memory`-backed volume, and
+refreshes well before expiry. The operator picks up rotations via its
+`--berth-api-key-file` watcher (1-second cache TTL).
+
+For Entra/Azure AD, AWS Cognito, Google Cloud, and other IdPs that need
+extra parameters on the token request, the broker accepts
+`--oidc-audience` (passed as the `audience` form parameter, which is what
+Auth0 and some Okta authorization servers require) and `--oidc-scopes`.
+For more exotic flows (token exchange, certificate-bound tokens) you can
+substitute your own broker — the operator only cares that the file at
+`--berth-api-key-file` contains a valid bearer token.
 
 ### Operator Flags
 
@@ -244,7 +356,13 @@ helm install berth-operator deploy/helm/berth-operator \
 --metrics-bind-address       Metrics endpoint (default ":8080")
 --health-probe-bind-address  Health probe endpoint (default ":8081")
 --berth-api-server           Berth API server base URL (required)
---berth-api-key              Bearer token for authenticating to the API server
+--berth-api-key              Static bearer token. Mutually exclusive with
+                             --berth-api-key-file.
+--berth-api-key-file         Path to a file containing the bearer token.
+                             Re-read on each request (cached briefly), so an
+                             external sidecar (typically the OIDC broker)
+                             can rotate it without restarting the operator.
+                             Mutually exclusive with --berth-api-key.
 --cluster-id                 Cluster-distinct holder identity. When set,
                              overrides spec.holderIdentity on every Acquire
                              call. Required for the cross-cluster singleton

@@ -64,11 +64,19 @@ func leaseResponseFrom(r lease.AcquireResult) LeaseResponse {
 	}
 }
 
-// registerLeaseRoutes wires the lease HTTP endpoints onto mux.
-func registerLeaseRoutes(mux *http.ServeMux, mgr LeaseManager) {
-	mux.HandleFunc("POST /v1alpha1/namespaces/{namespace}/leases/{name}/acquire", handleAcquire(mgr))
-	mux.HandleFunc("POST /v1alpha1/namespaces/{namespace}/leases/{name}/renew", handleRenew(mgr))
-	mux.HandleFunc("POST /v1alpha1/namespaces/{namespace}/leases/{name}/release", handleRelease(mgr))
+// registerLeaseRoutes wires the lease HTTP endpoints onto mux. When wrap
+// is non-nil, each handler is composed through it (used for auth).
+func registerLeaseRoutes(mux *http.ServeMux, mgr LeaseManager, wrap func(http.Handler) http.Handler) {
+	register := func(pattern string, h http.HandlerFunc) {
+		var handler http.Handler = h
+		if wrap != nil {
+			handler = wrap(handler)
+		}
+		mux.Handle(pattern, handler)
+	}
+	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/acquire", handleAcquire(mgr))
+	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/renew", handleRenew(mgr))
+	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/release", handleRelease(mgr))
 }
 
 func handleAcquire(mgr LeaseManager) http.HandlerFunc {
