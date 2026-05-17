@@ -1,6 +1,24 @@
 apiVersion: v2
 name: berth-operator
-description: Berth operator chart
+description: |
+  Berth tenant-cluster operator. Reconciles BerthLease CRs by acquiring
+  / renewing leases against a central Berth API server and applying the
+  configured AcquireAction / ReleaseAction to target workloads. Install
+  this chart once per tenant cluster; cluster-distinct identity is set
+  via clusterID.
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+version: 0.2.0
+appVersion: "0.2.0"
+home: https://github.com/skaphos/berth
+sources:
+  - https://github.com/skaphos/berth
+keywords:
+  - berth
+  - operator
+  - lease
+  - coordination
+  - skaphos
+maintainers:
+  - name: Skaphos
+    url: https://github.com/skaphos

@@ -1,0 +1,262 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
+  name: berthleases.berth.skaphos.io
+spec:
+  group: berth.skaphos.io
+  names:
+    kind: BerthLease
+    listKind: BerthLeaseList
+    plural: berthleases
+    singular: berthlease
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: BerthLease is the schema for the BerthLease API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: BerthLeaseSpec declares the desired state for a Berth lease.
+            properties:
+              acquireAction:
+                description: |-
+                  AcquireAction defines the action applied to the target workload when
+                  the lease is acquired.
+                properties:
+                  scale:
+                    description: |-
+                      Scale, when non-nil, sets the replica count on the target workload's
+                      scale subresource. Applies to workload kinds that expose a scale
+                      subresource, such as Deployment, StatefulSet, and ReplicaSet.
+                    properties:
+                      replicas:
+                        description: |-
+                          Replicas is the desired replica count. Use 0 to scale a workload down
+                          to zero (for example, on lease release).
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    required:
+                    - replicas
+                    type: object
+                  suspend:
+                    description: |-
+                      Suspend, when non-nil, sets the suspend field on the target workload.
+                      Setting this to true pauses the workload; false resumes it. Applies to
+                      workload kinds that expose a spec.suspend field, such as CronJob.
+                    type: boolean
+                type: object
+                x-kubernetes-validations:
+                - message: at most one of suspend or scale may be set
+                  rule: '!(has(self.suspend) && has(self.scale))'
+              heartbeatIntervalSeconds:
+                description: |-
+                  HeartbeatIntervalSeconds is the interval at which the holder must
+                  renew the lease to prevent TTL expiration.
+                format: int32
+                type: integer
+              holderIdentity:
+                description: HolderIdentity identifies the entity requesting or holding
+                  the lease.
+                type: string
+              leaseName:
+                description: LeaseName is the unique identifier for this lease within
+                  its namespace.
+                type: string
+              releaseAction:
+                description: |-
+                  ReleaseAction defines the action applied to the target workload when
+                  the lease is released or expires.
+                properties:
+                  scale:
+                    description: |-
+                      Scale, when non-nil, sets the replica count on the target workload's
+                      scale subresource. Applies to workload kinds that expose a scale
+                      subresource, such as Deployment, StatefulSet, and ReplicaSet.
+                    properties:
+                      replicas:
+                        description: |-
+                          Replicas is the desired replica count. Use 0 to scale a workload down
+                          to zero (for example, on lease release).
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    required:
+                    - replicas
+                    type: object
+                  suspend:
+                    description: |-
+                      Suspend, when non-nil, sets the suspend field on the target workload.
+                      Setting this to true pauses the workload; false resumes it. Applies to
+                      workload kinds that expose a spec.suspend field, such as CronJob.
+                    type: boolean
+                type: object
+                x-kubernetes-validations:
+                - message: at most one of suspend or scale may be set
+                  rule: '!(has(self.suspend) && has(self.scale))'
+              semantics:
+                description: |-
+                  Semantics controls the lease acquisition mode: "at-most-once"
+                  guarantees exclusive access, "at-least-once" permits concurrent holders.
+                enum:
+                - at-most-once
+                - at-least-once
+                type: string
+              target:
+                description: |-
+                  Target is an optional reference to a workload the operator manages
+                  in response to lease state transitions.
+                properties:
+                  apiVersion:
+                    description: APIVersion is the API group and version of the target
+                      resource (e.g. "apps/v1").
+                    type: string
+                  kind:
+                    description: Kind is the resource kind of the target (e.g. "Deployment").
+                    type: string
+                  name:
+                    description: Name is the name of the target resource in the same
+                      namespace as the lease.
+                    type: string
+                required:
+                - apiVersion
+                - kind
+                - name
+                type: object
+              ttlSeconds:
+                description: |-
+                  TTLSeconds is the time-to-live for the lease in seconds. The lease
+                  expires if not renewed within this duration.
+                format: int32
+                type: integer
+            required:
+            - heartbeatIntervalSeconds
+            - holderIdentity
+            - leaseName
+            - semantics
+            - ttlSeconds
+            type: object
+          status:
+            description: BerthLeaseStatus reports the observed state of a Berth lease.
+            properties:
+              acquiredAt:
+                description: AcquiredAt is the timestamp when the lease was last acquired.
+                format: date-time
+                type: string
+              conditions:
+                description: Conditions represent the latest observations of the lease's
+                  state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              currentHolder:
+                description: CurrentHolder is the identity of the entity currently
+                  holding the lease.
+                type: string
+              expiresAt:
+                description: ExpiresAt is the timestamp when the lease will expire
+                  if not renewed.
+                format: date-time
+                type: string
+              fencingToken:
+                description: |-
+                  FencingToken is the monotonic fencing token returned by the central
+                  API server on the most recent successful Acquire/Renew. It is used by
+                  the reconciler on deletion to perform a best-effort Release.
+                format: int32
+                type: integer
+              lastHeartbeat:
+                description: LastHeartbeat is the timestamp of the most recent lease
+                  renewal.
+                format: date-time
+                type: string
+              leaseState:
+                description: LeaseState is the current state of the lease (e.g. "held",
+                  "released", "expired").
+                type: string
+              tenant:
+                description: Tenant is the resolved tenant identifier for the current
+                  holder.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

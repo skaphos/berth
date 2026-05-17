@@ -26,12 +26,15 @@ func main() {
 
 func run() int {
 	var (
-		metricsAddr  string
-		probeAddr    string
-		apiServerURL string
-		apiKey       string
-		apiKeyFile   string
-		clusterID    string
+		metricsAddr        string
+		probeAddr          string
+		apiServerURL       string
+		apiKey             string
+		apiKeyFile         string
+		clusterID          string
+		caBundleFile       string
+		serverName         string
+		insecureSkipVerify bool
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "address for the metrics endpoint")
@@ -47,6 +50,16 @@ func run() int {
 		"cluster-distinct identity used as the holder for every Acquire call, overriding "+
 			"spec.HolderIdentity on the BerthLease. Required for the cross-cluster singleton "+
 			"pattern; leave empty to fall back to spec.HolderIdentity.")
+	flag.StringVar(&caBundleFile, "berth-ca-bundle-file", "",
+		"path to a PEM file with extra CA certificates trusted when verifying the Berth API "+
+			"server TLS certificate. The bundle is appended to the system trust store, so "+
+			"private and public CAs can coexist.")
+	flag.StringVar(&serverName, "berth-server-name", "",
+		"override the SNI / TLS certificate name used when connecting to the Berth API server. "+
+			"Defaults to the host in --berth-api-server.")
+	flag.BoolVar(&insecureSkipVerify, "berth-insecure-skip-tls-verify", false,
+		"disable Berth API server TLS certificate verification. Development only — never "+
+			"set this in production.")
 	flag.Parse()
 
 	if apiServerURL == "" {
@@ -59,6 +72,10 @@ func run() int {
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+
+	if insecureSkipVerify {
+		ctrl.Log.Info("WARNING: --berth-insecure-skip-tls-verify is set; the Berth API server certificate will not be verified")
+	}
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -86,6 +103,14 @@ func run() int {
 	case apiKey != "":
 		clientOpts = append(clientOpts, client.WithAPIKey(apiKey))
 	}
+
+	tlsCfg, err := operator.LoadTLSConfig(caBundleFile, serverName, insecureSkipVerify)
+	if err != nil {
+		ctrl.Log.Error(err, "load Berth API server TLS config")
+		return 1
+	}
+	clientOpts = append(clientOpts, client.WithTLSConfig(tlsCfg))
+
 	leaseClient := client.New(apiServerURL, clientOpts...)
 
 	reconciler := &operator.BerthLeaseReconciler{

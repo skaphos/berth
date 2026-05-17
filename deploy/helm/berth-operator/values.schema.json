@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "berth-operator values",
+  "type": "object",
+  "required": ["image", "berth", "rbac"],
+  "properties": {
+    "image": {
+      "type": "object",
+      "required": ["repository"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag":        {"type": "string"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "imagePullSecrets": {"type": "array"},
+    "nameOverride":     {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "replicaCount":     {"type": "integer", "minimum": 1, "maximum": 1},
+    "clusterID":        {"type": "string"},
+
+    "berth": {
+      "type": "object",
+      "required": ["apiServer"],
+      "properties": {
+        "apiServer": {"type": "string"},
+        "apiKey": {
+          "type": "object",
+          "properties": {
+            "secretName": {"type": "string"},
+            "secretKey":  {"type": "string"}
+          }
+        },
+        "tokenFile": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string"}
+          }
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "caBundleConfigMap": {"type": "string"},
+            "caBundleKey":       {"type": "string"},
+            "serverName":        {"type": "string"},
+            "insecureSkipVerify":{"type": "boolean"}
+          }
+        }
+      }
+    },
+
+    "sidecarBroker": {
+      "type": "object",
+      "properties": {
+        "enabled":     {"type": "boolean"},
+        "image":       {"type": "object"},
+        "oidc":        {"type": "object"},
+        "refreshSkew": {"type": "string"},
+        "tokenPath":   {"type": "string"},
+        "resources":   {"type": "object"}
+      }
+    },
+
+    "installCRDs": {"type": "boolean"},
+
+    "rbac": {
+      "type": "object",
+      "required": ["create"],
+      "properties": {
+        "create":           {"type": "boolean"},
+        "berthLeaseVerbs":  {"type": "array"},
+        "targetVerbs":      {"type": "array"},
+        "leaderElection":   {"type": "boolean"}
+      }
+    },
+
+    "metrics":           {"type": "object"},
+    "healthProbe":       {"type": "object"},
+    "resources":         {"type": "object"},
+    "podSecurityContext":{"type": "object"},
+    "securityContext":   {"type": "object"},
+    "livenessProbe":     {"type": "object"},
+    "readinessProbe":    {"type": "object"},
+    "nodeSelector":      {"type": "object"},
+    "tolerations":       {"type": "array"},
+    "affinity":          {"type": "object"},
+    "extraArgs":         {"type": "array", "items": {"type": "string"}},
+    "extraEnv":          {"type": "array"},
+    "extraVolumes":      {"type": "array"},
+    "extraVolumeMounts": {"type": "array"},
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create":      {"type": "boolean"},
+        "name":        {"type": "string"},
+        "annotations": {"type": "object"}
+      }
+    }
+  }
+}

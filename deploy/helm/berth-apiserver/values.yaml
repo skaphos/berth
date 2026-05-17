@@ -1,5 +1,180 @@
-replicaCount: 1
+# Default values for berth-apiserver.
+# values.schema.json validates inputs at render time.
+
+# -- Container image.
 image:
-  repository: berth-apiserver
-  tag: latest
+  repository: ghcr.io/skaphos/berth-apiserver
+  tag: ""              # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
+
+# -- Pull secrets referenced by the pod spec.
+imagePullSecrets: []
+
+# -- Override the chart name in resource names.
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Number of replicas. Multi-replica is safe because all replicas share
+# state through the coordination-cluster Lease store. Set to 1 only for
+# the dev `coordination.namespace: ""` mode (in-memory store).
+replicaCount: 2
+
+# -- Lease coordination backend.
+#
+# Two modes:
+# 1. inCluster: true   — the API server runs inside the coordination cluster
+#                         itself and uses the pod's ServiceAccount. The chart
+#                         renders a Role + RoleBinding granting CRUD on
+#                         coordination.k8s.io/v1.Lease in `namespace`.
+# 2. inCluster: false  — the API server runs in a different cluster and
+#                         reads `namespace`'s Leases via an external
+#                         kubeconfig stored in a Secret in this release.
+#                         The Secret's `kubeconfig.secretKey` data field
+#                         must contain a kubeconfig pointed at the
+#                         coordination cluster.
+#
+# When `namespace` is empty the API server falls back to an in-memory
+# store. This is for development only — state does not survive restart
+# and replicaCount must be 1.
+coordination:
+  namespace: ""
+  inCluster: false
+  kubeconfig:
+    secretName: ""
+    secretKey: kubeconfig
+
+# -- TLS certificate for the API server's listener. Exactly one of
+# `certManager.enabled` or `existingSecret` must be set.
+tls:
+  # cert-manager-issued Certificate. Renders a Certificate resource that
+  # writes tls.crt + tls.key + ca.crt into a Secret the Deployment mounts.
+  certManager:
+    enabled: false
+    issuerRef: {}    # e.g. { name: berth-ca, kind: ClusterIssuer }
+    duration: 8760h  # 1 year
+    renewBefore: 720h  # 30 days
+    dnsNames: []     # additional names beyond the Service ClusterIP DNS
+  # Pre-created Secret with kubernetes.io/tls type (tls.crt + tls.key).
+  existingSecret: ""
+
+# -- Authentication mode applied to lease endpoints. `/healthz` is always
+# unauthenticated.
+auth:
+  # none | static-keys | oidc
+  # Default: none — chart users MUST opt-in to static-keys or oidc.
+  # Render fails if mode=static-keys without a Secret, or mode=oidc
+  # without an issuerURL/audience. See _validations.tpl.
+  mode: none
+
+  staticKeys:
+    # Name of a Secret in the release namespace with a single data key
+    # `api-keys` containing `<key-id>:<sha256-hex>` lines.
+    secretName: ""
+    secretKey: api-keys
+
+  oidc:
+    issuerURL: ""
+    audience: ""
+    jwksURL: ""
+    usernameClaim: ""
+    tenantClaim: ""
+    # Repeatable claim-equality constraints, e.g. groups=berth-clients.
+    requiredClaims: []
+
+# -- Service exposing the API.
+service:
+  type: ClusterIP
+  port: 8443
+
+# -- Optional Ingress fronting the Service. Off by default; users hosting
+# a single cluster usually just expose the Service.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: berth.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# -- PodDisruptionBudget so a node drain cannot evict every replica.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: # mutually exclusive with minAvailable
+
+# -- Container resource requests / limits.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# -- Pod-level securityContext.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level securityContext.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# -- Liveness / readiness probes hit /healthz on the TLS listener.
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: https
+    scheme: HTTPS
+  initialDelaySeconds: 5
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: https
+    scheme: HTTPS
+  initialDelaySeconds: 2
+  periodSeconds: 5
+
+# -- Scheduling.
+nodeSelector: {}
+tolerations: []
+# Default: pod anti-affinity across nodes so replicas don't all land on one box.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: berth-apiserver
+
+# -- Extra command-line arguments appended to the apiserver invocation.
+# Use to set fields the chart has not yet templated (e.g. an experimental
+# --feature flag) without modifying the chart.
+extraArgs: []
+
+# -- Extra environment variables on the apiserver container.
+extraEnv: []
+
+# -- Extra volumes / mounts (for sidecars, CA bundles, etc.).
+extraVolumes: []
+extraVolumeMounts: []
+
+# -- ServiceAccount.
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}

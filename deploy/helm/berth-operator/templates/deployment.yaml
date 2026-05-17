@@ -1,18 +1,159 @@
+{{- include "berth-operator.validate" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: berth-operator
+  name: {{ include "berth-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "berth-operator.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: berth-operator
+      {{- include "berth-operator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: berth-operator
+        {{- include "berth-operator.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ printf "%s|%s|%s|%s|%t" .Values.clusterID .Values.berth.apiServer .Values.berth.apiKey.secretName .Values.berth.tls.caBundleConfigMap .Values.sidecarBroker.enabled | sha256sum }}
     spec:
+      serviceAccountName: {{ include "berth-operator.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: operator
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --berth-api-server={{ .Values.berth.apiServer }}
+            - --cluster-id={{ .Values.clusterID }}
+            - --metrics-bind-address={{ .Values.metrics.bindAddress }}
+            - --health-probe-bind-address={{ .Values.healthProbe.bindAddress }}
+            {{- if .Values.berth.apiKey.secretName }}
+            - --berth-api-key=$(BERTH_API_KEY)
+            {{- else if or .Values.sidecarBroker.enabled .Values.berth.tokenFile.path }}
+            - --berth-api-key-file={{ include "berth-operator.tokenFilePath" . }}
+            {{- end }}
+            {{- if .Values.berth.tls.caBundleConfigMap }}
+            - --berth-ca-bundle-file=/etc/berth/tls/{{ .Values.berth.tls.caBundleKey }}
+            {{- end }}
+            {{- with .Values.berth.tls.serverName }}
+            - --berth-server-name={{ . }}
+            {{- end }}
+            {{- if .Values.berth.tls.insecureSkipVerify }}
+            - --berth-insecure-skip-tls-verify
+            {{- end }}
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ trimPrefix ":" .Values.metrics.bindAddress | int }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ trimPrefix ":" .Values.healthProbe.bindAddress | int }}
+              protocol: TCP
+          env:
+            {{- if .Values.berth.apiKey.secretName }}
+            - name: BERTH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.berth.apiKey.secretName }}
+                  key: {{ .Values.berth.apiKey.secretKey }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.berth.tls.caBundleConfigMap }}
+            - name: berth-ca
+              mountPath: /etc/berth/tls
+              readOnly: true
+            {{- end }}
+            {{- if or .Values.sidecarBroker.enabled .Values.berth.tokenFile.path }}
+            - name: berth-token
+              mountPath: {{ include "berth-operator.tokenFilePath" . | dir }}
+              readOnly: {{ not .Values.sidecarBroker.enabled }}
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if .Values.sidecarBroker.enabled }}
+        - name: oidc-broker
+          image: "{{ .Values.sidecarBroker.image.repository }}:{{ .Values.sidecarBroker.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sidecarBroker.image.pullPolicy }}
+          args:
+            - --oidc-issuer-url={{ .Values.sidecarBroker.oidc.issuerURL }}
+            - --oidc-client-id={{ .Values.sidecarBroker.oidc.clientID }}
+            - --oidc-client-secret-file=/etc/berth/oidc/{{ .Values.sidecarBroker.oidc.clientSecret.secretKey }}
+            {{- with .Values.sidecarBroker.oidc.audience }}
+            - --oidc-audience={{ . }}
+            {{- end }}
+            {{- with .Values.sidecarBroker.oidc.scopes }}
+            - --oidc-scopes={{ . }}
+            {{- end }}
+            - --output={{ .Values.sidecarBroker.tokenPath }}
+            - --refresh-skew={{ .Values.sidecarBroker.refreshSkew }}
+          resources:
+            {{- toYaml .Values.sidecarBroker.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: berth-token
+              mountPath: {{ .Values.sidecarBroker.tokenPath | dir }}
+            - name: oidc-client-secret
+              mountPath: /etc/berth/oidc
+              readOnly: true
+        {{- end }}
+      volumes:
+        {{- if .Values.berth.tls.caBundleConfigMap }}
+        - name: berth-ca
+          configMap:
+            name: {{ .Values.berth.tls.caBundleConfigMap }}
+        {{- end }}
+        {{- if or .Values.sidecarBroker.enabled .Values.berth.tokenFile.path }}
+        - name: berth-token
+          emptyDir:
+            medium: Memory
+        {{- end }}
+        {{- if .Values.sidecarBroker.enabled }}
+        - name: oidc-client-secret
+          secret:
+            secretName: {{ .Values.sidecarBroker.oidc.clientSecret.secretName }}
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

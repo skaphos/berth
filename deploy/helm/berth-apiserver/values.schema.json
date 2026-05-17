@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "berth-apiserver values",
+  "type": "object",
+  "required": ["image", "coordination", "tls", "auth"],
+  "properties": {
+    "image": {
+      "type": "object",
+      "required": ["repository"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag":        {"type": "string"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "imagePullSecrets": {"type": "array"},
+    "nameOverride":     {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "replicaCount":     {"type": "integer", "minimum": 1},
+
+    "coordination": {
+      "type": "object",
+      "required": ["namespace", "inCluster", "kubeconfig"],
+      "properties": {
+        "namespace":  {"type": "string"},
+        "inCluster":  {"type": "boolean"},
+        "kubeconfig": {
+          "type": "object",
+          "properties": {
+            "secretName": {"type": "string"},
+            "secretKey":  {"type": "string"}
+          }
+        }
+      }
+    },
+
+    "tls": {
+      "type": "object",
+      "properties": {
+        "certManager": {
+          "type": "object",
+          "properties": {
+            "enabled":     {"type": "boolean"},
+            "issuerRef":   {"type": "object"},
+            "duration":    {"type": "string"},
+            "renewBefore": {"type": "string"},
+            "dnsNames":    {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "existingSecret": {"type": "string"}
+      }
+    },
+
+    "auth": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {"type": "string", "enum": ["none", "static-keys", "oidc"]},
+        "staticKeys": {
+          "type": "object",
+          "properties": {
+            "secretName": {"type": "string"},
+            "secretKey":  {"type": "string"}
+          }
+        },
+        "oidc": {
+          "type": "object",
+          "properties": {
+            "issuerURL":      {"type": "string"},
+            "audience":       {"type": "string"},
+            "jwksURL":        {"type": "string"},
+            "usernameClaim":  {"type": "string"},
+            "tenantClaim":    {"type": "string"},
+            "requiredClaims": {"type": "array", "items": {"type": "string", "pattern": "^[^=]+=.+$"}}
+          }
+        }
+      }
+    },
+
+    "service":       {"type": "object"},
+    "ingress":       {"type": "object"},
+    "podDisruptionBudget": {
+      "type": "object",
+      "properties": {
+        "enabled":        {"type": "boolean"},
+        "minAvailable":   {"oneOf": [{"type": "integer"}, {"type": "string"}]},
+        "maxUnavailable": {"oneOf": [{"type": "integer"}, {"type": "string"}]}
+      }
+    },
+    "resources":         {"type": "object"},
+    "podSecurityContext":{"type": "object"},
+    "securityContext":   {"type": "object"},
+    "livenessProbe":     {"type": "object"},
+    "readinessProbe":    {"type": "object"},
+    "nodeSelector":      {"type": "object"},
+    "tolerations":       {"type": "array"},
+    "affinity":          {"type": "object"},
+    "extraArgs":         {"type": "array", "items": {"type": "string"}},
+    "extraEnv":          {"type": "array"},
+    "extraVolumes":      {"type": "array"},
+    "extraVolumeMounts": {"type": "array"},
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create":      {"type": "boolean"},
+        "name":        {"type": "string"},
+        "annotations": {"type": "object"}
+      }
+    }
+  }
+}

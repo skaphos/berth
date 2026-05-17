@@ -1,0 +1,8 @@
+clusterID: cluster-west
+berth:
+  apiServer: https://berth.example.com:8443
+  apiKey:
+    secretName: berth-api-key
+    secretKey: api-key
+  tls:
+    caBundleConfigMap: berth-ca-bundle

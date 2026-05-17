@@ -1,0 +1,45 @@
+berth-operator {{ .Chart.AppVersion }} installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+Cluster identity: {{ .Values.clusterID }}
+Berth API server: {{ .Values.berth.apiServer }}
+
+Token source:
+{{- if .Values.berth.apiKey.secretName }}
+  static Secret {{ .Values.berth.apiKey.secretName }}.{{ .Values.berth.apiKey.secretKey }}
+{{- else if .Values.sidecarBroker.enabled }}
+  OIDC sidecar broker → {{ .Values.sidecarBroker.tokenPath }}
+  issuer:   {{ .Values.sidecarBroker.oidc.issuerURL }}
+  audience: {{ .Values.sidecarBroker.oidc.audience }}
+  client:   {{ .Values.sidecarBroker.oidc.clientID }}
+{{- else if .Values.berth.tokenFile.path }}
+  external token file at {{ .Values.berth.tokenFile.path }} (operator is unaware of the writer)
+{{- else }}
+  *** WARNING *** no token configured. The operator will not send an
+  Authorization header — only useful when the apiserver runs with
+  --auth-mode=none, which is not a production setting.
+{{- end }}
+
+TLS:
+{{- if .Values.berth.tls.caBundleConfigMap }}
+  Extra CAs from ConfigMap {{ .Values.berth.tls.caBundleConfigMap }}.{{ .Values.berth.tls.caBundleKey }}.
+{{- else }}
+  System trust store only (no additional CAs).
+{{- end }}
+{{- if .Values.berth.tls.insecureSkipVerify }}
+  *** WARNING *** --berth-insecure-skip-tls-verify is enabled. The Berth
+  API server's certificate is not being verified. Development only.
+{{- end }}
+
+CRDs:
+{{- if .Values.installCRDs }}
+  Installed by this chart on first install. Helm does NOT manage CRD
+  upgrades; for breaking schema changes, apply the new CRD with
+  kubectl before running `helm upgrade --skip-crds`.
+{{- else }}
+  Not managed by this chart. Apply config/crd/berthlease.yaml from the
+  Berth repo out-of-band before installing this chart.
+{{- end }}
+
+Verify the deployment:
+  kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ include "berth-operator.fullname" . }}
+  kubectl --namespace {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} -f

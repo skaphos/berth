@@ -1,5 +1,187 @@
-replicaCount: 1
+# Default values for berth-operator.
+# values.schema.json + _validations.tpl validate inputs at render time.
+
+# -- Container image.
 image:
-  repository: berth-operator
-  tag: latest
+  repository: ghcr.io/skaphos/berth-operator
+  tag: ""              # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Controller replica count. The operator does not use leader election
+# today, so leave this at 1. Multi-replica leader election can ship
+# later as an additive change.
+replicaCount: 1
+
+# -- Cluster-distinct identity used as the lease holder for every Acquire
+# call. REQUIRED for the cross-cluster singleton pattern — each cluster
+# running this chart must pass a different clusterID. Empty falls back
+# to spec.HolderIdentity on each BerthLease, which is fine for tests but
+# not for the production pattern.
+clusterID: ""
+
+# -- Berth API server connection.
+berth:
+  # Base URL of the Berth API server, e.g. https://berth.example.com:8443
+  apiServer: ""
+
+  # Bearer token authentication. Use exactly one of `apiKey.secretName`
+  # (static token) or `tokenFile.path` (token mounted by a sidecar that
+  # refreshes it — typically an OIDC broker). Leaving both empty means
+  # no Authorization header is sent (only valid for an apiserver in
+  # --auth-mode=none).
+  apiKey:
+    secretName: ""
+    secretKey: api-key
+
+  tokenFile:
+    # When set, the operator runs with --berth-api-key-file=<path>.
+    # The path must point at a file the operator can read; usually
+    # backed by an emptyDir shared with the sidecar broker (see
+    # `sidecarBroker` below).
+    path: ""
+
+  tls:
+    # ConfigMap with `ca.crt` for verifying the API server TLS chain.
+    # The operator appends the bundle to the system trust store.
+    caBundleConfigMap: ""
+    caBundleKey: ca.crt
+    # Override the SNI / certificate name (rarely needed).
+    serverName: ""
+    # Development only: skip TLS verification entirely. Never set true
+    # in production.
+    insecureSkipVerify: false
+
+# -- Optional OIDC token-broker sidecar (Pattern A from SKA-283). When
+# enabled, the chart adds a sidecar that fetches JWTs from an OIDC
+# provider and writes them to an emptyDir shared with the operator; the
+# operator reads via --berth-api-key-file.
+sidecarBroker:
+  enabled: false
+  image:
+    repository: ghcr.io/skaphos/berth-oidc-broker
+    tag: ""             # defaults to .Chart.AppVersion of THIS chart
+    pullPolicy: IfNotPresent
+  oidc:
+    issuerURL: ""
+    audience: ""
+    clientID: ""
+    # Secret with the client secret as a single data key.
+    clientSecret:
+      secretName: ""
+      secretKey: client-secret
+    scopes: ""          # comma-separated
+  refreshSkew: 60s
+  tokenPath: /var/run/berth/token
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# -- Install the BerthLease CRD as part of this chart. Helm only installs
+# CRDs on first install (no upgrade), so toggle off and apply CRDs
+# out-of-band when you need schema changes managed separately.
+installCRDs: true
+
+# -- RBAC granted to the operator's ServiceAccount in this tenant cluster.
+rbac:
+  create: true
+  # BerthLease management — almost never needs tweaking.
+  berthLeaseVerbs:
+    - apiGroups: ["berth.skaphos.io"]
+      resources: ["berthleases"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    - apiGroups: ["berth.skaphos.io"]
+      resources: ["berthleases/status"]
+      verbs: ["get", "update", "patch"]
+    - apiGroups: ["berth.skaphos.io"]
+      resources: ["berthleases/finalizers"]
+      verbs: ["update"]
+  # Target-workload management. Defaults to the kinds the AcquireAction /
+  # ReleaseAction can address (scale Deployment/StatefulSet/ReplicaSet,
+  # suspend CronJob). Extend in values for additional kinds.
+  targetVerbs:
+    - apiGroups: ["apps"]
+      resources: ["deployments", "statefulsets", "replicasets"]
+      verbs: ["get", "list", "watch", "patch", "update"]
+    - apiGroups: ["apps"]
+      resources: ["deployments/scale", "statefulsets/scale", "replicasets/scale"]
+      verbs: ["update", "patch"]
+    - apiGroups: ["batch"]
+      resources: ["cronjobs"]
+      verbs: ["get", "list", "watch", "patch", "update"]
+  # Leader-election lease lookup (forward-looking; harmless to include now
+  # so a future leader-election change is non-breaking).
+  leaderElection: false
+
+# -- Observability bind addresses (passed to the controller-runtime manager).
+metrics:
+  bindAddress: ":8080"
+  serviceMonitor:
+    enabled: false
+    namespace: ""        # defaults to release namespace
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+healthProbe:
+  bindAddress: ":8081"
+
+# -- Resource requests / limits.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# -- Pod- and container-level security context.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: health
+  initialDelaySeconds: 5
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: health
+  initialDelaySeconds: 2
+  periodSeconds: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+extraArgs: []
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
