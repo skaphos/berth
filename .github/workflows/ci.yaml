@@ -105,6 +105,15 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: [dco, reuse, lint, test, quality]
+    if: >-
+      ${{
+        always() &&
+        needs.reuse.result == 'success' &&
+        needs.lint.result == 'success' &&
+        needs.test.result == 'success' &&
+        needs.quality.result == 'success' &&
+        (needs.dco.result == 'success' || needs.dco.result == 'skipped')
+      }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
