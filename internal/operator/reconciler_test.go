@@ -138,8 +138,10 @@ func TestReconcileAddsFinalizerOnFirstObservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Requeue {
-		t.Fatal("expected immediate requeue after adding finalizer")
+	// After adding the finalizer we return an empty Result and rely on
+	// the resulting Update event to trigger the next reconcile.
+	if res != (ctrl.Result{}) {
+		t.Fatalf("Result = %+v, want zero value", res)
 	}
 	got := &berthv1alpha1.BerthLease{}
 	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "ns", Name: "lease-a"}, got); err != nil {

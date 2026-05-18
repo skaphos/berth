@@ -28,14 +28,14 @@ type AcquireRequest struct {
 // RenewRequest is the JSON body of POST .../renew.
 type RenewRequest struct {
 	Holder       string `json:"holder"`
-	FencingToken int32 `json:"fencingToken"`
+	FencingToken int32  `json:"fencingToken"`
 	TTLSeconds   int32  `json:"ttlSeconds"`
 }
 
 // ReleaseRequest is the JSON body of POST .../release.
 type ReleaseRequest struct {
 	Holder       string `json:"holder"`
-	FencingToken int32 `json:"fencingToken"`
+	FencingToken int32  `json:"fencingToken"`
 }
 
 // LeaseResponse is the JSON body returned by acquire and renew. It mirrors
@@ -44,7 +44,7 @@ type ReleaseRequest struct {
 type LeaseResponse struct {
 	Acquired     bool      `json:"acquired"`
 	Holder       string    `json:"holder,omitempty"`
-	FencingToken int32    `json:"fencingToken,omitempty"`
+	FencingToken int32     `json:"fencingToken,omitempty"`
 	ExpiresAt    time.Time `json:"expiresAt,omitempty"`
 	AcquiredAt   time.Time `json:"acquiredAt,omitempty"`
 }

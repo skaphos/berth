@@ -19,13 +19,19 @@ operators reach the coord API server at
 
 Requires `kind`, `kubectl`, `helm`, `docker`, `openssl` on PATH.
 
+Task is declared as a Go tool in `tools/go.mod`, so the canonical
+invocation is `go -C tools tool task <target>` — no separate Task
+install required. Copy-paste these as-is:
+
 ```bash
-make e2e-up      # ~2 min — creates clusters, builds + loads images, installs charts
-make e2e         # runs ./test/e2e with -tags=e2e
-make e2e-down    # tears everything down
+go -C tools tool task e2e-up    # ~2 min — creates clusters, builds + loads images, installs charts
+go -C tools tool task e2e       # runs ./test/e2e with -tags=e2e
+go -C tools tool task e2e-down  # tears everything down
 ```
 
-`make e2e-all` chains all three for CI.
+`go -C tools tool task e2e-all` chains all three for CI. If you already
+have Task on your PATH (Homebrew / asdf / etc.), `task <target>` works
+the same way.
 
 ## What's intentionally not production-grade
 

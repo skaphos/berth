@@ -1,7 +1,38 @@
-run:
-  timeout: 5m
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+
+version: "2"
 
 linters:
-  disable-all: true
+  # Disable the v2 "standard" preset so the enabled set below is the
+  # complete one. Future golangci-lint upgrades won't silently add or
+  # remove linters from CI.
+  default: none
   enable:
     - govet
+    - staticcheck
+    - errcheck
+    - unused
+    - misspell
+    - ineffassign
+    - unconvert
+  exclusions:
+    rules:
+      # Tests use httptest patterns where resp.Body.Close failures are
+      # immaterial; keep errcheck enabled on production code only.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+run:
+  timeout: 5m
+  allow-parallel-runners: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -107,7 +107,7 @@ func loadKeysFile(path string) (map[string]Identity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open keys file %q: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	keys := map[string]Identity{}
 	scanner := bufio.NewScanner(f)

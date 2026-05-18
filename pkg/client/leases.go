@@ -18,7 +18,7 @@ import (
 type AcquireResult struct {
 	Acquired     bool      `json:"acquired"`
 	Holder       string    `json:"holder,omitempty"`
-	FencingToken int32    `json:"fencingToken,omitempty"`
+	FencingToken int32     `json:"fencingToken,omitempty"`
 	ExpiresAt    time.Time `json:"expiresAt,omitempty"`
 	AcquiredAt   time.Time `json:"acquiredAt,omitempty"`
 }
@@ -94,7 +94,7 @@ func (c *Client) postJSON(ctx context.Context, path string, body, out any) error
 	if err != nil {
 		return fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	switch {
 	case resp.StatusCode == http.StatusConflict:

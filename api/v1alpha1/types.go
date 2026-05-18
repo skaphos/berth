@@ -122,7 +122,3 @@ type BerthLeaseList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []BerthLease `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&BerthLease{}, &BerthLeaseList{})
-}
