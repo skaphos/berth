@@ -306,16 +306,38 @@ inline documentation.
 --listen-addr               Listen address (default ":8443")
 --tls-cert-file             Path to TLS certificate (required)
 --tls-key-file              Path to TLS private key (required)
+--store-backend             Lease store backend: 'mem' (in-memory; dev only),
+                            'k8s' (coordination.k8s.io/v1.Lease in a separate
+                            cluster), or 'sql' (Postgres / MariaDB / SQLite).
+                            When unset, a legacy heuristic applies: empty
+                            --coordination-namespace → 'mem', set → 'k8s';
+                            a deprecation warning is logged. The implicit
+                            fallback will be removed one release after the
+                            SQL backend ships. Set explicitly.
 --coordination-kubeconfig   Path to a kubeconfig pointing at the coordination
-                            cluster (empty = in-cluster config)
+                            cluster (empty = in-cluster config). Only valid
+                            with --store-backend=k8s.
 --coordination-namespace    Namespace in the coordination cluster where Berth
-                            Lease objects are stored. When empty, the API
-                            server falls back to an in-memory store (dev only
-                            — state is lost on restart and HA is not possible).
+                            Lease objects are stored. Required when
+                            --store-backend=k8s.
+--sql-driver                SQL driver: 'postgres', 'mysql', or 'sqlite'.
+                            Required when --store-backend=sql.
+--sql-dsn                   SQL DSN (e.g. 'postgres://user:pass@host/berth').
+                            Mutually exclusive with --sql-dsn-file. Only
+                            valid with --store-backend=sql.
+--sql-dsn-file              Path to a file containing the SQL DSN. Re-read
+                            so an external rotator can refresh credentials
+                            without restarting the API server. Mutually
+                            exclusive with --sql-dsn. Only valid with
+                            --store-backend=sql.
+--sql-migrate               'auto' (apply pending migrations at startup) or
+                            'off' (fail fast on schema drift). Default
+                            'auto'. Only valid with --store-backend=sql.
 --auth-mode                 'none', 'static-keys', or 'oidc'. Defaults to
-                            'static-keys' when --coordination-namespace is set;
-                            defaults to 'none' otherwise. Use 'none' only for
-                            dev — the server logs a loud warning at startup.
+                            'static-keys' when the resolved store backend
+                            is 'k8s' or 'sql'; defaults to 'none' for 'mem'.
+                            Use 'none' only for dev — the server logs a
+                            loud warning at startup.
 --api-keys-file             Path to a file of '<key-id>:<sha256-hex>' entries.
                             Required when --auth-mode=static-keys. SIGHUP
                             reloads the file in place (no restart needed).
@@ -458,19 +480,29 @@ substitute your own broker — the operator only cares that the file at
 ### Lease storage backend
 
 The API server's lease state is authoritative for at-most-once semantics
-across clusters. Two backends are available:
+across clusters. The backend is selected explicitly via `--store-backend`:
 
 | Backend | When | Durability | HA |
 |---|---|---|---|
-| **K8s coordination cluster** (default in production) | `--coordination-namespace` is set | State persists in `coordination.k8s.io/v1.Lease` objects in the named namespace | API server can be scaled to multiple replicas; they share state via the kube-apiserver |
-| **In-memory** (dev/demo only) | `--coordination-namespace` is empty | None — state is lost on restart | Single replica only |
+| `--store-backend=k8s` | Cross-cluster topology with a dedicated coordination cluster | `coordination.k8s.io/v1.Lease` objects in `--coordination-namespace` | API server scales to multiple replicas; state is shared through the coordination kube-apiserver |
+| `--store-backend=sql` | Runner-local topology (no separate Kubernetes coordination cluster). Drivers: `postgres`, `mysql`, `sqlite` | Rows in a SQL database supplied via `--sql-dsn` / `--sql-dsn-file` | Postgres / MariaDB: multi-replica safe; SQLite: single replica |
+| `--store-backend=mem` | Dev / demo only | None — state is lost on restart | Single replica only |
 
-For the production backend, point `--coordination-kubeconfig` at a small
+For the `k8s` backend, point `--coordination-kubeconfig` at a small
 dedicated cluster — **not** at one of the tenant clusters that Berth
 coordinates Deployments on, since losing that cluster would also lose the
 lease store. A managed control plane (EKS/GKE/AKS) is fine. Berth pools all
 leases for all tenants under `--coordination-namespace`; the coordination
 cluster does not need per-tenant namespaces.
+
+The `sql` backend lands with SKA-316 — the flags accept their inputs
+today but `--store-backend=sql` returns a `not implemented` startup error
+until the SQL `lease.Store` ships.
+
+> Implicit backend selection (no `--store-backend` flag, picking `mem` or
+> `k8s` from `--coordination-namespace`) is deprecated and will be
+> removed one release after the SQL backend ships. Always set
+> `--store-backend` explicitly in new deployments.
 
 ## Build
 

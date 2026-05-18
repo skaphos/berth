@@ -18,6 +18,28 @@
     "fullnameOverride": {"type": "string"},
     "replicaCount":     {"type": "integer", "minimum": 1},
 
+    "store": {
+      "type": "object",
+      "properties": {
+        "backend": {"type": "string", "enum": ["", "mem", "k8s", "sql"]},
+        "sql": {
+          "type": "object",
+          "properties": {
+            "driver":   {"type": "string", "enum": ["", "postgres", "mysql", "sqlite"]},
+            "dsn":      {"type": "string"},
+            "dsnSecret": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "key":  {"type": "string"}
+              }
+            },
+            "migrate": {"type": "string", "enum": ["auto", "off"]}
+          }
+        }
+      }
+    },
+
     "coordination": {
       "type": "object",
       "required": ["namespace", "inCluster", "kubeconfig"],

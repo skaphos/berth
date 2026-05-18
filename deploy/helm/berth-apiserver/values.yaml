@@ -19,7 +19,40 @@ fullnameOverride: ""
 # the dev `coordination.namespace: ""` mode (in-memory store).
 replicaCount: 2
 
-# -- Lease coordination backend.
+# -- Lease store backend selection.
+#
+# Set `store.backend` to pick the lease.Store explicitly. The chart maps
+# this to the API server's --store-backend flag.
+#
+# Backends:
+#   mem  Single-replica in-memory store. Dev/demo only — state is lost on
+#        restart. Use only with replicaCount: 1.
+#   k8s  coordination.k8s.io/v1.Lease objects in a separate cluster, see
+#        the `coordination` block below. Multi-replica safe.
+#   sql  Postgres, MariaDB/MySQL, or SQLite. Multi-replica safe (Postgres
+#        and MariaDB). See `store.sql` and SKA-316 for the runner-local
+#        deployment topology.
+#
+# When `store.backend` is empty the API server falls back to a legacy
+# heuristic on --coordination-namespace (empty → mem, set → k8s) and logs
+# a deprecation warning. Set `store.backend` explicitly.
+store:
+  backend: ""
+  sql:
+    driver: ""          # postgres | mysql | sqlite
+    # dsn vs dsnSecret are mutually exclusive. Prefer dsnSecret in
+    # production; the apiserver re-reads the mounted file on each request
+    # so an external rotator can refresh credentials without a pod
+    # restart.
+    dsn: ""
+    dsnSecret:
+      name: ""
+      key: dsn
+    migrate: auto       # auto | off
+
+# -- coordination.k8s.io/v1.Lease backend settings. Only consulted when
+# `store.backend` is "k8s" (or unset and falling back via the legacy
+# heuristic).
 #
 # Two modes:
 # 1. inCluster: true   — the API server runs inside the coordination cluster
@@ -32,10 +65,6 @@ replicaCount: 2
 #                         The Secret's `kubeconfig.secretKey` data field
 #                         must contain a kubeconfig pointed at the
 #                         coordination cluster.
-#
-# When `namespace` is empty the API server falls back to an in-memory
-# store. This is for development only — state does not survive restart
-# and replicaCount must be 1.
 coordination:
   namespace: ""
   inCluster: false
