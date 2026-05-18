@@ -51,7 +51,8 @@ func TestServerStartRejectsNilContext(t *testing.T) {
 
 	server := NewServer(WithTLSFiles("cert.pem", "key.pem"))
 
-	err := server.Start(nil)
+	//lint:ignore SA1012 intentional: this test asserts Start rejects a nil context.
+	err := server.Start(nil) //nolint:staticcheck // same — keeps golangci happy too.
 	if err == nil || err.Error() != "start server: nil context" {
 		t.Fatalf("err = %v, want nil-context error", err)
 	}

@@ -62,8 +62,8 @@ func newTestIssuer(t *testing.T) *testIssuer {
 			"jwks_uri":                              iss.srv.URL + "/jwks",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 			// fields go-oidc requires for discovery validation
-			"authorization_endpoint": iss.srv.URL + "/auth",
-			"token_endpoint":         iss.srv.URL + "/token",
+			"authorization_endpoint":   iss.srv.URL + "/auth",
+			"token_endpoint":           iss.srv.URL + "/token",
 			"response_types_supported": []string{"id_token"},
 			"subject_types_supported":  []string{"public"},
 		})

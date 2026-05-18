@@ -24,12 +24,12 @@ func TestValidateArgs(t *testing.T) {
 		clientID, outputPath, issuerURL, tokenURL, secret, secretFile string
 		wantErr                                                       bool
 	}{
-		"happy issuer + secret":      {clientID: "x", outputPath: "/tmp/t", issuerURL: "https://i", secret: "s"},
-		"happy token-url + file":     {clientID: "x", outputPath: "/tmp/t", tokenURL: "https://i/token", secretFile: "/etc/secret"},
-		"missing client id":          {outputPath: "/tmp/t", issuerURL: "https://i", secret: "s", wantErr: true},
-		"missing output":             {clientID: "x", issuerURL: "https://i", secret: "s", wantErr: true},
-		"no issuer or token url":     {clientID: "x", outputPath: "/tmp/t", secret: "s", wantErr: true},
-		"no secret":                  {clientID: "x", outputPath: "/tmp/t", issuerURL: "https://i", wantErr: true},
+		"happy issuer + secret":        {clientID: "x", outputPath: "/tmp/t", issuerURL: "https://i", secret: "s"},
+		"happy token-url + file":       {clientID: "x", outputPath: "/tmp/t", tokenURL: "https://i/token", secretFile: "/etc/secret"},
+		"missing client id":            {outputPath: "/tmp/t", issuerURL: "https://i", secret: "s", wantErr: true},
+		"missing output":               {clientID: "x", issuerURL: "https://i", secret: "s", wantErr: true},
+		"no issuer or token url":       {clientID: "x", outputPath: "/tmp/t", secret: "s", wantErr: true},
+		"no secret":                    {clientID: "x", outputPath: "/tmp/t", issuerURL: "https://i", wantErr: true},
 		"both literal and file secret": {clientID: "x", outputPath: "/tmp/t", issuerURL: "https://i", secret: "s", secretFile: "/etc/secret", wantErr: true},
 	}
 	for name, tc := range cases {
@@ -256,9 +256,9 @@ func TestRunLoopFetchesAndWritesToken(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &clientcredentials.Config{
-		ClientID:     "test",
-		ClientSecret: "secret",
-		TokenURL:     srv.URL,
+		ClientID:       "test",
+		ClientSecret:   "secret",
+		TokenURL:       srv.URL,
 		EndpointParams: url.Values{"audience": {"berth-api"}},
 	}
 

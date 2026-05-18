@@ -88,7 +88,9 @@ func (r *BerthLeaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err := r.Update(ctx, &lease); err != nil {
 			return ctrl.Result{}, fmt.Errorf("add finalizer: %w", err)
 		}
-		return ctrl.Result{Requeue: true}, nil
+		// RequeueAfter=0 == "requeue with rate-limiter delay", same as the
+		// now-deprecated Requeue=true.
+		return ctrl.Result{RequeueAfter: 0}, nil
 	}
 
 	if err := validateSpec(&lease.Spec); err != nil {
@@ -253,4 +255,3 @@ func timePtr(t time.Time) *metav1.Time {
 	out := metav1.NewTime(t)
 	return &out
 }
-

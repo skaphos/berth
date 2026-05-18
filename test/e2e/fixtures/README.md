@@ -20,12 +20,12 @@ operators reach the coord API server at
 Requires `kind`, `kubectl`, `helm`, `docker`, `openssl` on PATH.
 
 ```bash
-make e2e-up      # ~2 min — creates clusters, builds + loads images, installs charts
-make e2e         # runs ./test/e2e with -tags=e2e
-make e2e-down    # tears everything down
+task e2e-up      # ~2 min — creates clusters, builds + loads images, installs charts
+task e2e         # runs ./test/e2e with -tags=e2e
+task e2e-down    # tears everything down
 ```
 
-`make e2e-all` chains all three for CI.
+`task e2e-all` chains all three for CI. (Where `task` is `go -C tools tool task`.)
 
 ## What's intentionally not production-grade
 
