@@ -2,7 +2,7 @@
 chart-dirs:
   - deploy/helm
 target-branch: main
-helm-extra-args: --timeout 90s
+helm-extra-args: --timeout 3m
 validate-maintainers: false
 # Install all charts in `default` so the pre-created TLS / API-key /
 # kubeconfig fixtures in .github/workflows/charts.yaml are visible to
