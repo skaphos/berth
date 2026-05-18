@@ -60,10 +60,21 @@ jobs:
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.7.0
 
+      - name: Build local images
+        run: |
+          docker build -f Dockerfile.apiserver -t berth-apiserver:ci .
+          docker build -f Dockerfile.operator -t berth-operator:ci .
+
       - name: Create kind cluster
         uses: helm/kind-action@v1
         with:
           wait: 120s
+
+      - name: Load local images into kind
+        run: |
+          CLUSTER_NAME=$(kind get clusters | head -1)
+          kind load docker-image berth-apiserver:ci --name "$CLUSTER_NAME"
+          kind load docker-image berth-operator:ci --name "$CLUSTER_NAME"
 
       - name: Pre-create chart test fixtures
         run: |
