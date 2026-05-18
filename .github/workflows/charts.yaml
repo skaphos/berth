@@ -64,6 +64,7 @@ jobs:
         run: |
           docker build -f Dockerfile.apiserver -t berth-apiserver:ci .
           docker build -f Dockerfile.operator -t berth-operator:ci .
+          docker build -f Dockerfile.broker -t berth-oidc-broker:ci .
 
       - name: Create kind cluster
         uses: helm/kind-action@v1
@@ -75,6 +76,7 @@ jobs:
           CLUSTER_NAME=$(kind get clusters | head -1)
           kind load docker-image berth-apiserver:ci --name "$CLUSTER_NAME"
           kind load docker-image berth-operator:ci --name "$CLUSTER_NAME"
+          kind load docker-image berth-oidc-broker:ci --name "$CLUSTER_NAME"
 
       - name: Pre-create chart test fixtures
         run: |

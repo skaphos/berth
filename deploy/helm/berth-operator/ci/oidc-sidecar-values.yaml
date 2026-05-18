@@ -9,6 +9,10 @@ berth:
     caBundleConfigMap: berth-ca-bundle
 sidecarBroker:
   enabled: true
+  image:
+    repository: berth-oidc-broker
+    tag: ci
+    pullPolicy: IfNotPresent
   oidc:
     issuerURL: https://issuer.example.com
     audience: berth-api
