@@ -6,7 +6,7 @@
 // Package e2e exercises the cross-cluster Berth singleton against three
 // real kind clusters. The harness (test/e2e/fixtures/up.sh) creates the
 // clusters and installs the charts; these tests assume the topology is
-// already up. Run via `task e2e`.
+// already up. Run via `go -C tools tool task e2e`.
 package e2e
 
 import (
@@ -55,7 +55,7 @@ func init() {
 func TestMain(m *testing.M) {
 	envPath := filepath.Join(repoRoot(), ".tmp", "e2e", "env")
 	if _, err := os.Stat(envPath); err != nil {
-		fmt.Fprintf(os.Stderr, "e2e harness not up (no %s) — run `task e2e-up` first\n", envPath)
+		fmt.Fprintf(os.Stderr, "e2e harness not up (no %s) — run `go -C tools tool task e2e-up` first\n", envPath)
 		os.Exit(1)
 	}
 
