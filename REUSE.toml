@@ -7,3 +7,11 @@ path = "**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Skaphos"
 SPDX-License-Identifier = "MIT"
+
+# Root LICENSE is a duplicate of LICENSES/MIT.txt kept for GitHub's
+# license detection (licensee only scans the repo root).
+[[annotations]]
+path = "LICENSE"
+precedence = "override"
+SPDX-FileCopyrightText = "1991 Massachusetts Institute of Technology"
+SPDX-License-Identifier = "MIT"
