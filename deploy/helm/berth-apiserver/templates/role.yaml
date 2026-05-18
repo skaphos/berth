@@ -1,0 +1,37 @@
+{{- /*
+  Only rendered when the API server runs inside the coordination cluster
+  itself. In that case the pod's ServiceAccount needs CRUD on
+  coordination.k8s.io/v1.Lease in the coordination namespace. For
+  external-kubeconfig deployments, the RBAC is granted in the
+  coordination cluster out-of-band (a Role bound to the user/SA encoded
+  in the kubeconfig).
+*/ -}}
+{{- if and .Values.coordination.inCluster .Values.coordination.namespace -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "berth-apiserver.fullname" . }}-coordination
+  namespace: {{ .Values.coordination.namespace }}
+  labels:
+    {{- include "berth-apiserver.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "berth-apiserver.fullname" . }}-coordination
+  namespace: {{ .Values.coordination.namespace }}
+  labels:
+    {{- include "berth-apiserver.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "berth-apiserver.fullname" . }}-coordination
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "berth-apiserver.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -1,18 +1,138 @@
+{{- include "berth-apiserver.validate" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: berth-apiserver
+  name: {{ include "berth-apiserver.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "berth-apiserver.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: berth-apiserver
+      {{- include "berth-apiserver.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: berth-apiserver
+        {{- include "berth-apiserver.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ printf "%s|%s|%s|%s" .Values.coordination.namespace .Values.auth.mode .Values.auth.staticKeys.secretName .Values.auth.oidc.issuerURL | sha256sum }}
     spec:
+      serviceAccountName: {{ include "berth-apiserver.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: apiserver
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --listen-addr=:8443
+            - --tls-cert-file=/etc/berth/tls/tls.crt
+            - --tls-key-file=/etc/berth/tls/tls.key
+            {{- if .Values.coordination.namespace }}
+            - --coordination-namespace={{ .Values.coordination.namespace }}
+            {{- end }}
+            {{- if and .Values.coordination.kubeconfig.secretName (not .Values.coordination.inCluster) }}
+            - --coordination-kubeconfig=/etc/berth/coordination/{{ .Values.coordination.kubeconfig.secretKey }}
+            {{- end }}
+            - --auth-mode={{ .Values.auth.mode }}
+            {{- if eq .Values.auth.mode "static-keys" }}
+            - --api-keys-file=/etc/berth/auth/{{ .Values.auth.staticKeys.secretKey }}
+            {{- else if eq .Values.auth.mode "oidc" }}
+            - --oidc-issuer-url={{ .Values.auth.oidc.issuerURL }}
+            - --oidc-audience={{ .Values.auth.oidc.audience }}
+            {{- with .Values.auth.oidc.jwksURL }}
+            - --oidc-jwks-url={{ . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.usernameClaim }}
+            - --oidc-username-claim={{ . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.tenantClaim }}
+            - --oidc-tenant-claim={{ . }}
+            {{- end }}
+            {{- range .Values.auth.oidc.requiredClaims }}
+            - --oidc-required-claim={{ . }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/berth/tls
+              readOnly: true
+            {{- if and .Values.coordination.kubeconfig.secretName (not .Values.coordination.inCluster) }}
+            - name: coordination-kubeconfig
+              mountPath: /etc/berth/coordination
+              readOnly: true
+            {{- end }}
+            {{- if eq .Values.auth.mode "static-keys" }}
+            - name: auth-keys
+              mountPath: /etc/berth/auth
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ include "berth-apiserver.tlsSecretName" . }}
+        {{- if and .Values.coordination.kubeconfig.secretName (not .Values.coordination.inCluster) }}
+        - name: coordination-kubeconfig
+          secret:
+            secretName: {{ .Values.coordination.kubeconfig.secretName }}
+        {{- end }}
+        {{- if eq .Values.auth.mode "static-keys" }}
+        - name: auth-keys
+          secret:
+            secretName: {{ .Values.auth.staticKeys.secretName }}
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

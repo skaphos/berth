@@ -1,0 +1,89 @@
+name: charts
+
+on:
+  pull_request:
+    paths:
+      - "deploy/helm/**"
+      - ".github/workflows/charts.yaml"
+      - "config/crd/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "deploy/helm/**"
+      - ".github/workflows/charts.yaml"
+      - "config/crd/**"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.7.0
+
+      - name: Run ct lint
+        run: ct lint --config .github/ct.yaml
+
+  install:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.7.0
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          wait: 120s
+
+      - name: Pre-create chart test fixtures
+        run: |
+          set -euo pipefail
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout /tmp/tls.key -out /tmp/tls.crt \
+            -days 1 -subj "/CN=berth-apiserver.default.svc"
+          kubectl create secret tls berth-apiserver-test-tls \
+            --cert=/tmp/tls.crt --key=/tmp/tls.key
+          printf 'test:%s' "$(printf 'test' | sha256sum | cut -d' ' -f1)" \
+            > /tmp/api-keys
+          kubectl create secret generic berth-api-keys \
+            --from-file=api-keys=/tmp/api-keys
+          CLUSTER_NAME=$(kind get clusters | head -1)
+          kind get kubeconfig --name "$CLUSTER_NAME" > /tmp/coord-kubeconfig
+          kubectl create secret generic berth-coordination-kubeconfig \
+            --from-file=kubeconfig=/tmp/coord-kubeconfig
+          kubectl create namespace berth-coordination
+          kubectl create secret generic berth-api-key --from-literal=api-key=test
+          kubectl create configmap berth-ca-bundle --from-file=ca.crt=/tmp/tls.crt
+
+      - name: Run ct install
+        run: ct install --config .github/ct.yaml

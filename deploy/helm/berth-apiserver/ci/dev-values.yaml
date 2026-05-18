@@ -1,0 +1,17 @@
+# Dev mode: in-memory store, no auth, BYO TLS Secret (chart still requires
+# tls config). Used by `ct install` against a kind cluster.
+replicaCount: 1
+coordination:
+  namespace: ""
+  inCluster: false
+  kubeconfig:
+    secretName: ""
+    secretKey: kubeconfig
+tls:
+  certManager:
+    enabled: false
+  existingSecret: berth-apiserver-test-tls
+auth:
+  mode: none
+podDisruptionBudget:
+  enabled: false

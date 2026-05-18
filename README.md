@@ -206,23 +206,99 @@ berth lease release ingest-coordinator
 
 ### Install the CRD
 
+The `berth-operator` chart installs the BerthLease CRD by default
+(`installCRDs: true`). For out-of-band CRD management — recommended when
+you need control over CRD upgrades — apply it directly and disable the
+chart-managed install:
+
 ```bash
 kubectl apply -f config/crd/berthlease.yaml
+# then: helm install ... --set installCRDs=false
 ```
 
 ### Deploy with Helm
 
-```bash
-# API server
-helm install berth-apiserver deploy/helm/berth-apiserver \
-  --set image.repository=your-registry/berth-apiserver \
-  --set image.tag=latest
+The charts target the cross-cluster topology: one `berth-apiserver`
+release in a control plane (with state in a coordination cluster) and a
+`berth-operator` release in each tenant cluster.
 
-# Operator
-helm install berth-operator deploy/helm/berth-operator \
-  --set image.repository=your-registry/berth-operator \
-  --set image.tag=latest
+#### Step 1 — install `berth-apiserver`
+
+Pick a TLS source and a coordination backend. Minimal in-cluster
+deployment (API server runs inside the coordination cluster, cert-manager
+issues the serving cert, static API keys for auth):
+
+```bash
+helm install berth-apiserver deploy/helm/berth-apiserver \
+  --namespace berth-system --create-namespace \
+  --set coordination.namespace=berth-coordination \
+  --set coordination.inCluster=true \
+  --set tls.certManager.enabled=true \
+  --set tls.certManager.issuerRef.name=berth-ca \
+  --set tls.certManager.issuerRef.kind=ClusterIssuer \
+  --set auth.mode=static-keys \
+  --set auth.staticKeys.secretName=berth-api-keys
 ```
+
+External coordination cluster (API server runs elsewhere, kubeconfig in
+a Secret), OIDC auth, BYO TLS Secret:
+
+```bash
+helm install berth-apiserver deploy/helm/berth-apiserver \
+  --namespace berth-system --create-namespace \
+  --set coordination.namespace=berth-coordination \
+  --set coordination.kubeconfig.secretName=berth-coordination-kubeconfig \
+  --set tls.existingSecret=berth-apiserver-tls \
+  --set auth.mode=oidc \
+  --set auth.oidc.issuerURL=https://your-org.okta.com/oauth2/default \
+  --set auth.oidc.audience=berth-api
+```
+
+The chart enforces invariants at render time: TLS source required, at
+most one coordination backend, required Secret/ConfigMap names. Failures
+surface as clear messages from `helm install`.
+
+#### Step 2 — install `berth-operator` in each tenant cluster
+
+Each cluster must pass a **distinct** `clusterID`:
+
+```bash
+# East cluster
+helm install berth-operator deploy/helm/berth-operator \
+  --namespace berth-system --create-namespace \
+  --set clusterID=cluster-east \
+  --set berth.apiServer=https://berth.example.com:8443 \
+  --set berth.apiKey.secretName=berth-api-key \
+  --set berth.tls.caBundleConfigMap=berth-ca-bundle
+
+# West cluster — same values modulo clusterID
+helm install berth-operator deploy/helm/berth-operator \
+  --namespace berth-system --create-namespace \
+  --set clusterID=cluster-west \
+  --set berth.apiServer=https://berth.example.com:8443 \
+  --set berth.apiKey.secretName=berth-api-key \
+  --set berth.tls.caBundleConfigMap=berth-ca-bundle
+```
+
+To run with OIDC instead of a static key, enable the bundled token-broker
+sidecar:
+
+```bash
+helm install berth-operator deploy/helm/berth-operator \
+  --namespace berth-system --create-namespace \
+  --set clusterID=cluster-east \
+  --set berth.apiServer=https://berth.example.com:8443 \
+  --set berth.tls.caBundleConfigMap=berth-ca-bundle \
+  --set sidecarBroker.enabled=true \
+  --set sidecarBroker.oidc.issuerURL=https://your-org.okta.com/oauth2/default \
+  --set sidecarBroker.oidc.audience=berth-api \
+  --set sidecarBroker.oidc.clientID=berth-operator \
+  --set sidecarBroker.oidc.clientSecret.secretName=berth-oidc-client
+```
+
+See `deploy/helm/berth-apiserver/values.yaml` and
+`deploy/helm/berth-operator/values.yaml` for the full value reference and
+inline documentation.
 
 ### API Server Flags
 
@@ -368,6 +444,15 @@ substitute your own broker — the operator only cares that the file at
                              call. Required for the cross-cluster singleton
                              pattern; leave empty to fall back to
                              spec.holderIdentity.
+--berth-ca-bundle-file       Path to a PEM file with extra CAs trusted when
+                             verifying the API server TLS chain. The bundle
+                             is appended to the system trust store.
+--berth-server-name          Override the SNI / TLS certificate name used
+                             when connecting to the API server. Defaults to
+                             the host in --berth-api-server.
+--berth-insecure-skip-tls-verify
+                             Development only. Disables API server TLS
+                             verification entirely.
 ```
 
 ### Lease storage backend

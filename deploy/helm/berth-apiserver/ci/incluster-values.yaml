@@ -1,0 +1,17 @@
+# API server runs inside the coordination cluster; RBAC rendered by the chart.
+replicaCount: 2
+coordination:
+  namespace: berth-coordination
+  inCluster: true
+  kubeconfig:
+    secretName: ""
+    secretKey: kubeconfig
+tls:
+  certManager:
+    enabled: false
+  existingSecret: berth-apiserver-test-tls
+auth:
+  mode: static-keys
+  staticKeys:
+    secretName: berth-api-keys
+    secretKey: api-keys
