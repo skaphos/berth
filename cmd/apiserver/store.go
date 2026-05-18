@@ -64,7 +64,7 @@ func resolveStoreBackend(cfg storeConfig) (string, error) {
 // required per-backend inputs.
 func validateStoreConfig(backend string, cfg storeConfig) error {
 	hasCoordinationFlags := cfg.coordinationNamespace != "" || cfg.coordinationKubeconfig != ""
-	hasSQLFlags := cfg.sqlDriver != "" || cfg.sqlDSN != "" || cfg.sqlDSNFile != ""
+	hasSQLFlags := cfg.sqlDriver != "" || cfg.sqlDSN != "" || cfg.sqlDSNFile != "" || cfg.sqlMigrate != ""
 
 	switch backend {
 	case storeBackendMem:
