@@ -56,6 +56,17 @@ jobs:
       - name: Run REUSE lint
         run: reuse lint
 
+  generated:
+    name: Verify Generated
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Re-run generators and check for drift
+        run: go -C tools tool task verify-generated
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -104,11 +115,12 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [dco, reuse, lint, test, quality]
+    needs: [dco, reuse, generated, lint, test, quality]
     if: >-
       ${{
         always() &&
         needs.reuse.result == 'success' &&
+        needs.generated.result == 'success' &&
         needs.lint.result == 'success' &&
         needs.test.result == 'success' &&
         needs.quality.result == 'success' &&
@@ -125,25 +137,26 @@ jobs:
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [dco, reuse, lint, test, quality, build]
+    needs: [dco, reuse, generated, lint, test, quality, build]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Publish workflow summary
         env:
           DCO_RESULT: ${{ needs.dco.result }}
           REUSE_RESULT: ${{ needs.reuse.result }}
+          GENERATED_RESULT: ${{ needs.generated.result }}
           LINT_RESULT: ${{ needs.lint.result }}
           TEST_RESULT: ${{ needs.test.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
           BUILD_RESULT: ${{ needs.build.result }}
         run: |
-          total=6
+          total=7
           success=0
           failed=0
           skipped=0
           cancelled=0
 
-          for result in "$DCO_RESULT" "$REUSE_RESULT" "$LINT_RESULT" "$TEST_RESULT" "$QUALITY_RESULT" "$BUILD_RESULT"; do
+          for result in "$DCO_RESULT" "$REUSE_RESULT" "$GENERATED_RESULT" "$LINT_RESULT" "$TEST_RESULT" "$QUALITY_RESULT" "$BUILD_RESULT"; do
             case "$result" in
               success) success=$((success + 1)) ;;
               failure) failed=$((failed + 1)) ;;
@@ -160,6 +173,7 @@ jobs:
             echo "| --- | --- |"
             echo "| dco | $DCO_RESULT |"
             echo "| reuse | $REUSE_RESULT |"
+            echo "| generated | $GENERATED_RESULT |"
             echo "| lint | $LINT_RESULT |"
             echo "| test | $TEST_RESULT |"
             echo "| quality | $QUALITY_RESULT |"

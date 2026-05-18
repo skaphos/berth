@@ -107,7 +107,8 @@ jobs:
           set -euo pipefail
           mkdir -p dist/charts
           # Pin both charts to the release version so consumers can pull
-          # `helm pull oci://ghcr.io/skaphos/charts/berth-apiserver --version vX.Y.Z`.
+          # `helm pull oci://ghcr.io/skaphos/charts/berth-apiserver --version X.Y.Z`
+          # (Helm chart versions are plain semver — no leading `v`).
           helm package deploy/helm/berth-apiserver \
             --version "${VERSION}" --app-version "${VERSION}" \
             --destination dist/charts

@@ -4,6 +4,10 @@
 version: "2"
 
 linters:
+  # Disable the v2 "standard" preset so the enabled set below is the
+  # complete one. Future golangci-lint upgrades won't silently add or
+  # remove linters from CI.
+  default: none
   enable:
     - govet
     - staticcheck

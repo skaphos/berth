@@ -88,9 +88,9 @@ func (r *BerthLeaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err := r.Update(ctx, &lease); err != nil {
 			return ctrl.Result{}, fmt.Errorf("add finalizer: %w", err)
 		}
-		// RequeueAfter=0 == "requeue with rate-limiter delay", same as the
-		// now-deprecated Requeue=true.
-		return ctrl.Result{RequeueAfter: 0}, nil
+		// The Update bumps resourceVersion and the watch delivers it as a
+		// fresh reconcile, so an explicit Requeue is unnecessary.
+		return ctrl.Result{}, nil
 	}
 
 	if err := validateSpec(&lease.Spec); err != nil {

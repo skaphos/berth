@@ -138,10 +138,10 @@ func TestReconcileAddsFinalizerOnFirstObservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Finalizer add returns an immediate requeue via RequeueAfter=0;
-	// controller-runtime treats that as "requeue with rate-limiter delay".
-	if res.RequeueAfter != 0 {
-		t.Fatalf("RequeueAfter = %v, want 0 (immediate requeue after adding finalizer)", res.RequeueAfter)
+	// After adding the finalizer we return an empty Result and rely on
+	// the resulting Update event to trigger the next reconcile.
+	if res != (ctrl.Result{}) {
+		t.Fatalf("Result = %+v, want zero value", res)
 	}
 	got := &berthv1alpha1.BerthLease{}
 	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "ns", Name: "lease-a"}, got); err != nil {

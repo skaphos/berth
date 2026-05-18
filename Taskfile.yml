@@ -44,6 +44,17 @@ tasks:
       - cp "{{.TMP_CRD_DIR}}/berth.skaphos.io_berthleases.yaml" deploy/helm/berth-operator/crds/berthlease.yaml
       - rm -rf "{{.TMP_CRD_DIR}}"
 
+  verify-generated:
+    desc: Re-run generators and fail if anything changed (CI gate against stale codegen)
+    cmds:
+      - task: manifests
+      - task: generate
+      - |
+        if ! git diff --exit-code -- api/ config/crd deploy/helm/berth-operator/crds; then
+          echo "::error::Generated artifacts are stale. Run 'task manifests' and 'task generate' and commit the result." >&2
+          exit 1
+        fi
+
   # --- Quality ---
 
   fmt:
