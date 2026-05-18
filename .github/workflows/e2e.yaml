@@ -1,0 +1,78 @@
+name: e2e
+
+# Cross-cluster singleton e2e suite. Runtime ~5-10 min — not gating on
+# every PR. Triggered nightly (catch regressions before they pile up)
+# and manually via workflow_dispatch.
+
+on:
+  schedule:
+    # 03:00 UTC daily — quiet hours for the org.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run at a time per branch — kind cluster names are global on a
+  # given runner and parallel runs would collide.
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up kind
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Bring up topology
+        run: make e2e-up
+
+      - name: Run scenarios
+        run: make e2e
+
+      - name: Collect cluster state on failure
+        if: failure()
+        run: |
+          set +e
+          mkdir -p artifacts
+          for cluster in berth-e2e-coord berth-e2e-east berth-e2e-west; do
+            context="kind-$cluster"
+            kubectl --context "$context" get nodes,po,deploy,svc,berthlease -A -o wide \
+              > "artifacts/$cluster-resources.txt" 2>&1
+            kubectl --context "$context" describe pod -n berth-system \
+              > "artifacts/$cluster-pods-describe.txt" 2>&1
+            for pod in $(kubectl --context "$context" -n berth-system get pods -o name); do
+              kubectl --context "$context" -n berth-system logs "$pod" --tail=500 \
+                > "artifacts/$cluster-${pod#pod/}.log" 2>&1
+            done
+            kubectl --context "$context" get berthlease -A -o yaml \
+              > "artifacts/$cluster-berthleases.yaml" 2>&1
+          done
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: artifacts/
+          retention-days: 7
+
+      - name: Tear down topology
+        if: always()
+        run: make e2e-down
