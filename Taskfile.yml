@@ -1,0 +1,160 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Berth build orchestration. Invoked via `go -C tools tool task`. The
+# tools/ module declares Task as a Go 1.24+ tool so contributors only need
+# the system Go toolchain — no extra installs.
+
+version: "3"
+
+vars:
+  TASK_RUNNER: go -C tools tool task -d ..
+  CONTROLLER_GEN: go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0
+  GOLANGCI_RUNNER: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+  GOIMPORTS_RUNNER: go run golang.org/x/tools/cmd/goimports@v0.43.0
+  STATICCHECK_RUNNER: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0
+  GOVULNCHECK_RUNNER: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
+  TMP_CRD_DIR: .tmp/crd
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - "{{.TASK_RUNNER}} --list"
+
+  list:
+    desc: List available tasks
+    cmds:
+      - "{{.TASK_RUNNER}} --list"
+
+  # --- Codegen ---
+
+  generate:
+    desc: Generate DeepCopy implementations
+    cmds:
+      - "{{.CONTROLLER_GEN}} object paths=./api/..."
+
+  manifests:
+    desc: Generate CRD manifests + sync the chart's bundled copy
+    cmds:
+      - rm -rf "{{.TMP_CRD_DIR}}"
+      - mkdir -p "{{.TMP_CRD_DIR}}" config/crd deploy/helm/berth-operator/crds
+      - '{{.CONTROLLER_GEN}} crd paths=./api/... output:crd:artifacts:config="{{.TMP_CRD_DIR}}"'
+      - cp "{{.TMP_CRD_DIR}}/berth.skaphos.io_berthleases.yaml" config/crd/berthlease.yaml
+      - cp "{{.TMP_CRD_DIR}}/berth.skaphos.io_berthleases.yaml" deploy/helm/berth-operator/crds/berthlease.yaml
+      - rm -rf "{{.TMP_CRD_DIR}}"
+
+  verify-generated:
+    desc: Re-run generators and fail if anything changed (CI gate against stale codegen)
+    cmds:
+      - task: manifests
+      - task: generate
+      - |
+        if ! git diff --exit-code -- api/ config/crd deploy/helm/berth-operator/crds; then
+          echo "::error::Generated artifacts are stale. Run 'task manifests' and 'task generate' and commit the result." >&2
+          exit 1
+        fi
+
+  # --- Quality ---
+
+  fmt:
+    desc: Format code
+    cmds:
+      - "{{.GOIMPORTS_RUNNER}} -w ."
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run golangci-lint (regenerates manifests + DeepCopy first)
+    cmds:
+      - task: manifests
+      - task: generate
+      - "{{.GOLANGCI_RUNNER}} run ./..."
+
+  lint-fix:
+    desc: Run golangci-lint --fix
+    cmds:
+      - "{{.GOLANGCI_RUNNER}} run --fix ./..."
+
+  staticcheck:
+    desc: Run staticcheck
+    cmds:
+      - "{{.STATICCHECK_RUNNER}} ./..."
+
+  vuln:
+    desc: Run vulnerability scan (govulncheck)
+    cmds:
+      - "{{.GOVULNCHECK_RUNNER}} ./..."
+
+  # --- Tests ---
+
+  test:
+    desc: Run unit tests with coverage profile (CI uses this)
+    cmds:
+      - task: manifests
+      - task: generate
+      - go test -coverprofile=coverage.out $(go list ./... | grep -v /test/e2e)
+
+  test-cover:
+    desc: Same as test (alias for parity with sibling repos)
+    cmds:
+      - task: test
+
+  test-cover-check:
+    desc: Run tests + enforce per-package coverage thresholds
+    cmds:
+      - task: test
+      - ./scripts/check-coverage.sh coverage.out
+
+  # --- Build ---
+
+  build:
+    desc: Build all four binaries to ./bin
+    cmds:
+      - mkdir -p bin
+      - go build -o bin/apiserver ./cmd/apiserver
+      - go build -o bin/operator ./cmd/operator
+      - go build -o bin/berth ./cmd/berth
+      - go build -o bin/berth-oidc-broker ./cmd/berth-oidc-broker
+
+  docker-build:
+    desc: Build all three container images locally
+    cmds:
+      - docker build -f Dockerfile.apiserver -t berth-apiserver:local .
+      - docker build -f Dockerfile.operator -t berth-operator:local .
+      - docker build -f Dockerfile.broker -t berth-oidc-broker:local .
+
+  # --- e2e (cross-cluster singleton harness) ---
+
+  e2e-up:
+    desc: Bring up the three-kind-cluster e2e topology
+    cmds:
+      - ./test/e2e/fixtures/up.sh
+
+  e2e:
+    desc: Run e2e scenarios against a standing topology
+    cmds:
+      - go test -tags=e2e -count=1 -v -timeout=20m ./test/e2e/...
+
+  e2e-down:
+    desc: Tear down the e2e topology
+    cmds:
+      - ./test/e2e/fixtures/down.sh
+
+  e2e-all:
+    desc: e2e-up -> run -> e2e-down (CI-style)
+    cmds:
+      - task: e2e-up
+      - task: e2e
+      - task: e2e-down
+
+  # --- Housekeeping ---
+
+  clean:
+    desc: Remove build artifacts + coverage profile + temp CRD dir
+    cmds:
+      - rm -rf bin .tmp coverage.out

@@ -17,12 +17,6 @@ const testNamespace = "berth-system"
 
 func newK8sStore(t *testing.T, seed ...*coordinationv1.Lease) (*K8sLeaseStore, kubernetes.Interface) {
 	t.Helper()
-	objs := make([]any, 0, len(seed))
-	for _, s := range seed {
-		objs = append(objs, s)
-	}
-	// fake.NewSimpleClientset accepts variadic runtime.Object via interface{};
-	// the typed conversion happens internally.
 	client := fake.NewSimpleClientset()
 	for _, s := range seed {
 		if _, err := client.CoordinationV1().Leases(s.Namespace).Create(context.Background(), s, metav1.CreateOptions{}); err != nil {

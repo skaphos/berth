@@ -474,15 +474,21 @@ cluster does not need per-tenant namespaces.
 
 ## Build
 
-Requires Go 1.26+.
+Requires Go 1.26+. All tasks are orchestrated by [Task](https://taskfile.dev),
+declared as a Go tool in `tools/go.mod` so contributors only need the
+system Go toolchain.
 
 ```bash
-make build        # Build all binaries to bin/
-make test         # Run tests
-make lint         # Run golangci-lint and go vet
-make generate     # Regenerate deepcopy code
-make manifests    # Regenerate CRD manifests
-make docker-build # Build Docker images
+go -C tools tool task --list   # see all targets
+
+go -C tools tool task build         # build all four binaries to bin/
+go -C tools tool task test          # unit tests with coverage profile
+go -C tools tool task lint          # golangci-lint v2 (govet, staticcheck, errcheck, ...)
+go -C tools tool task staticcheck   # staticcheck directly
+go -C tools tool task vuln          # govulncheck
+go -C tools tool task generate      # regenerate DeepCopy
+go -C tools tool task manifests     # regenerate CRD manifests (+ chart copy)
+go -C tools tool task docker-build  # build all three container images locally
 ```
 
 ## Project Layout

@@ -41,10 +41,10 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: Bring up topology
-        run: make e2e-up
+        run: go -C tools tool task e2e-up
 
       - name: Run scenarios
-        run: make e2e
+        run: go -C tools tool task e2e
 
       - name: Collect cluster state on failure
         if: failure()
@@ -75,4 +75,4 @@ jobs:
 
       - name: Tear down topology
         if: always()
-        run: make e2e-down
+        run: go -C tools tool task e2e-down
