@@ -10,3 +10,6 @@ validate-maintainers: false
 # which leaves the fixtures unreachable. ct does not delete the namespace
 # when `namespace` is set explicitly — just the release.
 namespace: default
+# Required by ct when namespace is set: identifies a release's resources
+# via this Helm-standard label so ct can clean up between installs.
+release-label: app.kubernetes.io/instance
