@@ -21,8 +21,10 @@ replicaCount: 2
 
 # -- Lease store backend selection.
 #
-# Set `store.backend` to pick the lease.Store explicitly. The chart maps
-# this to the API server's --store-backend flag.
+# Set `store.backend` to document the intended lease.Store explicitly.
+# This value does not by itself imply that the rendered Deployment passes
+# `--store-backend`; see the Deployment template for the currently emitted
+# API server arguments.
 #
 # Backends:
 #   mem  Single-replica in-memory store. Dev/demo only — state is lost on
