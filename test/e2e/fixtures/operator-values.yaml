@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Berth operator values shared by both east and west e2e clusters.
+# The harness overrides clusterID and berth.apiServer per-cluster via
+# `helm install --set` because the API server URL is the runtime-discovered
+# `https://<coord-control-plane-IP>:<NodePort>`.
+
+image:
+  repository: berth-operator
+  tag: e2e
+  pullPolicy: IfNotPresent
+
+# clusterID is required and supplied per-release at install time.
+clusterID: ""
+
+installCRDs: true
+
+berth:
+  # apiServer is supplied per-release at install time.
+  apiServer: ""
+  apiKey:
+    secretName: berth-api-key
+    secretKey: api-key
+  tls:
+    # The harness-issued cert SAN can't include a yet-to-be-assigned
+    # container IP, so e2e uses skip-verify. Production never does.
+    insecureSkipVerify: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 300m
+    memory: 192Mi
+
+metrics:
+  serviceMonitor:
+    enabled: false

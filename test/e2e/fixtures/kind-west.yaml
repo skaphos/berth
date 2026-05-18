@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# West runner cluster — hosts berth-operator with --cluster-id=cluster-west
+# and the target Deployment that the lease gates.
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: berth-e2e-west
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.33.1

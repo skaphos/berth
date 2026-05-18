@@ -4,7 +4,7 @@ GOLANGCI_LINT := $(GO) run github.com/golangci/golangci-lint/cmd/golangci-lint@v
 BIN_DIR ?= bin
 TMP_CRD_DIR := .tmp/crd
 
-.PHONY: generate manifests build test lint docker-build clean
+.PHONY: generate manifests build test lint docker-build clean e2e-up e2e e2e-down e2e-all
 
 generate:
 	$(CONTROLLER_GEN) object paths=./api/...
@@ -36,3 +36,18 @@ docker-build:
 
 clean:
 	rm -rf "$(BIN_DIR)" .tmp
+
+# --- e2e --------------------------------------------------------------
+# Three-kind-cluster harness validating cross-cluster lease semantics.
+# See test/e2e/fixtures/README.md for the topology rationale.
+
+e2e-up:
+	./test/e2e/fixtures/up.sh
+
+e2e:
+	$(GO) test -tags=e2e -count=1 -v -timeout=20m ./test/e2e/...
+
+e2e-down:
+	./test/e2e/fixtures/down.sh
+
+e2e-all: e2e-up e2e e2e-down
