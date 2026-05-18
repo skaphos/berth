@@ -1,3 +1,7 @@
+image:
+  repository: berth-operator
+  tag: ci
+  pullPolicy: IfNotPresent
 clusterID: cluster-east
 berth:
   apiServer: https://berth.example.com:8443

@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -45,7 +45,7 @@ jobs:
     needs: lint
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -60,10 +60,23 @@ jobs:
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.7.0
 
+      - name: Build local images
+        run: |
+          docker build -f Dockerfile.apiserver -t berth-apiserver:ci .
+          docker build -f Dockerfile.operator -t berth-operator:ci .
+          docker build -f Dockerfile.broker -t berth-oidc-broker:ci .
+
       - name: Create kind cluster
         uses: helm/kind-action@v1
         with:
           wait: 120s
+
+      - name: Load local images into kind
+        run: |
+          CLUSTER_NAME=$(kind get clusters | head -1)
+          kind load docker-image berth-apiserver:ci --name "$CLUSTER_NAME"
+          kind load docker-image berth-operator:ci --name "$CLUSTER_NAME"
+          kind load docker-image berth-oidc-broker:ci --name "$CLUSTER_NAME"
 
       - name: Pre-create chart test fixtures
         run: |
@@ -84,6 +97,7 @@ jobs:
           kubectl create namespace berth-coordination
           kubectl create secret generic berth-api-key --from-literal=api-key=test
           kubectl create configmap berth-ca-bundle --from-file=ca.crt=/tmp/tls.crt
+          kubectl create secret generic berth-oidc-client --from-literal=client-secret=test
 
       - name: Run ct install
         run: ct install --config .github/ct.yaml

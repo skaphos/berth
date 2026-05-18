@@ -1,3 +1,7 @@
+image:
+  repository: berth-apiserver
+  tag: ci
+  pullPolicy: IfNotPresent
 # API server runs inside the coordination cluster; RBAC rendered by the chart.
 replicaCount: 2
 coordination:

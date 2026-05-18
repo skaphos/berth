@@ -1,5 +1,5 @@
 GO ?= go
-CONTROLLER_GEN := $(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5
+CONTROLLER_GEN := $(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0
 GOLANGCI_LINT := $(GO) run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
 BIN_DIR ?= bin
 TMP_CRD_DIR := .tmp/crd
@@ -11,9 +11,10 @@ generate:
 
 manifests:
 	rm -rf "$(TMP_CRD_DIR)"
-	mkdir -p "$(TMP_CRD_DIR)" config/crd
+	mkdir -p "$(TMP_CRD_DIR)" config/crd deploy/helm/berth-operator/crds
 	$(CONTROLLER_GEN) crd paths=./api/... output:crd:artifacts:config="$(TMP_CRD_DIR)"
 	cp "$(TMP_CRD_DIR)/berth.skaphos.io_berthleases.yaml" config/crd/berthlease.yaml
+	cp "$(TMP_CRD_DIR)/berth.skaphos.io_berthleases.yaml" deploy/helm/berth-operator/crds/berthlease.yaml
 	rm -rf "$(TMP_CRD_DIR)"
 
 build:
