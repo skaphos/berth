@@ -97,6 +97,7 @@ jobs:
           kubectl create namespace berth-coordination
           kubectl create secret generic berth-api-key --from-literal=api-key=test
           kubectl create configmap berth-ca-bundle --from-file=ca.crt=/tmp/tls.crt
+          kubectl create secret generic berth-oidc-client --from-literal=client-secret=test
 
       - name: Run ct install
         run: ct install --config .github/ct.yaml
