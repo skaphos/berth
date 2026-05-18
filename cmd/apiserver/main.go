@@ -15,7 +15,6 @@ import (
 
 	"github.com/skaphos/berth/internal/api"
 	"github.com/skaphos/berth/internal/auth"
-	"github.com/skaphos/berth/internal/k8s"
 	"github.com/skaphos/berth/internal/lease"
 )
 
@@ -34,32 +33,49 @@ func main() {
 
 func run() int {
 	var (
-		listenAddr             string
-		tlsCert                string
-		tlsKey                 string
-		coordinationKubeconfig string
-		coordinationNamespace  string
-		authMode               string
-		apiKeysFile            string
-		oidcIssuerURL          string
-		oidcAudience           string
-		oidcJWKSURL            string
-		oidcUsernameClaim      string
-		oidcTenantClaim        string
+		listenAddr        string
+		tlsCert           string
+		tlsKey            string
+		storeCfg          storeConfig
+		authMode          string
+		apiKeysFile       string
+		oidcIssuerURL     string
+		oidcAudience      string
+		oidcJWKSURL       string
+		oidcUsernameClaim string
+		oidcTenantClaim   string
 	)
 	oidcRequiredClaims := map[string]string{}
 
 	flag.StringVar(&listenAddr, "listen-addr", ":8443", "address to listen on")
 	flag.StringVar(&tlsCert, "tls-cert-file", "", "path to TLS certificate file")
 	flag.StringVar(&tlsKey, "tls-key-file", "", "path to TLS private key file")
-	flag.StringVar(&coordinationKubeconfig, "coordination-kubeconfig", "",
-		"path to a kubeconfig pointing at the coordination cluster (empty = in-cluster config)")
-	flag.StringVar(&coordinationNamespace, "coordination-namespace", "",
+	flag.StringVar(&storeCfg.backend, "store-backend", storeBackendUnset,
+		"lease store backend: 'mem' (in-memory; dev only), 'k8s' (coordination.k8s.io/v1.Lease in a separate "+
+			"cluster), or 'sql' (Postgres/MariaDB/SQLite). When unset, the legacy heuristic applies (empty "+
+			"--coordination-namespace → 'mem', set → 'k8s') and a deprecation warning is logged.")
+	flag.StringVar(&storeCfg.coordinationKubeconfig, "coordination-kubeconfig", "",
+		"path to a kubeconfig pointing at the coordination cluster (empty = in-cluster config). "+
+			"Only valid with --store-backend=k8s.")
+	flag.StringVar(&storeCfg.coordinationNamespace, "coordination-namespace", "",
 		"namespace in the coordination cluster where Berth Lease objects are stored. "+
-			"When empty, the API server falls back to an in-memory store (dev only — state is lost on restart).")
+			"Required when --store-backend=k8s.")
+	flag.StringVar(&storeCfg.sqlDriver, "sql-driver", "",
+		"SQL driver: 'postgres', 'mysql', or 'sqlite'. Required when --store-backend=sql.")
+	flag.StringVar(&storeCfg.sqlDSN, "sql-dsn", "",
+		"SQL DSN (e.g. 'postgres://user:pass@host:5432/berth?sslmode=require'). "+
+			"Mutually exclusive with --sql-dsn-file. Only valid with --store-backend=sql.")
+	flag.StringVar(&storeCfg.sqlDSNFile, "sql-dsn-file", "",
+		"path to a file containing the SQL DSN. Re-read so an external secret-rotation sidecar can "+
+			"refresh it without restarting the API server. Mutually exclusive with --sql-dsn. "+
+			"Only valid with --store-backend=sql.")
+	flag.StringVar(&storeCfg.sqlMigrate, "sql-migrate", "",
+		"schema migration policy: 'auto' (apply pending migrations at startup) or 'off' "+
+			"(fail fast on schema drift). Only valid with --store-backend=sql. "+
+			"Defaults to 'auto' when --store-backend=sql.")
 	flag.StringVar(&authMode, "auth-mode", "",
 		"authentication mode: 'none', 'static-keys', or 'oidc'. Defaults to 'static-keys' when "+
-			"--coordination-namespace is set; defaults to 'none' otherwise.")
+			"the resolved store backend is 'k8s' or 'sql'; defaults to 'none' for the 'mem' backend.")
 	flag.StringVar(&apiKeysFile, "api-keys-file", "",
 		"path to a file of '<key-id>:<sha256-hex>' entries; required when --auth-mode=static-keys. "+
 			"SIGHUP reloads the file in place.")
@@ -87,9 +103,19 @@ func run() int {
 		})
 	flag.Parse()
 
-	authMode = resolveAuthMode(authMode, coordinationNamespace)
+	backend, err := resolveStoreBackend(storeCfg)
+	if err != nil {
+		slog.Error("resolve store backend", "error", err)
+		return exitCodeConfigError
+	}
+	if err := validateStoreConfig(backend, storeCfg); err != nil {
+		slog.Error("validate store flags", "error", err)
+		return exitCodeConfigError
+	}
 
-	store, err := buildStore(coordinationKubeconfig, coordinationNamespace)
+	authMode = resolveAuthMode(authMode, backend)
+
+	store, err := buildStore(backend, storeCfg)
 	if err != nil {
 		slog.Error("build lease store", "error", err)
 		return exitCodeConfigError
@@ -127,32 +153,17 @@ func run() int {
 	return 0
 }
 
-// resolveAuthMode applies the default-when-unset rule: production
-// (coordination namespace set) defaults to static-keys; dev defaults to
-// none. An explicit --auth-mode value always wins.
-func resolveAuthMode(authMode, coordinationNamespace string) string {
+// resolveAuthMode applies the default-when-unset rule: a persistent store
+// backend (k8s or sql) defaults to static-keys; the in-memory dev backend
+// defaults to none. An explicit --auth-mode value always wins.
+func resolveAuthMode(authMode, backend string) string {
 	if authMode != "" {
 		return authMode
 	}
-	if coordinationNamespace == "" {
+	if backend == storeBackendMem {
 		return authModeNone
 	}
 	return authModeStaticKeys
-}
-
-// buildStore selects the lease.Store backend. When coordinationNamespace
-// is non-empty, a K8sLeaseStore is built against the coordination
-// cluster. Otherwise an in-memory store is used and a warning is logged.
-func buildStore(kubeconfig, namespace string) (lease.Store, error) {
-	if namespace == "" {
-		slog.Warn("running with in-memory lease store; state will not survive restart, do not use in production")
-		return lease.NewMemStore(), nil
-	}
-	clientset, err := k8s.NewClientset(kubeconfig)
-	if err != nil {
-		return nil, err
-	}
-	return lease.NewK8sLeaseStore(clientset, namespace)
 }
 
 // oidcConfig groups the OIDC-related flag values for buildAuthenticator.
