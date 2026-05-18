@@ -69,18 +69,24 @@ func TestValidateStoreConfig(t *testing.T) {
 		{
 			name:    "mem accepts no other flags",
 			backend: "mem",
-			cfg:     storeConfig{sqlMigrate: "auto"},
+			cfg:     storeConfig{},
 		},
 		{
 			name:    "mem rejects coordination flags",
 			backend: "mem",
-			cfg:     storeConfig{coordinationNamespace: "berth", sqlMigrate: "auto"},
+			cfg:     storeConfig{coordinationNamespace: "berth"},
 			wantErr: "--coordination-namespace and --coordination-kubeconfig are only valid with --store-backend=k8s",
 		},
 		{
 			name:    "mem rejects sql flags",
 			backend: "mem",
-			cfg:     storeConfig{sqlDriver: "postgres", sqlMigrate: "auto"},
+			cfg:     storeConfig{sqlDriver: "postgres"},
+			wantErr: "--sql-* flags are only valid with --store-backend=sql",
+		},
+		{
+			name:    "mem rejects explicit sql-migrate",
+			backend: "mem",
+			cfg:     storeConfig{sqlMigrate: "auto"},
 			wantErr: "--sql-* flags are only valid with --store-backend=sql",
 		},
 
@@ -88,7 +94,7 @@ func TestValidateStoreConfig(t *testing.T) {
 		{
 			name:    "k8s with namespace is valid",
 			backend: "k8s",
-			cfg:     storeConfig{coordinationNamespace: "berth", sqlMigrate: "auto"},
+			cfg:     storeConfig{coordinationNamespace: "berth"},
 		},
 		{
 			name:    "k8s with namespace + kubeconfig is valid",
@@ -96,13 +102,12 @@ func TestValidateStoreConfig(t *testing.T) {
 			cfg: storeConfig{
 				coordinationNamespace:  "berth",
 				coordinationKubeconfig: "/etc/berth/coord.kubeconfig",
-				sqlMigrate:             "auto",
 			},
 		},
 		{
 			name:    "k8s requires namespace",
 			backend: "k8s",
-			cfg:     storeConfig{sqlMigrate: "auto"},
+			cfg:     storeConfig{},
 			wantErr: "--coordination-namespace is required when --store-backend=k8s",
 		},
 		{
@@ -111,7 +116,15 @@ func TestValidateStoreConfig(t *testing.T) {
 			cfg: storeConfig{
 				coordinationNamespace: "berth",
 				sqlDSN:                "postgres://...",
-				sqlMigrate:            "auto",
+			},
+			wantErr: "--sql-* flags are only valid with --store-backend=sql",
+		},
+		{
+			name:    "k8s rejects explicit sql-migrate",
+			backend: "k8s",
+			cfg: storeConfig{
+				coordinationNamespace: "berth",
+				sqlMigrate:            "off",
 			},
 			wantErr: "--sql-* flags are only valid with --store-backend=sql",
 		},
@@ -119,6 +132,14 @@ func TestValidateStoreConfig(t *testing.T) {
 		// sql ----------------------------------------------------------
 		{
 			name:    "sql with dsn is valid",
+			backend: "sql",
+			cfg: storeConfig{
+				sqlDriver: "postgres",
+				sqlDSN:    "postgres://user:pass@host/berth",
+			},
+		},
+		{
+			name:    "sql with explicit migrate=auto is valid",
 			backend: "sql",
 			cfg: storeConfig{
 				sqlDriver:  "postgres",
@@ -132,7 +153,6 @@ func TestValidateStoreConfig(t *testing.T) {
 			cfg: storeConfig{
 				sqlDriver:  "postgres",
 				sqlDSNFile: "/etc/berth/dsn",
-				sqlMigrate: "auto",
 			},
 		},
 		{
@@ -151,7 +171,6 @@ func TestValidateStoreConfig(t *testing.T) {
 				coordinationNamespace: "berth",
 				sqlDriver:             "postgres",
 				sqlDSN:                "postgres://...",
-				sqlMigrate:            "auto",
 			},
 			wantErr: "--coordination-* flags are only valid with --store-backend=k8s",
 		},
@@ -159,8 +178,7 @@ func TestValidateStoreConfig(t *testing.T) {
 			name:    "sql requires driver",
 			backend: "sql",
 			cfg: storeConfig{
-				sqlDSN:     "postgres://...",
-				sqlMigrate: "auto",
+				sqlDSN: "postgres://...",
 			},
 			wantErr: "--sql-driver is required when --store-backend=sql",
 		},
@@ -168,9 +186,8 @@ func TestValidateStoreConfig(t *testing.T) {
 			name:    "sql rejects unknown driver",
 			backend: "sql",
 			cfg: storeConfig{
-				sqlDriver:  "etcd",
-				sqlDSN:     "x",
-				sqlMigrate: "auto",
+				sqlDriver: "etcd",
+				sqlDSN:    "x",
 			},
 			wantErr: "--sql-driver must be one of",
 		},
@@ -178,8 +195,7 @@ func TestValidateStoreConfig(t *testing.T) {
 			name:    "sql requires dsn or dsn-file",
 			backend: "sql",
 			cfg: storeConfig{
-				sqlDriver:  "postgres",
-				sqlMigrate: "auto",
+				sqlDriver: "postgres",
 			},
 			wantErr: "one of --sql-dsn or --sql-dsn-file is required when --store-backend=sql",
 		},
@@ -190,7 +206,6 @@ func TestValidateStoreConfig(t *testing.T) {
 				sqlDriver:  "postgres",
 				sqlDSN:     "postgres://...",
 				sqlDSNFile: "/etc/berth/dsn",
-				sqlMigrate: "auto",
 			},
 			wantErr: "--sql-dsn and --sql-dsn-file are mutually exclusive",
 		},
@@ -209,7 +224,7 @@ func TestValidateStoreConfig(t *testing.T) {
 		{
 			name:    "unknown backend is rejected",
 			backend: "etcd",
-			cfg:     storeConfig{sqlMigrate: "auto"},
+			cfg:     storeConfig{},
 			wantErr: "unknown backend",
 		},
 	}
@@ -255,9 +270,8 @@ func TestResolveAuthMode(t *testing.T) {
 
 func TestBuildStore_SQLNotImplemented(t *testing.T) {
 	_, err := buildStore("sql", storeConfig{
-		sqlDriver:  "postgres",
-		sqlDSN:     "postgres://...",
-		sqlMigrate: "auto",
+		sqlDriver: "postgres",
+		sqlDSN:    "postgres://...",
 	})
 	if err == nil || !strings.Contains(err.Error(), "SKA-316") {
 		t.Fatalf("want error referencing SKA-316, got %v", err)
@@ -265,7 +279,7 @@ func TestBuildStore_SQLNotImplemented(t *testing.T) {
 }
 
 func TestBuildStore_Mem(t *testing.T) {
-	s, err := buildStore("mem", storeConfig{sqlMigrate: "auto"})
+	s, err := buildStore("mem", storeConfig{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

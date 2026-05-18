@@ -69,9 +69,10 @@ func run() int {
 		"path to a file containing the SQL DSN. Re-read so an external secret-rotation sidecar can "+
 			"refresh it without restarting the API server. Mutually exclusive with --sql-dsn. "+
 			"Only valid with --store-backend=sql.")
-	flag.StringVar(&storeCfg.sqlMigrate, "sql-migrate", sqlMigrateAuto,
+	flag.StringVar(&storeCfg.sqlMigrate, "sql-migrate", "",
 		"schema migration policy: 'auto' (apply pending migrations at startup) or 'off' "+
-			"(fail fast on schema drift). Only valid with --store-backend=sql.")
+			"(fail fast on schema drift). Only valid with --store-backend=sql. "+
+			"Defaults to 'auto' when --store-backend=sql.")
 	flag.StringVar(&authMode, "auth-mode", "",
 		"authentication mode: 'none', 'static-keys', or 'oidc'. Defaults to 'static-keys' when "+
 			"the resolved store backend is 'k8s' or 'sql'; defaults to 'none' for the 'mem' backend.")
