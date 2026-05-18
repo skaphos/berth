@@ -100,7 +100,7 @@ func validateStoreConfig(backend string, cfg storeConfig) error {
 			return errors.New("--sql-dsn and --sql-dsn-file are mutually exclusive")
 		}
 		switch cfg.sqlMigrate {
-		case sqlMigrateAuto, sqlMigrateOff:
+		case "", sqlMigrateAuto, sqlMigrateOff:
 		default:
 			return fmt.Errorf("--sql-migrate must be one of %q, %q; got %q",
 				sqlMigrateAuto, sqlMigrateOff, cfg.sqlMigrate)

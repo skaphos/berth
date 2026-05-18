@@ -331,8 +331,9 @@ inline documentation.
                             exclusive with --sql-dsn. Only valid with
                             --store-backend=sql.
 --sql-migrate               'auto' (apply pending migrations at startup) or
-                            'off' (fail fast on schema drift). Default
-                            'auto'. Only valid with --store-backend=sql.
+                            'off' (fail fast on schema drift). Defaults to
+                            'auto' when --store-backend=sql. Only valid with
+                            --store-backend=sql.
 --auth-mode                 'none', 'static-keys', or 'oidc'. Defaults to
                             'static-keys' when the resolved store backend
                             is 'k8s' or 'sql'; defaults to 'none' for 'mem'.
