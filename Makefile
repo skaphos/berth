@@ -11,7 +11,7 @@ generate:
 
 manifests:
 	rm -rf "$(TMP_CRD_DIR)"
-	mkdir -p "$(TMP_CRD_DIR)" config/crd
+	mkdir -p "$(TMP_CRD_DIR)" config/crd deploy/helm/berth-operator/crds
 	$(CONTROLLER_GEN) crd paths=./api/... output:crd:artifacts:config="$(TMP_CRD_DIR)"
 	cp "$(TMP_CRD_DIR)/berth.skaphos.io_berthleases.yaml" config/crd/berthlease.yaml
 	cp "$(TMP_CRD_DIR)/berth.skaphos.io_berthleases.yaml" deploy/helm/berth-operator/crds/berthlease.yaml

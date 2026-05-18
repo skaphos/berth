@@ -2,5 +2,11 @@
 chart-dirs:
   - deploy/helm
 target-branch: main
-helm-extra-args: --timeout 600s
+helm-extra-args: --timeout 90s
 validate-maintainers: false
+# Install all charts in `default` so the pre-created TLS / API-key /
+# kubeconfig fixtures in .github/workflows/charts.yaml are visible to
+# both charts. ct's default behavior randomizes a namespace per install
+# which leaves the fixtures unreachable. ct does not delete the namespace
+# when `namespace` is set explicitly — just the release.
+namespace: default
