@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Berth API server values for the e2e harness. Deployed into the
+# berth-e2e-coord kind cluster, in the berth-system namespace.
+#
+# Decisions specific to e2e:
+# - Service type NodePort so east/west operator clusters reach the API
+#   server via the coord control-plane container IP + nodePort.
+# - existingSecret TLS — the harness pre-creates berth-apiserver-tls
+#   with a throwaway self-signed cert; operators set
+#   --berth-insecure-skip-tls-verify because the cert SAN cannot be
+#   pinned to a yet-to-be-assigned container IP.
+# - static-keys auth — keeps OIDC out of the e2e topology; the secret
+#   berth-api-keys is pre-created by the harness with a fixed key id.
+
+image:
+  repository: berth-apiserver
+  tag: e2e
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+coordination:
+  namespace: berth-coordination
+  inCluster: true
+
+tls:
+  certManager:
+    enabled: false
+  existingSecret: berth-apiserver-tls
+
+auth:
+  mode: static-keys
+  staticKeys:
+    secretName: berth-api-keys
+    secretKey: api-keys
+
+service:
+  type: NodePort
+  port: 8443
+
+podDisruptionBudget:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 300m
+    memory: 192Mi

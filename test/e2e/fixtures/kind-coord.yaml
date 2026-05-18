@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Kind cluster config for the Berth coordination cluster in e2e.
+# Hosts the Berth API server and the coordination.k8s.io/v1.Lease store.
+#
+# `berth-e2e-coord` is paired with `berth-e2e-east` and `berth-e2e-west`
+# in the same docker `kind` network so the runner clusters can reach the
+# API server via the coord control-plane container IP + NodePort.
+#
+# Node image is pinned in lockstep with the operator's
+# controller-runtime / client-go versions. Bump together.
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: berth-e2e-coord
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.33.1
