@@ -16,6 +16,9 @@ sidecarBroker:
     clientSecret:
       secretName: berth-oidc-client
       secretKey: client-secret
+# ServiceMonitor render is covered by `ct lint`; `ct install` needs
+# the Prometheus Operator CRDs which kind doesn't bundle. Leave the
+# render path off here.
 metrics:
   serviceMonitor:
-    enabled: true
+    enabled: false
