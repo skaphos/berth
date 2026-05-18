@@ -50,9 +50,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.x'
+          # Pinned so CI doesn't pick up a new Python minor mid-stream;
+          # ratchet manually when intentionally upgrading.
+          python-version: '3.13'
       - name: Install REUSE tool
-        run: python -m pip install --upgrade pip reuse
+        # Pin to a known-good REUSE version so a new upstream release
+        # cannot break CI behind our backs. Bump deliberately.
+        run: python -m pip install --upgrade pip 'reuse==6.2.0'
       - name: Run REUSE lint
         run: reuse lint
 
