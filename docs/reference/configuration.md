@@ -26,9 +26,9 @@ For deployed components, the practical precedence is:
 | `--store-backend` | empty | `mem`, `k8s`, or `sql`. Empty uses the deprecated coordination-namespace heuristic. |
 | `--coordination-kubeconfig` | empty | Kubeconfig for the coordination cluster. Empty means in-cluster config. Only valid with `k8s`. |
 | `--coordination-namespace` | empty | Namespace where Kubernetes-backed lease objects are stored. Required with `k8s`. |
-| `--sql-driver` | empty | `postgres`, `mysql`, or `sqlite`. Required with `sql`, but SQL is not implemented yet. |
+| `--sql-driver` | empty | `postgres`, `mysql`, or `sqlite`. Required with `sql`. |
 | `--sql-dsn` | empty | SQL DSN. Mutually exclusive with `--sql-dsn-file`. |
-| `--sql-dsn-file` | empty | File containing the SQL DSN. Mutually exclusive with `--sql-dsn`. |
+| `--sql-dsn-file` | empty | File containing the SQL DSN. Read once at startup; restart the API server after credential rotation. Mutually exclusive with `--sql-dsn`. |
 | `--sql-migrate` | empty | `auto` or `off`. Defaults to `auto` for `sql`. |
 | `--auth-mode` | derived | `none`, `static-keys`, or `oidc`. Explicit value wins. |
 | `--api-keys-file` | empty | Static key file with `<key-id>:<sha256-hex>` lines. Required with `static-keys`. Reloaded on SIGHUP. |
@@ -41,6 +41,13 @@ For deployed components, the practical precedence is:
 
 Auth defaults depend on the resolved backend: `mem` defaults to `none`; `k8s`
 and `sql` default to `static-keys`.
+
+The `sql` backend runs every Store operation inside an explicit SQL
+transaction. Postgres and MariaDB/MySQL are the HA runner-local options.
+SQLite is durable and ACID, but single-writer; use it only with one API server
+replica for edge, dev, or CI deployments. In Kubernetes, prefer mounting the
+SQL DSN from a Secret and passing `--sql-dsn-file` rather than putting
+credentials in environment variables.
 
 ## Operator Flags
 

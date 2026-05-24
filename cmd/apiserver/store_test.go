@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/skaphos/berth/internal/lease"
 )
 
 func TestResolveStoreBackend_Explicit(t *testing.T) {
@@ -268,18 +273,79 @@ func TestResolveAuthMode(t *testing.T) {
 	}
 }
 
-func TestBuildStore_SQLNotImplemented(t *testing.T) {
-	_, err := buildStore("sql", storeConfig{
-		sqlDriver: "postgres",
-		sqlDSN:    "postgres://...",
+func TestBuildStore_SQLite(t *testing.T) {
+	s, err := buildStore(context.Background(), "sql", storeConfig{
+		sqlDriver: "sqlite",
+		sqlDSN:    "file:" + t.Name() + "?mode=memory&cache=shared",
 	})
-	if err == nil || !strings.Contains(err.Error(), "SKA-316") {
-		t.Fatalf("want error referencing SKA-316, got %v", err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s == nil {
+		t.Fatal("buildStore(sql) returned nil store")
+	}
+	if c, ok := s.(interface{ Close() error }); ok {
+		t.Cleanup(func() {
+			if err := c.Close(); err != nil {
+				t.Errorf("close sql store: %v", err)
+			}
+		})
+	}
+	rec := &lease.Record{Key: lease.Key{Namespace: "ns", Name: "a"}, Holder: "h", FencingToken: 1}
+	if err := s.Put(context.Background(), 0, rec); err != nil {
+		t.Fatalf("put via sql store: %v", err)
+	}
+}
+
+func TestBuildStore_SQLiteDSNFile(t *testing.T) {
+	path := t.TempDir() + "/dsn"
+	if err := os.WriteFile(path, []byte("file:"+t.Name()+"?mode=memory&cache=shared\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := buildStore(context.Background(), "sql", storeConfig{
+		sqlDriver:  "sqlite",
+		sqlDSNFile: path,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s == nil {
+		t.Fatal("buildStore(sql dsn-file) returned nil store")
+	}
+	if c, ok := s.(interface{ Close() error }); ok {
+		t.Cleanup(func() {
+			if err := c.Close(); err != nil {
+				t.Errorf("close sql store: %v", err)
+			}
+		})
+	}
+}
+
+func TestBuildStore_SQLHonorsCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := buildStore(ctx, "sql", storeConfig{
+		sqlDriver: "sqlite",
+		sqlDSN:    "file:" + t.Name() + "?mode=memory&cache=shared",
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+func TestResolveSQLDSNRejectsEmptyFile(t *testing.T) {
+	path := t.TempDir() + "/dsn"
+	if err := os.WriteFile(path, []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveSQLDSN(storeConfig{sqlDSNFile: path}); err == nil || !strings.Contains(err.Error(), "empty") {
+		t.Fatalf("want empty file error, got %v", err)
 	}
 }
 
 func TestBuildStore_Mem(t *testing.T) {
-	s, err := buildStore("mem", storeConfig{})
+	s, err := buildStore(context.Background(), "mem", storeConfig{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

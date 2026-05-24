@@ -6,7 +6,7 @@
 - `internal/`: private application packages for API wiring, auth, lease coordination, Kubernetes integration, and operator logic.
 - `pkg/client`: public Go client surface for Berth.
 - `config/`: generated CRDs, RBAC, and deployment-oriented manifests.
-- `deploy/helm/`: Helm charts for the API server and operator.
+- `deploy/helm/`: Helm charts for the API server and operator; any chart-directory change must bump that chart's `Chart.yaml` `version`.
 - `docs/`: portable Markdown documentation; keep `README.md` as the short front door.
 - `mkdocs.yml` and `.github/workflows/docs.yml`: MkDocs Material and `mike` publishing configuration.
 
@@ -32,6 +32,7 @@
 
 ## Agent Notes
 - Update generated artifacts when API types or manifests change.
+- If any file under `deploy/helm/<chart>/` changes, including comments, values examples, templates, schemas, CRD copies, or chart tests, bump that same chart's `version` in `deploy/helm/<chart>/Chart.yaml` in the same change. Use a patch bump for documentation, metadata, or compatible rendering changes; use a minor or major bump for additive or breaking chart behavior.
 - Update `docs/` or top-level process docs when user-visible behavior, architecture, configuration, release, or contributor workflow changes.
 - Preserve the split between cross-platform CLI concerns and Linux runtime components.
 - Use [docs/code-map.md](docs/code-map.md) for package ownership and [docs/architecture.md](docs/architecture.md) for runtime behavior.

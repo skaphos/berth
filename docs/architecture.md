@@ -76,7 +76,11 @@ depend on the scan loop.
 | --- | --- | --- |
 | `mem` | Implemented | Development and tests only. State is per-process and lost on restart. |
 | `k8s` | Implemented | Production cross-cluster topology. Stores records as Kubernetes `Lease` objects in a coordination cluster namespace. |
-| `sql` | Flagged, not implemented | Reserved for SKA-316 runner-local topology. Startup currently fails for `--store-backend=sql`. |
+| `sql` | Implemented | Runner-local topology. Stores records in Postgres, MariaDB/MySQL, or SQLite using ACID database transactions. |
+
+Postgres and MariaDB/MySQL support multi-replica API server deployments through
+shared SQL compare-and-swap updates. SQLite is durable and ACID, but remains a
+single-writer backend; run it with one API server replica only.
 
 Use explicit `--store-backend`. The legacy heuristic that selects `mem` or
 `k8s` from `--coordination-namespace` is deprecated.

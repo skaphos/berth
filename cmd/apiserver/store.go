@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/skaphos/berth/internal/k8s"
 	"github.com/skaphos/berth/internal/lease"
+	"github.com/skaphos/berth/internal/lease/sqlstore"
 )
 
 const (
@@ -21,6 +26,8 @@ const (
 
 	sqlMigrateAuto = "auto"
 	sqlMigrateOff  = "off"
+
+	sqlStoreStartupTimeout = 30 * time.Second
 )
 
 // storeConfig groups all flag values that feed the lease.Store factory.
@@ -113,7 +120,7 @@ func validateStoreConfig(backend string, cfg storeConfig) error {
 
 // buildStore constructs the lease.Store for the chosen backend. The caller is
 // expected to have already invoked validateStoreConfig.
-func buildStore(backend string, cfg storeConfig) (lease.Store, error) {
+func buildStore(ctx context.Context, backend string, cfg storeConfig) (lease.Store, error) {
 	switch backend {
 	case storeBackendMem:
 		slog.Warn("running with in-memory lease store; state will not survive restart, do not use in production")
@@ -125,8 +132,40 @@ func buildStore(backend string, cfg storeConfig) (lease.Store, error) {
 		}
 		return lease.NewK8sLeaseStore(clientset, cfg.coordinationNamespace)
 	case storeBackendSQL:
-		return nil, errors.New("--store-backend=sql is not yet implemented; see SKA-316")
+		dsn, err := resolveSQLDSN(cfg)
+		if err != nil {
+			return nil, err
+		}
+		migrate := cfg.sqlMigrate
+		if migrate == "" {
+			migrate = sqlstore.MigrateAuto
+		}
+		if cfg.sqlDriver == sqlDriverSQLite {
+			slog.Warn("running with sqlite lease store; SQLite is durable and ACID, but single-writer only and not suitable for multi-replica HA API servers")
+		}
+		startupCtx, cancel := context.WithTimeout(ctx, sqlStoreStartupTimeout)
+		defer cancel()
+		return sqlstore.New(startupCtx, sqlstore.Config{
+			Driver:  cfg.sqlDriver,
+			DSN:     dsn,
+			Migrate: migrate,
+		})
 	default:
 		return nil, fmt.Errorf("internal error: unknown backend %q", backend)
 	}
+}
+
+func resolveSQLDSN(cfg storeConfig) (string, error) {
+	if cfg.sqlDSN != "" {
+		return cfg.sqlDSN, nil
+	}
+	data, err := os.ReadFile(cfg.sqlDSNFile)
+	if err != nil {
+		return "", fmt.Errorf("read --sql-dsn-file: %w", err)
+	}
+	dsn := strings.TrimSpace(string(data))
+	if dsn == "" {
+		return "", errors.New("--sql-dsn-file is empty")
+	}
+	return dsn, nil
 }

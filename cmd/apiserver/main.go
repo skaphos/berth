@@ -66,8 +66,8 @@ func run() int {
 		"SQL DSN (e.g. 'postgres://user:pass@host:5432/berth?sslmode=require'). "+
 			"Mutually exclusive with --sql-dsn-file. Only valid with --store-backend=sql.")
 	flag.StringVar(&storeCfg.sqlDSNFile, "sql-dsn-file", "",
-		"path to a file containing the SQL DSN. Re-read so an external secret-rotation sidecar can "+
-			"refresh it without restarting the API server. Mutually exclusive with --sql-dsn. "+
+		"path to a file containing the SQL DSN. Read once at startup; restart the API server after "+
+			"credential rotation. Mutually exclusive with --sql-dsn. "+
 			"Only valid with --store-backend=sql.")
 	flag.StringVar(&storeCfg.sqlMigrate, "sql-migrate", "",
 		"schema migration policy: 'auto' (apply pending migrations at startup) or 'off' "+
@@ -115,7 +115,10 @@ func run() int {
 
 	authMode = resolveAuthMode(authMode, backend)
 
-	store, err := buildStore(backend, storeCfg)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	store, err := buildStore(ctx, backend, storeCfg)
 	if err != nil {
 		slog.Error("build lease store", "error", err)
 		return exitCodeConfigError
@@ -134,9 +137,6 @@ func run() int {
 		slog.Error("build authenticator", "error", err)
 		return exitCodeConfigError
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	go watchSIGHUP(ctx, authn)
 

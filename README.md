@@ -11,7 +11,7 @@ token-broker sidecar for operator authentication.
 
 | Component | Purpose |
 | --- | --- |
-| `apiserver` | HTTPS lease API backed by either in-memory state or Kubernetes `Lease` objects in a coordination cluster. |
+| `apiserver` | HTTPS lease API backed by in-memory state, Kubernetes `Lease` objects in a coordination cluster, or a SQL database. |
 | `operator` | Controller that reconciles `BerthLease` resources and applies suspend or scale actions to target workloads. |
 | `berth` | CLI entrypoint. Lease commands currently exist as stubs while the Go client is the supported direct-integration path. |
 | `berth-oidc-broker` | Sidecar that fetches OIDC client-credentials tokens and writes them to a file consumed by the operator. |
