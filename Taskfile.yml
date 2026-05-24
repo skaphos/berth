@@ -14,6 +14,7 @@ vars:
   GOIMPORTS_RUNNER: go run golang.org/x/tools/cmd/goimports@v0.43.0
   STATICCHECK_RUNNER: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0
   GOVULNCHECK_RUNNER: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
+  CRD_REF_DOCS: go -C tools tool crd-ref-docs
   TMP_CRD_DIR: .tmp/crd
 
 tasks:
@@ -49,11 +50,33 @@ tasks:
     cmds:
       - task: manifests
       - task: generate
+      - task: docs:api-ref
       - |
-        if ! git diff --exit-code -- api/ config/crd deploy/helm/berth-operator/crds; then
-          echo "::error::Generated artifacts are stale. Run 'task manifests' and 'task generate' and commit the result." >&2
+        paths="api/ config/crd deploy/helm/berth-operator/crds docs/reference/api.md"
+        untracked_generated="$(git ls-files --others --exclude-standard -- $paths)"
+        if ! git diff --exit-code -- $paths || [ -n "$untracked_generated" ]; then
+          if [ -n "$untracked_generated" ]; then
+            echo "::error::Untracked generated artifacts detected:" >&2
+            printf '%s\n' "$untracked_generated" >&2
+          fi
+          echo "::error::Generated artifacts are stale. Run 'task manifests', 'task generate', and 'task docs:api-ref' and commit the result." >&2
           exit 1
         fi
+
+  # --- Docs ---
+
+  docs:api-ref:
+    desc: Regenerate the CRD API reference from api/v1alpha1 doc comments
+    cmds:
+      - mkdir -p docs/reference
+      - |
+        set -euo pipefail
+        root="$(pwd)"
+        {{.CRD_REF_DOCS}} \
+          --source-path="$root/api/v1alpha1" \
+          --config="$root/docs/.crd-ref-docs.yaml" \
+          --renderer=markdown \
+          --output-path="$root/docs/reference/api.md"
 
   # --- Quality ---
 

@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Configuration for elastic/crd-ref-docs. Drives the generated CRD API
+# reference at docs/reference/api.md (regenerated via `task docs:api-ref`).
+# Field descriptions come from the doc comments on the Go types in
+# api/v1alpha1 and also feed CRD descriptions through controller-gen.
+
+processor:
+  ignoreFields:
+    - "TypeMeta$"
+  ignoreGroupVersions: []
+
+render:
+  kubernetesVersion: "1.36"

@@ -1,20 +1,22 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `cmd/apiserver`, `cmd/operator`, and `cmd/berth`: entrypoints for the API server, operator, and CLI.
+- `cmd/apiserver`, `cmd/operator`, `cmd/berth`, and `cmd/berth-oidc-broker`: entrypoints for the API server, operator, CLI, and OIDC token broker.
 - `api/v1alpha1`: CRD API types and generated deepcopy code.
 - `internal/`: private application packages for API wiring, auth, lease coordination, Kubernetes integration, and operator logic.
 - `pkg/client`: public Go client surface for Berth.
 - `config/`: generated CRDs, RBAC, and deployment-oriented manifests.
 - `deploy/helm/`: Helm charts for the API server and operator.
+- `docs/`: portable Markdown documentation; keep `README.md` as the short front door.
+- `mkdocs.yml` and `.github/workflows/docs.yml`: MkDocs Material and `mike` publishing configuration.
 
 ## Build, Test, and Development Commands
-- `make generate`: regenerate deepcopy code.
-- `make manifests`: regenerate CRD manifests.
-- `make build`: build local binaries into `bin/`.
-- `make test`: run the Go test suite.
-- `go test ./... -coverprofile=coverage.out`: run tests with coverage output.
-- `make lint`: run `golangci-lint` and `go vet`.
+- `go -C tools tool task generate`: regenerate deepcopy code.
+- `go -C tools tool task manifests`: regenerate CRD manifests and sync the Helm CRD copy.
+- `go -C tools tool task verify-generated`: fail if generated artifacts are stale.
+- `go -C tools tool task build`: build local binaries into `bin/`.
+- `go -C tools tool task test`: run the Go test suite with coverage output.
+- `go -C tools tool task lint`: run `golangci-lint`.
 
 ## Coding Style & Testing Guidelines
 - Go version: `go 1.26` (see `go.mod`).
@@ -30,4 +32,6 @@
 
 ## Agent Notes
 - Update generated artifacts when API types or manifests change.
+- Update `docs/` or top-level process docs when user-visible behavior, architecture, configuration, release, or contributor workflow changes.
 - Preserve the split between cross-platform CLI concerns and Linux runtime components.
+- Use [docs/code-map.md](docs/code-map.md) for package ownership and [docs/architecture.md](docs/architecture.md) for runtime behavior.
