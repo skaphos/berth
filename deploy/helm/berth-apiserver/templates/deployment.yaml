@@ -13,18 +13,20 @@ spec:
     rollingUpdate:
       {{- /*
         Zero-downtime rollout (surge a new Ready pod before terminating the old)
-        is only safe when the lease store is SHARED across pods — the k8s and
-        sql backends are CAS-protected, so two apiserver pods overlapping during
-        a rollout observe the same lease state. Without it, maxUnavailable=1 on
-        a single replica takes the only pod down, stalling renewals past the TTL
-        and causing a spurious cross-cluster failover.
+        is only safe when the lease store is SHARED across pods — the k8s,
+        Postgres, and MariaDB/MySQL backends are CAS-protected, so two
+        apiserver pods overlapping during a rollout observe the same lease
+        state. Without it, maxUnavailable=1 on a single replica takes the
+        only pod down, stalling renewals past the TTL and causing a spurious
+        cross-cluster failover.
 
         The in-memory store (mem, or the legacy empty backend with no
-        coordination namespace) is per-pod, so a surged second pod would have
-        divergent lease state. There we avoid overlap (scale down first, no
-        surge) and accept the brief dev-only downtime.
+        coordination namespace) and the common SQLite case are per-pod, so a
+        surged second pod would have divergent lease state. There we avoid
+        overlap (scale down first, no surge) and accept the brief dev-only
+        downtime.
       */}}
-      {{- if or (eq .Values.store.backend "k8s") (eq .Values.store.backend "sql") (and (not .Values.store.backend) .Values.coordination.namespace) }}
+      {{- if or (eq .Values.store.backend "k8s") (and (eq .Values.store.backend "sql") (ne .Values.store.sql.driver "sqlite")) (and (not .Values.store.backend) .Values.coordination.namespace) }}
       maxUnavailable: 0
       maxSurge: 1
       {{- else }}
@@ -39,7 +41,7 @@ spec:
       labels:
         {{- include "berth-apiserver.labels" . | nindent 8 }}
       annotations:
-        checksum/config: {{ printf "%s|%s|%s|%s" .Values.coordination.namespace .Values.auth.mode .Values.auth.staticKeys.secretName .Values.auth.oidc.issuerURL | sha256sum }}
+        checksum/config: {{ printf "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" .Values.store.backend .Values.store.sql.driver .Values.store.sql.dsn .Values.store.sql.dsnSecret.name .Values.store.sql.dsnSecret.key .Values.store.sql.migrate .Values.coordination.namespace .Values.auth.mode .Values.auth.staticKeys.secretName .Values.auth.oidc.issuerURL | sha256sum }}
     spec:
       serviceAccountName: {{ include "berth-apiserver.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
@@ -56,11 +58,23 @@ spec:
             - --listen-addr=:8443
             - --tls-cert-file=/etc/berth/tls/tls.crt
             - --tls-key-file=/etc/berth/tls/tls.key
-            {{- if .Values.coordination.namespace }}
-            - --coordination-namespace={{ .Values.coordination.namespace }}
+            {{- if .Values.store.backend }}
+            - --store-backend={{ .Values.store.backend }}
             {{- end }}
-            {{- if and .Values.coordination.kubeconfig.secretName (not .Values.coordination.inCluster) }}
+            {{- if or (eq .Values.store.backend "k8s") (and (not .Values.store.backend) .Values.coordination.namespace) }}
+            - --coordination-namespace={{ .Values.coordination.namespace }}
+              {{- if and .Values.coordination.kubeconfig.secretName (not .Values.coordination.inCluster) }}
             - --coordination-kubeconfig=/etc/berth/coordination/{{ .Values.coordination.kubeconfig.secretKey }}
+              {{- end }}
+            {{- end }}
+            {{- if eq .Values.store.backend "sql" }}
+            - --sql-driver={{ .Values.store.sql.driver }}
+            {{- if .Values.store.sql.dsn }}
+            - --sql-dsn={{ .Values.store.sql.dsn }}
+            {{- else }}
+            - --sql-dsn-file=/etc/berth/sql/{{ .Values.store.sql.dsnSecret.key }}
+            {{- end }}
+            - --sql-migrate={{ .Values.store.sql.migrate | default "auto" }}
             {{- end }}
             - --auth-mode={{ .Values.auth.mode }}
             {{- if eq .Values.auth.mode "static-keys" }}
@@ -118,6 +132,11 @@ spec:
               mountPath: /etc/berth/auth
               readOnly: true
             {{- end }}
+            {{- if and (eq .Values.store.backend "sql") .Values.store.sql.dsnSecret.name }}
+            - name: sql-dsn
+              mountPath: /etc/berth/sql
+              readOnly: true
+            {{- end }}
             - name: tmp
               mountPath: /tmp
             {{- with .Values.extraVolumeMounts }}
@@ -136,6 +155,11 @@ spec:
         - name: auth-keys
           secret:
             secretName: {{ .Values.auth.staticKeys.secretName }}
+        {{- end }}
+        {{- if and (eq .Values.store.backend "sql") .Values.store.sql.dsnSecret.name }}
+        - name: sql-dsn
+          secret:
+            secretName: {{ .Values.store.sql.dsnSecret.name }}
         {{- end }}
         - name: tmp
           emptyDir: {}

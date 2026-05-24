@@ -45,9 +45,9 @@ and `sql` default to `static-keys`.
 The `sql` backend runs every Store operation inside an explicit SQL
 transaction. Postgres and MariaDB/MySQL are the HA runner-local options.
 SQLite is durable and ACID, but single-writer; use it only with one API server
-replica for edge, dev, or CI deployments. In Kubernetes, prefer mounting the
-SQL DSN from a Secret and passing `--sql-dsn-file` rather than putting
-credentials in environment variables.
+replica for edge, dev, or CI deployments. In Kubernetes, mount the SQL DSN from
+a Secret and pass `--sql-dsn-file`; the Helm chart does this from
+`store.sql.dsnSecret`.
 
 ## Operator Flags
 
@@ -78,11 +78,27 @@ credentials in environment variables.
 | `--refresh-skew` | `60s` | Refresh this long before token expiry. |
 | `--min-refresh-interval` | `30s` | Minimum retry or refresh interval. |
 
+## SQL Integration Test DSNs
+
+The `test-integration` task runs SQL backend conformance tests against
+operator-provided databases. This is intended for local kind-based test
+topologies or CI environments with explicit database DSNs.
+
+| Environment variable | Meaning |
+| --- | --- |
+| `BERTH_TEST_POSTGRES_DSN` | Postgres DSN used by `TestPostgresStoreConformance`. |
+| `BERTH_TEST_MYSQL_DSN` | MariaDB/MySQL DSN used by `TestMariaDBStoreConformance`. |
+
+If either variable is unset, that driver test is skipped. GitHub Actions only
+runs the SQL integration task when at least one of these DSNs is configured as
+a repository variable or secret.
+
 ## Helm Values
 
 | Chart | Key | Meaning |
 | --- | --- | --- |
-| `berth-apiserver` | `store.backend` | Intended store backend used by chart logic such as rollout strategy. The chart does not yet render `--store-backend`; pass it through `extraArgs` for explicit binary configuration. |
+| `berth-apiserver` | `store.backend` | Store backend rendered into `--store-backend`; one of `mem`, `k8s`, or `sql`. |
+| `berth-apiserver` | `store.sql.*` | SQL driver, migration mode, and DSN source. Prefer `store.sql.dsnSecret` so the chart mounts a Secret and passes `--sql-dsn-file`. |
 | `berth-apiserver` | `coordination.*` | Kubernetes Lease backend namespace, in-cluster mode, and optional kubeconfig Secret. |
 | `berth-apiserver` | `tls.certManager.*`, `tls.existingSecret` | Exactly one TLS source is required. |
 | `berth-apiserver` | `auth.mode` | `none`, `static-keys`, or `oidc`. Production should use `static-keys` or `oidc`. |
@@ -94,14 +110,6 @@ credentials in environment variables.
 | `berth-operator` | `berth.tokenFile.path` | Token file path written by a sidecar. |
 | `berth-operator` | `berth.tls.*` | CA bundle, server name, and development-only insecure mode. |
 | `berth-operator` | `sidecarBroker.*` | Optional OIDC broker sidecar configuration. |
-
-Until the apiserver chart renders `--store-backend` directly, set both the
-chart value and the binary flag for explicit production installs:
-
-```bash
---set store.backend=k8s \
---set-string 'extraArgs[0]=--store-backend=k8s'
-```
 
 ## Static API Key File
 

@@ -95,6 +95,8 @@ jobs:
           kubectl create secret generic berth-coordination-kubeconfig \
             --from-file=kubeconfig=/tmp/coord-kubeconfig
           kubectl create namespace berth-coordination
+          kubectl create secret generic berth-sqlite-dsn \
+            --from-literal=dsn='file:/tmp/berth.db?cache=shared'
           kubectl create secret generic berth-api-key --from-literal=api-key=test
           kubectl create configmap berth-ca-bundle --from-file=ca.crt=/tmp/tls.crt
           kubectl create secret generic berth-oidc-client --from-literal=client-secret=test

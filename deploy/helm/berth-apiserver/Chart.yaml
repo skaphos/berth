@@ -1,13 +1,12 @@
 apiVersion: v2
 name: berth-apiserver
 description: |
-  Berth coordination API server. Runs N replicas in a dedicated control
-  plane and persists lease state into coordination.k8s.io Lease objects
-  on a coordination cluster, so all replicas share a single source of
-  truth via kube-apiserver compare-and-swap.
+  Berth coordination API server. Runs with an in-memory, Kubernetes Lease,
+  or SQL-backed lease store so deployments can choose a cross-cluster
+  coordination plane or a runner-local topology.
 type: application
 kubeVersion: ">=1.27.0-0"
-version: 0.3.2
+version: 0.4.0
 appVersion: "0.2.0"
 home: https://github.com/skaphos/berth
 sources:
