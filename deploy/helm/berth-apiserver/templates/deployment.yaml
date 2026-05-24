@@ -11,13 +11,26 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      # Zero-downtime rollout: surge a new Ready pod before terminating the
-      # old one. With maxUnavailable=1 on a single replica, a rollout takes
-      # the only pod down and lease renewals stall past the TTL, causing a
-      # spurious cross-cluster failover. K8sLeaseStore is shared CAS state, so
-      # two apiserver pods overlapping briefly is safe.
+      {{- /*
+        Zero-downtime rollout (surge a new Ready pod before terminating the old)
+        is only safe when the lease store is SHARED across pods — the k8s and
+        sql backends are CAS-protected, so two apiserver pods overlapping during
+        a rollout observe the same lease state. Without it, maxUnavailable=1 on
+        a single replica takes the only pod down, stalling renewals past the TTL
+        and causing a spurious cross-cluster failover.
+
+        The in-memory store (mem, or the legacy empty backend with no
+        coordination namespace) is per-pod, so a surged second pod would have
+        divergent lease state. There we avoid overlap (scale down first, no
+        surge) and accept the brief dev-only downtime.
+      */}}
+      {{- if or (eq .Values.store.backend "k8s") (eq .Values.store.backend "sql") (and (not .Values.store.backend) .Values.coordination.namespace) }}
       maxUnavailable: 0
       maxSurge: 1
+      {{- else }}
+      maxUnavailable: 1
+      maxSurge: 0
+      {{- end }}
   selector:
     matchLabels:
       {{- include "berth-apiserver.selectorLabels" . | nindent 6 }}
