@@ -160,7 +160,7 @@ func RunStoreConformance(t *testing.T, newStore func(testing.TB) lease.Store) {
 			winnerTok int32
 		)
 		wg.Add(holders)
-		for i := range holders {
+		for i := 0; i < holders; i++ {
 			holder := fmt.Sprintf("holder-%02d", i)
 			go func(holder string) {
 				defer wg.Done()
