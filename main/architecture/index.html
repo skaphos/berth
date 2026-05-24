@@ -785,11 +785,14 @@ depend on the scan loop.</p>
 </tr>
 <tr>
 <td><code>sql</code></td>
-<td>Flagged, not implemented</td>
-<td>Reserved for SKA-316 runner-local topology. Startup currently fails for <code>--store-backend=sql</code>.</td>
+<td>Implemented</td>
+<td>Runner-local topology. Stores records in Postgres, MariaDB/MySQL, or SQLite using ACID database transactions.</td>
 </tr>
 </tbody>
 </table>
+<p>Postgres and MariaDB/MySQL support multi-replica API server deployments through
+shared SQL compare-and-swap updates. SQLite is durable and ACID, but remains a
+single-writer backend; run it with one API server replica only.</p>
 <p>Use explicit <code>--store-backend</code>. The legacy heuristic that selects <code>mem</code> or
 <code>k8s</code> from <code>--coordination-namespace</code> is deprecated.</p>
 <h2 id="operator-reconcile-flow">Operator Reconcile Flow</h2>

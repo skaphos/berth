@@ -638,7 +638,7 @@ manifests explicitly map them into container arguments or Secrets.</p>
 <tr>
 <td><code>--sql-driver</code></td>
 <td>empty</td>
-<td><code>postgres</code>, <code>mysql</code>, or <code>sqlite</code>. Required with <code>sql</code>, but SQL is not implemented yet.</td>
+<td><code>postgres</code>, <code>mysql</code>, or <code>sqlite</code>. Required with <code>sql</code>.</td>
 </tr>
 <tr>
 <td><code>--sql-dsn</code></td>
@@ -648,7 +648,7 @@ manifests explicitly map them into container arguments or Secrets.</p>
 <tr>
 <td><code>--sql-dsn-file</code></td>
 <td>empty</td>
-<td>File containing the SQL DSN. Mutually exclusive with <code>--sql-dsn</code>.</td>
+<td>File containing the SQL DSN. Read once at startup; restart the API server after credential rotation. Mutually exclusive with <code>--sql-dsn</code>.</td>
 </tr>
 <tr>
 <td><code>--sql-migrate</code></td>
@@ -699,6 +699,12 @@ manifests explicitly map them into container arguments or Secrets.</p>
 </table>
 <p>Auth defaults depend on the resolved backend: <code>mem</code> defaults to <code>none</code>; <code>k8s</code>
 and <code>sql</code> default to <code>static-keys</code>.</p>
+<p>The <code>sql</code> backend runs every Store operation inside an explicit SQL
+transaction. Postgres and MariaDB/MySQL are the HA runner-local options.
+SQLite is durable and ACID, but single-writer; use it only with one API server
+replica for edge, dev, or CI deployments. In Kubernetes, prefer mounting the
+SQL DSN from a Secret and passing <code>--sql-dsn-file</code> rather than putting
+credentials in environment variables.</p>
 <h2 id="operator-flags">Operator Flags</h2>
 <table>
 <thead>
