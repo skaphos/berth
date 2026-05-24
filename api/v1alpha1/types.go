@@ -18,8 +18,10 @@ type BerthLeaseSpec struct {
 	// renew the lease to prevent TTL expiration.
 	HeartbeatIntervalSeconds int32 `json:"heartbeatIntervalSeconds"`
 
-	// Semantics controls the lease acquisition mode: "at-most-once"
-	// guarantees exclusive access, "at-least-once" permits concurrent holders.
+	// Semantics selects the lease-window behavior. "at-most-once" is the
+	// implemented exclusive-holder mode. "at-least-once" is accepted by the
+	// schema but currently behaves as exclusive-holder mode until the central
+	// API server implements at-least-once lease windows.
 	// +kubebuilder:validation:Enum=at-most-once;at-least-once
 	Semantics string `json:"semantics"`
 

@@ -117,8 +117,10 @@ spec:
                   rule: '!(has(self.suspend) && has(self.scale))'
               semantics:
                 description: |-
-                  Semantics controls the lease acquisition mode: "at-most-once"
-                  guarantees exclusive access, "at-least-once" permits concurrent holders.
+                  Semantics selects the lease-window behavior. "at-most-once" is the
+                  implemented exclusive-holder mode. "at-least-once" is accepted by the
+                  schema but currently behaves as exclusive-holder mode until the central
+                  API server implements at-least-once lease windows.
                 enum:
                 - at-most-once
                 - at-least-once
