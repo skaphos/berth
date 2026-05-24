@@ -78,6 +78,21 @@ a Secret and pass `--sql-dsn-file`; the Helm chart does this from
 | `--refresh-skew` | `60s` | Refresh this long before token expiry. |
 | `--min-refresh-interval` | `30s` | Minimum retry or refresh interval. |
 
+## SQL Integration Test DSNs
+
+The `test-integration` task runs SQL backend conformance tests against
+operator-provided databases. This is intended for local kind-based test
+topologies or CI environments with explicit database DSNs.
+
+| Environment variable | Meaning |
+| --- | --- |
+| `BERTH_TEST_POSTGRES_DSN` | Postgres DSN used by `TestPostgresStoreConformance`. |
+| `BERTH_TEST_MYSQL_DSN` | MariaDB/MySQL DSN used by `TestMariaDBStoreConformance`. |
+
+If either variable is unset, that driver test is skipped. GitHub Actions only
+runs the SQL integration task when at least one of these DSNs is configured as
+a repository variable or secret.
+
 ## Helm Values
 
 | Chart | Key | Meaning |

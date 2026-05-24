@@ -124,6 +124,17 @@ go -C tools tool task lint
 go -C tools tool task verify-generated
 ```
 
+SQL integration tests are DSN-driven so they can point at databases exposed
+from a local kind topology:
+
+```bash
+BERTH_TEST_POSTGRES_DSN='postgres://berth:secret@127.0.0.1:5432/berth?sslmode=disable' \
+BERTH_TEST_MYSQL_DSN='berth:secret@tcp(127.0.0.1:3306)/berth?parseTime=true' \
+go -C tools tool task test-integration
+```
+
+Unset DSNs skip the corresponding driver tests.
+
 ## License
 
 MIT. See [LICENSE](LICENSE) and [LICENSES/MIT.txt](LICENSES/MIT.txt).

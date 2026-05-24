@@ -4,71 +4,35 @@ package sqlstore
 
 import (
 	"context"
-	"fmt"
+	"os"
 	"testing"
-	"time"
 
 	"github.com/skaphos/berth/internal/lease"
 	"github.com/skaphos/berth/internal/lease/storetest"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
+)
+
+const (
+	postgresDSNEnv = "BERTH_TEST_POSTGRES_DSN"
+	mysqlDSNEnv    = "BERTH_TEST_MYSQL_DSN"
 )
 
 func TestPostgresStoreConformance(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-
-	ctr, err := postgres.Run(ctx, "postgres:16-alpine",
-		postgres.WithDatabase("berth"),
-		postgres.WithUsername("berth"),
-		postgres.WithPassword("berth"),
-		postgres.BasicWaitStrategies(),
-	)
-	if err != nil {
-		t.Fatalf("start postgres container: %v", err)
-	}
-	testcontainers.CleanupContainer(t, ctr)
-
-	dsn, err := ctr.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("postgres dsn: %v", err)
-	}
+	dsn := integrationDSN(t, postgresDSNEnv)
 	runSQLStoreConformance(t, DriverPostgres, dsn)
 }
 
 func TestMariaDBStoreConformance(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-
-	const (
-		user     = "berth"
-		password = "berth"
-		database = "berth"
-	)
-	ctr, err := testcontainers.Run(ctx, "mariadb:11.4",
-		testcontainers.WithEnv(map[string]string{
-			"MARIADB_DATABASE":      database,
-			"MARIADB_USER":          user,
-			"MARIADB_PASSWORD":      password,
-			"MARIADB_ROOT_PASSWORD": "root",
-		}),
-		testcontainers.WithExposedPorts("3306/tcp"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("ready for connections").WithStartupTimeout(2*time.Minute),
-		),
-	)
-	if err != nil {
-		t.Fatalf("start mariadb container: %v", err)
-	}
-	testcontainers.CleanupContainer(t, ctr)
-
-	endpoint, err := ctr.PortEndpoint(ctx, "3306/tcp", "")
-	if err != nil {
-		t.Fatalf("mariadb endpoint: %v", err)
-	}
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?timeout=5s", user, password, endpoint, database)
+	dsn := integrationDSN(t, mysqlDSNEnv)
 	runSQLStoreConformance(t, DriverMySQL, dsn)
+}
+
+func integrationDSN(t *testing.T, env string) string {
+	t.Helper()
+	dsn := os.Getenv(env)
+	if dsn == "" {
+		t.Skipf("set %s to run this integration test", env)
+	}
+	return dsn
 }
 
 func runSQLStoreConformance(t *testing.T, driver, dsn string) {

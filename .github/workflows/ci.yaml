@@ -106,6 +106,9 @@ jobs:
   sql-integration:
     name: SQL Integration
     runs-on: ubuntu-latest
+    env:
+      BERTH_TEST_POSTGRES_DSN: ${{ secrets.BERTH_TEST_POSTGRES_DSN || vars.BERTH_TEST_POSTGRES_DSN }}
+      BERTH_TEST_MYSQL_DSN: ${{ secrets.BERTH_TEST_MYSQL_DSN || vars.BERTH_TEST_MYSQL_DSN }}
     steps:
       - uses: actions/checkout@v6
       - name: Detect relevant changes
@@ -121,12 +124,27 @@ jobs:
               - 'Taskfile.yml'
               - '.github/workflows/ci.yaml'
       - uses: actions/setup-go@v6
-        if: github.event_name == 'push' || steps.changes.outputs.sql == 'true'
+        if: >-
+          ${{
+            (github.event_name == 'push' || steps.changes.outputs.sql == 'true') &&
+            (env.BERTH_TEST_POSTGRES_DSN != '' || env.BERTH_TEST_MYSQL_DSN != '')
+          }}
         with:
           go-version-file: go.mod
       - name: Run SQL integration tests
-        if: github.event_name == 'push' || steps.changes.outputs.sql == 'true'
+        if: >-
+          ${{
+            (github.event_name == 'push' || steps.changes.outputs.sql == 'true') &&
+            (env.BERTH_TEST_POSTGRES_DSN != '' || env.BERTH_TEST_MYSQL_DSN != '')
+          }}
         run: go -C tools tool task test-integration
+      - name: Skip SQL integration tests
+        if: >-
+          ${{
+            (github.event_name != 'push' && steps.changes.outputs.sql != 'true') ||
+            (env.BERTH_TEST_POSTGRES_DSN == '' && env.BERTH_TEST_MYSQL_DSN == '')
+          }}
+        run: echo "Skipping SQL integration tests because no BERTH_TEST_*_DSN value is configured."
 
   quality:
     name: Static Analysis

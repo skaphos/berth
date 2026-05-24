@@ -134,7 +134,7 @@ tasks:
       - ./scripts/check-coverage.sh coverage.out
 
   test-integration:
-    desc: Run Docker-backed integration tests
+    desc: Run DSN-backed SQL integration tests
     cmds:
       - go test -tags=integration -count=1 -timeout=10m ./internal/lease/sqlstore
 
