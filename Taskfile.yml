@@ -133,6 +133,11 @@ tasks:
       - task: test
       - ./scripts/check-coverage.sh coverage.out
 
+  test-integration:
+    desc: Run Docker-backed integration tests
+    cmds:
+      - go test -tags=integration -count=1 -timeout=10m ./internal/lease/sqlstore
+
   # --- Build ---
 
   build:

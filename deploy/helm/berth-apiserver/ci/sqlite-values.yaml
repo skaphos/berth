@@ -2,11 +2,16 @@ image:
   repository: berth-apiserver
   tag: ci
   pullPolicy: IfNotPresent
-# Dev mode: in-memory store, no auth, BYO TLS Secret (chart still requires
-# tls config). Used by `ct install` against a kind cluster.
 replicaCount: 1
 store:
-  backend: mem
+  backend: sql
+  sql:
+    driver: sqlite
+    dsn: ""
+    dsnSecret:
+      name: berth-sqlite-dsn
+      key: dsn
+    migrate: auto
 coordination:
   namespace: ""
   inCluster: false

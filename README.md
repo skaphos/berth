@@ -18,15 +18,42 @@ token-broker sidecar for operator authentication.
 
 ## Quickstart
 
-Install the API server in a coordination cluster:
+Choose a topology first:
+
+| Topology | Backend | When to use it |
+| --- | --- | --- |
+| Cross-cluster coordination plane | `k8s` | One central Berth API server coordinates workloads across multiple tenant clusters. |
+| Runner-local HA | `sql` with Postgres or MariaDB | Berth runs inside the runner cluster and stores lease state in an external SQL database. |
+| Runner-local edge/dev | `sql` with SQLite, or `mem` | Single API server replica only. SQLite persists locally; `mem` is ephemeral. |
+
+Install the API server in a coordination cluster with the Kubernetes Lease
+backend:
 
 ```bash
 helm install berth-apiserver deploy/helm/berth-apiserver \
   --namespace berth-system --create-namespace \
   --set store.backend=k8s \
-  --set-string 'extraArgs[0]=--store-backend=k8s' \
   --set coordination.namespace=berth-coordination \
   --set coordination.inCluster=true \
+  --set tls.certManager.enabled=true \
+  --set tls.certManager.issuerRef.name=berth-ca \
+  --set tls.certManager.issuerRef.kind=ClusterIssuer \
+  --set auth.mode=static-keys \
+  --set auth.staticKeys.secretName=berth-api-keys
+```
+
+For a runner-local SQL deployment, store the DSN in a Kubernetes Secret and
+let the chart mount it as the `--sql-dsn-file` input:
+
+```bash
+kubectl -n berth-system create secret generic berth-sql-dsn \
+  --from-literal=dsn='postgres://berth:secret@postgres.berth.svc:5432/berth?sslmode=require'
+
+helm install berth-apiserver deploy/helm/berth-apiserver \
+  --namespace berth-system --create-namespace \
+  --set store.backend=sql \
+  --set store.sql.driver=postgres \
+  --set store.sql.dsnSecret.name=berth-sql-dsn \
   --set tls.certManager.enabled=true \
   --set tls.certManager.issuerRef.name=berth-ca \
   --set tls.certManager.issuerRef.kind=ClusterIssuer \

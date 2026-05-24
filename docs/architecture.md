@@ -131,7 +131,5 @@ downstream systems.
 - The operator currently runs one replica and does not use leader election.
 - `at-least-once` is part of the CRD surface, but the current central manager
   implements exclusive holder behavior.
-- The SQL backend is configured in flags and Helm values but is not
-  implemented.
 - The management console package exists as a placeholder.
 - CLI lease commands are scaffolds and print `not implemented`.

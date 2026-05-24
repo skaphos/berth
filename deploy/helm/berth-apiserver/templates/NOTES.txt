@@ -4,7 +4,17 @@ Service:
   {{ include "berth-apiserver.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
 
 Coordination backend:
-{{- if .Values.coordination.namespace }}
+{{- if eq .Values.store.backend "sql" }}
+  SQL store, driver = {{ .Values.store.sql.driver }}
+  {{- if .Values.store.sql.dsnSecret.name }}
+  DSN mounted from Secret {{ .Values.store.sql.dsnSecret.name }} (key {{ .Values.store.sql.dsnSecret.key }}).
+  {{- else }}
+  DSN passed inline from store.sql.dsn.
+  {{- end }}
+  {{- if eq .Values.store.sql.driver "sqlite" }}
+  SQLite is durable and ACID, but single-writer only. Keep replicaCount=1.
+  {{- end }}
+{{- else if .Values.coordination.namespace }}
   {{- if .Values.coordination.inCluster }}
   in-cluster Lease store, namespace = {{ .Values.coordination.namespace }}
   {{- else if .Values.coordination.kubeconfig.secretName }}

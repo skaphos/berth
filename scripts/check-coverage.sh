@@ -37,6 +37,9 @@ skip_pkg() {
     github.com/skaphos/berth/cmd/operator) return 0 ;;
     # internal/tenant is a placeholder package with no test files yet.
     github.com/skaphos/berth/internal/tenant) return 0 ;;
+    # internal/lease/storetest is a reusable conformance suite that is
+    # executed by concrete Store implementation packages.
+    github.com/skaphos/berth/internal/lease/storetest) return 0 ;;
     *) return 1 ;;
   esac
 }

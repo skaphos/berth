@@ -12,23 +12,28 @@ import (
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/skaphos/berth/internal/lease"
+	"github.com/skaphos/berth/internal/lease/storetest"
 )
 
-func newSQLiteStore(t *testing.T) *Store {
-	t.Helper()
+func newSQLiteStore(tb testing.TB) *Store {
+	tb.Helper()
 	store, err := New(context.Background(), Config{
 		Driver: DriverSQLite,
-		DSN:    "file:" + t.Name() + "?mode=memory&cache=shared",
+		DSN:    "file:" + sqliteTestName(tb) + "?mode=memory&cache=shared",
 	})
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		if err := store.Close(); err != nil {
-			t.Errorf("close sqlite store: %v", err)
+			tb.Errorf("close sqlite store: %v", err)
 		}
 	})
 	return store
+}
+
+func sqliteTestName(tb testing.TB) string {
+	return strings.NewReplacer("/", "_", " ", "_").Replace(tb.Name())
 }
 
 func sampleRecord() *lease.Record {
@@ -41,6 +46,12 @@ func sampleRecord() *lease.Record {
 		RenewedAt:    now,
 		FencingToken: 1,
 	}
+}
+
+func TestSQLiteStoreConformance(t *testing.T) {
+	storetest.RunStoreConformance(t, func(tb testing.TB) lease.Store {
+		return newSQLiteStore(tb)
+	})
 }
 
 func TestNewValidatesConfig(t *testing.T) {

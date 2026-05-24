@@ -14,17 +14,14 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# -- Number of replicas. Multi-replica is safe because all replicas share
-# state through the coordination-cluster Lease store. Set to 1 only for
-# the dev `coordination.namespace: ""` mode (in-memory store).
+# -- Number of replicas. Multi-replica is safe with the k8s backend and with
+# sql backed by Postgres or MariaDB/MySQL. Use replicaCount: 1 for mem and
+# sqlite.
 replicaCount: 2
 
 # -- Lease store backend selection.
 #
-# Set `store.backend` to document the intended lease.Store explicitly.
-# This value does not by itself imply that the rendered Deployment passes
-# `--store-backend`; see the Deployment template for the currently emitted
-# API server arguments.
+# Set `store.backend` to render the matching API server backend flags.
 #
 # Backends:
 #   mem  Single-replica in-memory store. Dev/demo only — state is lost on
@@ -43,8 +40,9 @@ store:
   sql:
     driver: ""          # postgres | mysql | sqlite
     # dsn vs dsnSecret are mutually exclusive. Prefer dsnSecret in
-    # production. The apiserver reads the mounted file at startup; restart
-    # pods after credential rotation.
+    # production; the chart mounts the Secret and passes --sql-dsn-file.
+    # The apiserver reads the mounted file at startup; restart pods after
+    # credential rotation.
     dsn: ""
     dsnSecret:
       name: ""
