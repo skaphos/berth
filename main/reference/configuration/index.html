@@ -444,6 +444,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sql-integration-test-dsns" class="md-nav__link">
+    <span class="md-ellipsis">
+      SQL Integration Test DSNs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#helm-values" class="md-nav__link">
     <span class="md-ellipsis">
       Helm Values
@@ -534,6 +543,15 @@
   <a href="#oidc-broker-flags" class="md-nav__link">
     <span class="md-ellipsis">
       OIDC Broker Flags
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sql-integration-test-dsns" class="md-nav__link">
+    <span class="md-ellipsis">
+      SQL Integration Test DSNs
     </span>
   </a>
   
@@ -702,9 +720,9 @@ and <code>sql</code> default to <code>static-keys</code>.</p>
 <p>The <code>sql</code> backend runs every Store operation inside an explicit SQL
 transaction. Postgres and MariaDB/MySQL are the HA runner-local options.
 SQLite is durable and ACID, but single-writer; use it only with one API server
-replica for edge, dev, or CI deployments. In Kubernetes, prefer mounting the
-SQL DSN from a Secret and passing <code>--sql-dsn-file</code> rather than putting
-credentials in environment variables.</p>
+replica for edge, dev, or CI deployments. In Kubernetes, mount the SQL DSN from
+a Secret and pass <code>--sql-dsn-file</code>; the Helm chart does this from
+<code>store.sql.dsnSecret</code>.</p>
 <h2 id="operator-flags">Operator Flags</h2>
 <table>
 <thead>
@@ -824,6 +842,31 @@ credentials in environment variables.</p>
 </tr>
 </tbody>
 </table>
+<h2 id="sql-integration-test-dsns">SQL Integration Test DSNs</h2>
+<p>The <code>test-integration</code> task runs SQL backend conformance tests against
+operator-provided databases. This is intended for local kind-based test
+topologies or CI environments with explicit database DSNs.</p>
+<table>
+<thead>
+<tr>
+<th>Environment variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BERTH_TEST_POSTGRES_DSN</code></td>
+<td>Postgres DSN used by <code>TestPostgresStoreConformance</code>.</td>
+</tr>
+<tr>
+<td><code>BERTH_TEST_MYSQL_DSN</code></td>
+<td>MariaDB/MySQL DSN used by <code>TestMariaDBStoreConformance</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>If either variable is unset, that driver test is skipped. GitHub Actions only
+runs the SQL integration task when at least one of these DSNs is configured as
+a repository variable or secret.</p>
 <h2 id="helm-values">Helm Values</h2>
 <table>
 <thead>
@@ -837,7 +880,12 @@ credentials in environment variables.</p>
 <tr>
 <td><code>berth-apiserver</code></td>
 <td><code>store.backend</code></td>
-<td>Intended store backend used by chart logic such as rollout strategy. The chart does not yet render <code>--store-backend</code>; pass it through <code>extraArgs</code> for explicit binary configuration.</td>
+<td>Store backend rendered into <code>--store-backend</code>; one of <code>mem</code>, <code>k8s</code>, or <code>sql</code>.</td>
+</tr>
+<tr>
+<td><code>berth-apiserver</code></td>
+<td><code>store.sql.*</code></td>
+<td>SQL driver, migration mode, and DSN source. Prefer <code>store.sql.dsnSecret</code> so the chart mounts a Secret and passes <code>--sql-dsn-file</code>.</td>
 </tr>
 <tr>
 <td><code>berth-apiserver</code></td>
@@ -896,11 +944,6 @@ credentials in environment variables.</p>
 </tr>
 </tbody>
 </table>
-<p>Until the apiserver chart renders <code>--store-backend</code> directly, set both the
-chart value and the binary flag for explicit production installs:</p>
-<div class="highlight"><pre><span></span><code>--set<span class="w"> </span>store.backend<span class="o">=</span>k8s<span class="w"> </span><span class="se">\</span>
---set-string<span class="w"> </span><span class="s1">&#39;extraArgs[0]=--store-backend=k8s&#39;</span>
-</code></pre></div>
 <h2 id="static-api-key-file">Static API Key File</h2>
 <p><code>--api-keys-file</code> uses one entry per line:</p>
 <div class="highlight"><pre><span></span><code>team-a:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
