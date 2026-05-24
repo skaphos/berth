@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -273,7 +274,7 @@ func TestResolveAuthMode(t *testing.T) {
 }
 
 func TestBuildStore_SQLite(t *testing.T) {
-	s, err := buildStore("sql", storeConfig{
+	s, err := buildStore(context.Background(), "sql", storeConfig{
 		sqlDriver: "sqlite",
 		sqlDSN:    "file:" + t.Name() + "?mode=memory&cache=shared",
 	})
@@ -301,7 +302,7 @@ func TestBuildStore_SQLiteDSNFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("file:"+t.Name()+"?mode=memory&cache=shared\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s, err := buildStore("sql", storeConfig{
+	s, err := buildStore(context.Background(), "sql", storeConfig{
 		sqlDriver:  "sqlite",
 		sqlDSNFile: path,
 	})
@@ -320,6 +321,19 @@ func TestBuildStore_SQLiteDSNFile(t *testing.T) {
 	}
 }
 
+func TestBuildStore_SQLHonorsCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := buildStore(ctx, "sql", storeConfig{
+		sqlDriver: "sqlite",
+		sqlDSN:    "file:" + t.Name() + "?mode=memory&cache=shared",
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
 func TestResolveSQLDSNRejectsEmptyFile(t *testing.T) {
 	path := t.TempDir() + "/dsn"
 	if err := os.WriteFile(path, []byte("\n"), 0o600); err != nil {
@@ -331,7 +345,7 @@ func TestResolveSQLDSNRejectsEmptyFile(t *testing.T) {
 }
 
 func TestBuildStore_Mem(t *testing.T) {
-	s, err := buildStore("mem", storeConfig{})
+	s, err := buildStore(context.Background(), "mem", storeConfig{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

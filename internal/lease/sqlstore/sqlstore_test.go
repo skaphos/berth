@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/skaphos/berth/internal/lease"
 )
 
@@ -67,6 +69,27 @@ func TestMySQLDialectUsesReadCommittedTransactions(t *testing.T) {
 	}
 	if d.writeTx == nil || d.writeTx.Isolation != sql.LevelReadCommitted || d.writeTx.ReadOnly {
 		t.Fatalf("write tx = %#v, want read-write READ COMMITTED", d.writeTx)
+	}
+}
+
+func TestMySQLDialectCreateUsesDuplicateKeyErrorForConflict(t *testing.T) {
+	t.Parallel()
+
+	d, err := dialectFor(DriverMySQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(d.insertSQL, "ON DUPLICATE KEY") {
+		t.Fatalf("insertSQL = %q, want plain insert so duplicate creates return a driver error", d.insertSQL)
+	}
+	if d.duplicateKey == nil {
+		t.Fatal("mysql dialect must classify duplicate-key errors")
+	}
+	if !d.duplicateKey(&mysqldriver.MySQLError{Number: 1062}) {
+		t.Fatal("duplicate key error was not classified as conflict")
+	}
+	if d.duplicateKey(&mysqldriver.MySQLError{Number: 1048}) {
+		t.Fatal("non-duplicate mysql error was classified as conflict")
 	}
 }
 

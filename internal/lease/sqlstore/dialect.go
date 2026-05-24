@@ -9,16 +9,17 @@ import (
 const columns = "namespace, name, holder, ttl_ms, acquired_at, renewed_at, fencing_token"
 
 type dialect struct {
-	driverName string
-	schema     []string
-	getSQL     string
-	listSQL    string
-	insertSQL  string
-	updateSQL  string
-	deleteSQL  string
-	timeValue  func(time.Time) any
-	readTx     *sql.TxOptions
-	writeTx    *sql.TxOptions
+	driverName   string
+	schema       []string
+	getSQL       string
+	listSQL      string
+	insertSQL    string
+	updateSQL    string
+	deleteSQL    string
+	timeValue    func(time.Time) any
+	readTx       *sql.TxOptions
+	writeTx      *sql.TxOptions
+	duplicateKey func(error) bool
 }
 
 func dialectFor(driver string) (dialect, error) {
@@ -61,7 +62,7 @@ CREATE TABLE IF NOT EXISTS berth_leases (
 ) ENGINE=InnoDB`},
 			getSQL:    "SELECT " + columns + " FROM berth_leases WHERE namespace = ? AND name = ?",
 			listSQL:   "SELECT " + columns + " FROM berth_leases",
-			insertSQL: "INSERT INTO berth_leases (" + columns + ") VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = name",
+			insertSQL: "INSERT INTO berth_leases (" + columns + ") VALUES (?, ?, ?, ?, ?, ?, ?)",
 			updateSQL: "UPDATE berth_leases SET holder = ?, ttl_ms = ?, acquired_at = ?, renewed_at = ?, fencing_token = ? WHERE namespace = ? AND name = ? AND fencing_token = ?",
 			deleteSQL: "DELETE FROM berth_leases WHERE namespace = ? AND name = ? AND fencing_token = ?",
 			timeValue: sqlTimeValue,
@@ -69,7 +70,8 @@ CREATE TABLE IF NOT EXISTS berth_leases (
 				Isolation: sql.LevelReadCommitted,
 				ReadOnly:  true,
 			},
-			writeTx: &sql.TxOptions{Isolation: sql.LevelReadCommitted},
+			writeTx:      &sql.TxOptions{Isolation: sql.LevelReadCommitted},
+			duplicateKey: isMySQLDuplicateKey,
 		}, nil
 	case DriverSQLite:
 		return dialect{

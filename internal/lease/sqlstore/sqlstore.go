@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	mysqldriver "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/skaphos/berth/internal/lease"
 	_ "modernc.org/sqlite"
@@ -147,6 +147,9 @@ func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) erro
 	if expected == 0 {
 		res, err = tx.ExecContext(ctx, s.dialect.insertSQL, s.recordArgs(rec)...)
 		if err != nil {
+			if s.dialect.duplicateKey != nil && s.dialect.duplicateKey(err) {
+				return lease.ErrConflict
+			}
 			return fmt.Errorf("sql store: insert %s: %w", rec.Key, err)
 		}
 	} else {
@@ -160,13 +163,22 @@ func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) erro
 	if err != nil {
 		return fmt.Errorf("sql store: rows affected %s: %w", rec.Key, err)
 	}
-	if affected == 0 {
+	if expected == 0 {
+		if affected != 1 {
+			return lease.ErrConflict
+		}
+	} else if affected == 0 {
 		return lease.ErrConflict
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("sql store: commit put %s: %w", rec.Key, err)
 	}
 	return nil
+}
+
+func isMySQLDuplicateKey(err error) bool {
+	var mysqlErr *mysqldriver.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
 // Delete implements lease.Store.

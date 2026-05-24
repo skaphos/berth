@@ -115,7 +115,10 @@ func run() int {
 
 	authMode = resolveAuthMode(authMode, backend)
 
-	store, err := buildStore(backend, storeCfg)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	store, err := buildStore(ctx, backend, storeCfg)
 	if err != nil {
 		slog.Error("build lease store", "error", err)
 		return exitCodeConfigError
@@ -134,9 +137,6 @@ func run() int {
 		slog.Error("build authenticator", "error", err)
 		return exitCodeConfigError
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	go watchSIGHUP(ctx, authn)
 
