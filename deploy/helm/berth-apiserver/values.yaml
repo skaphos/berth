@@ -43,9 +43,8 @@ store:
   sql:
     driver: ""          # postgres | mysql | sqlite
     # dsn vs dsnSecret are mutually exclusive. Prefer dsnSecret in
-    # production; the apiserver re-reads the mounted file on each request
-    # so an external rotator can refresh credentials without a pod
-    # restart.
+    # production. The apiserver reads the mounted file at startup; restart
+    # pods after credential rotation.
     dsn: ""
     dsnSecret:
       name: ""

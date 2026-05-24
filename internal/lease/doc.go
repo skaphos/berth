@@ -23,6 +23,9 @@
 // [Store] is the persistence interface. Implementations must execute Get,
 // Put, and Delete linearizably per Key. [MemStore] provides an in-memory
 // implementation suitable for tests and single-process deployments.
+// [K8sLeaseStore] persists records as coordination.k8s.io/v1 Lease objects
+// in a coordination cluster. The sqlstore subpackage persists records in
+// Postgres, MariaDB/MySQL, or SQLite using ACID database transactions.
 //
 // # TTL
 //
