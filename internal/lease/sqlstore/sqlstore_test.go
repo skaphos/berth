@@ -2,6 +2,7 @@ package sqlstore
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -51,6 +52,21 @@ func TestNewValidatesConfig(t *testing.T) {
 	}
 	if _, err := New(context.Background(), Config{Driver: DriverSQLite, DSN: ":memory:", Migrate: "sometimes"}); err == nil {
 		t.Fatal("expected error for unknown migrate mode")
+	}
+}
+
+func TestMySQLDialectUsesReadCommittedTransactions(t *testing.T) {
+	t.Parallel()
+
+	d, err := dialectFor(DriverMySQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.readTx == nil || d.readTx.Isolation != sql.LevelReadCommitted || !d.readTx.ReadOnly {
+		t.Fatalf("read tx = %#v, want read-only READ COMMITTED", d.readTx)
+	}
+	if d.writeTx == nil || d.writeTx.Isolation != sql.LevelReadCommitted || d.writeTx.ReadOnly {
+		t.Fatalf("write tx = %#v, want read-write READ COMMITTED", d.writeTx)
 	}
 }
 
@@ -232,6 +248,53 @@ func TestSQLiteStoreConcurrentAcquireExactlyOneWinner(t *testing.T) {
 	}
 	if winnerTok != 1 {
 		t.Fatalf("winner token = %d, want 1", winnerTok)
+	}
+}
+
+func TestParseTimeStringSQLFormats(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want time.Time
+	}{
+		{
+			name: "mysql datetime six fractional digits",
+			in:   "2026-05-24 10:30:00.123456",
+			want: time.Date(2026, 5, 24, 10, 30, 0, 123456000, time.UTC),
+		},
+		{
+			name: "mysql datetime three fractional digits",
+			in:   "2026-05-24 10:30:00.123",
+			want: time.Date(2026, 5, 24, 10, 30, 0, 123000000, time.UTC),
+		},
+		{
+			name: "sql timestamp six fractional digits with offset",
+			in:   "2026-05-24 10:30:00.123456-05:00",
+			want: time.Date(2026, 5, 24, 15, 30, 0, 123456000, time.UTC),
+		},
+		{
+			name: "sql timestamp three fractional digits with offset",
+			in:   "2026-05-24 10:30:00.123-05:00",
+			want: time.Date(2026, 5, 24, 15, 30, 0, 123000000, time.UTC),
+		},
+		{
+			name: "seconds only",
+			in:   "2026-05-24 10:30:00",
+			want: time.Date(2026, 5, 24, 10, 30, 0, 0, time.UTC),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseTimeString(tc.in)
+			if err != nil {
+				t.Fatalf("parseTimeString(%q): %v", tc.in, err)
+			}
+			if !got.Equal(tc.want) {
+				t.Fatalf("parseTimeString(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 

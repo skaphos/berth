@@ -1,6 +1,7 @@
 package sqlstore
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -16,6 +17,8 @@ type dialect struct {
 	updateSQL  string
 	deleteSQL  string
 	timeValue  func(time.Time) any
+	readTx     *sql.TxOptions
+	writeTx    *sql.TxOptions
 }
 
 func dialectFor(driver string) (dialect, error) {
@@ -40,6 +43,7 @@ CREATE TABLE IF NOT EXISTS berth_leases (
 			updateSQL: "UPDATE berth_leases SET holder = $1, ttl_ms = $2, acquired_at = $3, renewed_at = $4, fencing_token = $5 WHERE namespace = $6 AND name = $7 AND fencing_token = $8",
 			deleteSQL: "DELETE FROM berth_leases WHERE namespace = $1 AND name = $2 AND fencing_token = $3",
 			timeValue: sqlTimeValue,
+			readTx:    &sql.TxOptions{ReadOnly: true},
 		}, nil
 	case DriverMySQL:
 		return dialect{
@@ -61,6 +65,11 @@ CREATE TABLE IF NOT EXISTS berth_leases (
 			updateSQL: "UPDATE berth_leases SET holder = ?, ttl_ms = ?, acquired_at = ?, renewed_at = ?, fencing_token = ? WHERE namespace = ? AND name = ? AND fencing_token = ?",
 			deleteSQL: "DELETE FROM berth_leases WHERE namespace = ? AND name = ? AND fencing_token = ?",
 			timeValue: sqlTimeValue,
+			readTx: &sql.TxOptions{
+				Isolation: sql.LevelReadCommitted,
+				ReadOnly:  true,
+			},
+			writeTx: &sql.TxOptions{Isolation: sql.LevelReadCommitted},
 		}, nil
 	case DriverSQLite:
 		return dialect{
@@ -82,6 +91,7 @@ CREATE TABLE IF NOT EXISTS berth_leases (
 			updateSQL: "UPDATE berth_leases SET holder = ?, ttl_ms = ?, acquired_at = ?, renewed_at = ?, fencing_token = ? WHERE namespace = ? AND name = ? AND fencing_token = ?",
 			deleteSQL: "DELETE FROM berth_leases WHERE namespace = ? AND name = ? AND fencing_token = ?",
 			timeValue: sqliteTimeValue,
+			readTx:    &sql.TxOptions{ReadOnly: true},
 		}, nil
 	default:
 		return dialect{}, fmt.Errorf("sql store: driver must be one of %q, %q, %q; got %q",

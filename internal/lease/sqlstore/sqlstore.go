@@ -85,7 +85,7 @@ func (s *Store) Close() error {
 
 // Get implements lease.Store.
 func (s *Store) Get(ctx context.Context, key lease.Key) (*lease.Record, error) {
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.db.BeginTx(ctx, s.dialect.readTx)
 	if err != nil {
 		return nil, fmt.Errorf("sql store: begin get: %w", err)
 	}
@@ -103,7 +103,7 @@ func (s *Store) Get(ctx context.Context, key lease.Key) (*lease.Record, error) {
 
 // List implements lease.Store.
 func (s *Store) List(ctx context.Context) ([]lease.Record, error) {
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.db.BeginTx(ctx, s.dialect.readTx)
 	if err != nil {
 		return nil, fmt.Errorf("sql store: begin list: %w", err)
 	}
@@ -137,7 +137,7 @@ func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) erro
 	if rec == nil {
 		return lease.ErrConflict
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, s.dialect.writeTx)
 	if err != nil {
 		return fmt.Errorf("sql store: begin put: %w", err)
 	}
@@ -171,7 +171,7 @@ func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) erro
 
 // Delete implements lease.Store.
 func (s *Store) Delete(ctx context.Context, key lease.Key, expected int32) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, s.dialect.writeTx)
 	if err != nil {
 		return fmt.Errorf("sql store: begin delete: %w", err)
 	}
@@ -303,7 +303,11 @@ func parseTimeString(s string) (time.Time, error) {
 	layouts := []string{
 		time.RFC3339Nano,
 		"2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02 15:04:05.999999Z07:00",
+		"2006-01-02 15:04:05.999Z07:00",
 		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05.999999",
+		"2006-01-02 15:04:05.999",
 		"2006-01-02 15:04:05",
 	}
 	for _, layout := range layouts {
