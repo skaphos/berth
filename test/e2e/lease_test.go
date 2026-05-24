@@ -16,7 +16,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +26,8 @@ import (
 const (
 	leaseName  = "demo-lease"
 	targetName = "demo-app"
+	// operatorName is the berth-operator Deployment (Helm release name).
+	operatorName = "berth-operator"
 	// pause image starts in <2s and never exits — ideal for replica-count
 	// assertions where we don't care what the workload does.
 	targetImage = "registry.k8s.io/pause:3.9"
@@ -162,9 +163,18 @@ func getDeploymentReplicas(ctx context.Context, c ctrlclient.Client) (int32, err
 // upsert deletes any existing object then creates the new one. Simpler
 // than apply-semantics three-way merging and good enough for fixtures
 // whose only purpose is to seed a test.
+//
+// BerthLease carries the lease-release finalizer, so Delete does not complete
+// synchronously — the object lingers in Terminating until the operator removes
+// the finalizer. We therefore wait for the prior object to be fully gone before
+// Create; otherwise the Create races the deletion and fails with
+// "object is being deleted: <name> already exists".
 func upsert(ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object) error {
 	if err := c.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete prior %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
+	}
+	if err := waitGone(ctx, c, obj); err != nil {
+		return err
 	}
 	// Object now stale (ResourceVersion set from the failed get on
 	// delete). Strip metadata that conflicts with create.
@@ -174,6 +184,31 @@ func upsert(ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object) err
 		return fmt.Errorf("create %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
 	}
 	return nil
+}
+
+// waitGone blocks until no object exists at obj's key (or a 60s deadline
+// elapses). Used by upsert to let a finalizer-guarded delete complete before
+// recreating the object.
+func waitGone(ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object) error {
+	key := ctrlclient.ObjectKeyFromObject(obj)
+	probe, ok := obj.DeepCopyObject().(ctrlclient.Object)
+	if !ok {
+		return fmt.Errorf("waitGone: %T is not a client.Object", obj)
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		err := c.Get(ctx, key, probe)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("waitGone get %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("waitGone: %s/%s still present after 60s (finalizer not removed?)", obj.GetNamespace(), obj.GetName())
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 // cleanupFixtures removes the per-test resources from both runner
@@ -243,35 +278,36 @@ type clusterRef struct {
 // cluster.
 func (r clusterRef) kubectlContext() string { return "kind-" + r.kindName }
 
-// deleteOperatorPod removes the operator pod on the given cluster. The
-// Deployment controller will recreate it within a few seconds.
-func deleteOperatorPod(ctx context.Context, c ctrlclient.Client) error {
-	pods := &corev1.PodList{}
-	if err := c.List(ctx, pods,
-		ctrlclient.InNamespace(namespace),
-		ctrlclient.MatchingLabelsSelector{Selector: labels.SelectorFromSet(map[string]string{
-			"app.kubernetes.io/name": "berth-operator",
-		})},
-	); err != nil {
-		return fmt.Errorf("list operator pods: %w", err)
+// setOperatorReplicas scales the berth-operator Deployment on a cluster.
+//
+// Scaling to 0 is how a scenario simulates the holder cluster going away:
+// with no operator pod, nothing renews the lease, so it expires after the TTL
+// and the standby can reclaim it. Deleting a single pod does NOT achieve this
+// — the Deployment immediately reschedules a replacement that resumes renewing
+// within the TTL, so the lease never expires and failover never triggers.
+func setOperatorReplicas(ctx context.Context, c ctrlclient.Client, replicas int32) error {
+	dep := &appsv1.Deployment{}
+	key := types.NamespacedName{Name: operatorName, Namespace: namespace}
+	if err := c.Get(ctx, key, dep); err != nil {
+		return fmt.Errorf("get operator deployment: %w", err)
 	}
-	if len(pods.Items) == 0 {
-		return fmt.Errorf("no operator pods found in namespace %q", namespace)
-	}
-	for i := range pods.Items {
-		if err := c.Delete(ctx, &pods.Items[i]); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("delete pod %s: %w", pods.Items[i].Name, err)
-		}
+	dep.Spec.Replicas = ptr.To(replicas)
+	if err := c.Update(ctx, dep); err != nil {
+		return fmt.Errorf("scale operator to %d: %w", replicas, err)
 	}
 	return nil
 }
 
-// TestHolderFailover (scenario 2): kill the operator pod on the holding
-// cluster. The other cluster acquires within ttl + reacquire and its
-// Deployment scales up. The original holder's Deployment stays at 2
-// (no reconciler to scale it down) until the operator pod returns and
-// reconciles — at which point the spec's "stays at 0 until operator
-// returns" assertion engages (verified in scenario 3).
+// TestHolderFailover (scenario 2): take the holding cluster's operator
+// down (scale its Deployment to 0). With nothing left to renew, the lease
+// expires after its TTL and the other cluster acquires within
+// ttl + reacquire, scaling its Deployment up. The original holder's
+// Deployment stays at 2 (no reconciler to scale it down) until its operator
+// returns and reconciles — exercised in scenario 3 (rejoin).
+//
+// NOTE: deleting a single operator pod does NOT model failover — the
+// Deployment reschedules a replacement that resumes renewing inside the TTL,
+// so the lease never expires (see setOperatorReplicas).
 func TestHolderFailover(t *testing.T) {
 	ctx := context.Background()
 	t.Cleanup(func() { cleanupFixtures(t, ctx) })
@@ -292,10 +328,18 @@ func TestHolderFailover(t *testing.T) {
 	holder, standby := waitForHolder(t, ctx)
 	t.Logf("steady state: %s holds, %s waits", holder.name, standby.name)
 
-	if err := deleteOperatorPod(ctx, holder.c); err != nil {
-		t.Fatalf("delete operator pod on %s: %v", holder.name, err)
+	if err := setOperatorReplicas(ctx, holder.c, 0); err != nil {
+		t.Fatalf("scale down operator on %s: %v", holder.name, err)
 	}
-	t.Logf("deleted operator pod on %s", holder.name)
+	// Restore the holder's operator so its lease finalizer can be removed at
+	// cleanup and the next test starts with both operators running. t.Cleanup
+	// is LIFO, so this runs before cleanupFixtures deletes the leases.
+	t.Cleanup(func() {
+		if err := setOperatorReplicas(ctx, holder.c, 1); err != nil {
+			t.Logf("restore operator on %s: %v", holder.name, err)
+		}
+	})
+	t.Logf("scaled operator on %s to 0 (simulated holder loss)", holder.name)
 
 	// Within ttl + reacquire, the standby's next Acquire succeeds.
 	waitFor(t, acquireWindow+10*time.Second, "standby takes over", func(ctx context.Context) (bool, string) {
@@ -310,11 +354,10 @@ func TestHolderFailover(t *testing.T) {
 	})
 }
 
-// TestHolderRejoin (scenario 3): after failover, the operator pod on
-// the original holder cluster is recreated by the Deployment
-// controller. Its first reconcile observes Acquired=false and scales
-// the original holder's Deployment to 0. Final invariant: holder
-// (original) = 0, standby (new) = 2.
+// TestHolderRejoin (scenario 3): after failover, the original holder's
+// operator is brought back up (scaled from 0 to 1). Its first reconcile
+// observes Acquired=false and scales the original holder's Deployment to 0.
+// Final invariant: holder (original) = 0, standby (new) = 2.
 //
 // The spec's "no interval where both at non-zero" is not strictly
 // enforceable in this design — between standby acquire and original
@@ -341,9 +384,18 @@ func TestHolderRejoin(t *testing.T) {
 	original, newHolder := waitForHolder(t, ctx)
 	t.Logf("steady state: %s holds, %s waits", original.name, newHolder.name)
 
-	if err := deleteOperatorPod(ctx, original.c); err != nil {
-		t.Fatalf("delete operator pod on %s: %v", original.name, err)
+	// Take the original holder down so the standby can win.
+	if err := setOperatorReplicas(ctx, original.c, 0); err != nil {
+		t.Fatalf("scale down operator on %s: %v", original.name, err)
 	}
+	// Safety net: if an assertion below fails before the explicit rejoin,
+	// restore the operator so the next test isn't left with it scaled to 0.
+	t.Cleanup(func() {
+		if err := setOperatorReplicas(ctx, original.c, 1); err != nil {
+			t.Logf("restore operator on %s: %v", original.name, err)
+		}
+	})
+	t.Logf("scaled operator on %s to 0 (simulated holder loss)", original.name)
 
 	// Wait for new holder to take over.
 	waitFor(t, acquireWindow+10*time.Second, "new holder acquired", func(ctx context.Context) (bool, string) {
@@ -357,9 +409,15 @@ func TestHolderRejoin(t *testing.T) {
 		return false, fmt.Sprintf("%s replicas=%d (want 2)", newHolder.name, replicas)
 	})
 
-	// Now wait for original operator's first reconcile to scale its
-	// deployment down. Generous timeout — pod restart + first reconcile
-	// can take 20-30s.
+	// Rejoin: bring the original holder's operator back up.
+	if err := setOperatorReplicas(ctx, original.c, 1); err != nil {
+		t.Fatalf("scale up operator on %s (rejoin): %v", original.name, err)
+	}
+	t.Logf("scaled operator on %s back to 1 (rejoin)", original.name)
+
+	// Wait for the rejoining operator's first reconcile to observe
+	// Acquired=false and scale its deployment down. Generous timeout — pod
+	// start + first reconcile can take 20-30s.
 	waitFor(t, 90*time.Second, "rejoining operator scales original holder to 0", func(ctx context.Context) (bool, string) {
 		replicas, err := getDeploymentReplicas(ctx, original.c)
 		if err != nil {

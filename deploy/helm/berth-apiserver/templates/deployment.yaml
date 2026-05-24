@@ -11,7 +11,12 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 1
+      # Zero-downtime rollout: surge a new Ready pod before terminating the
+      # old one. With maxUnavailable=1 on a single replica, a rollout takes
+      # the only pod down and lease renewals stall past the TTL, causing a
+      # spurious cross-cluster failover. K8sLeaseStore is shared CAS state, so
+      # two apiserver pods overlapping briefly is safe.
+      maxUnavailable: 0
       maxSurge: 1
   selector:
     matchLabels:
