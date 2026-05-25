@@ -1,0 +1,122 @@
+name: Linear Release Sync
+
+# When a GitHub release is published (by release.yml on a v* tag), move every
+# Linear issue referenced in the release notes to the "Released" status. This is
+# the second half of the merge -> Done -> Released lifecycle: PR merge lands an
+# issue in "Done" (via Linear's GitHub integration), and shipping it in a
+# release lands it in "Released".
+#
+# It intentionally triggers on the published *release*, NOT the release-please
+# PR. Keying off the PR is what reopens already-closed issues, because the
+# release PR re-surfaces each commit's `closes SKA-NNN` keyword. The release
+# event carries no such side effect.
+#
+# Untrusted input (the release body) is passed via env and never interpolated
+# into the run script. Requires repo secret LINEAR_API_KEY: a Linear personal
+# API key (or service account key) with write access to the team. See
+# docs/release-and-issue-workflow.md.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linear-release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Move released issues to Released
+    runs-on: ubuntu-latest
+    env:
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      TEAM_KEY: SKA
+      RELEASED_STATE: Released
+      RELEASE_BODY: ${{ github.event.release.body }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_URL: ${{ github.event.release.html_url }}
+    steps:
+      - name: Sync Linear statuses
+        shell: bash
+        run: |
+          # Disable errexit: per-issue Linear calls are best-effort (a transient
+          # failure should warn + continue, not abort the whole release sync).
+          # nounset + pipefail stay on; GitHub's default shell sets -e, so we
+          # explicitly turn it off here.
+          set +e -uo pipefail
+
+          if [ -z "${LINEAR_API_KEY}" ]; then
+            echo "::notice::LINEAR_API_KEY not set; skipping Linear release sync."
+            exit 0
+          fi
+
+          API="https://api.linear.app/graphql"
+          # Linear personal/service API keys are sent raw (no "Bearer" prefix).
+          AUTH="Authorization: ${LINEAR_API_KEY}"
+          CT="Content-Type: application/json"
+
+          # 1. Collect unique SKA-NNN identifiers from the release notes.
+          mapfile -t IDS < <(printf '%s' "${RELEASE_BODY}" | grep -oE "${TEAM_KEY}-[0-9]+" | sort -u)
+          if [ "${#IDS[@]}" -eq 0 ]; then
+            echo "No ${TEAM_KEY}-NNN references in ${RELEASE_TAG}; nothing to do."
+            exit 0
+          fi
+          echo "Referenced issues: ${IDS[*]}"
+
+          # 2. Resolve the target 'Released' workflow state id for the team.
+          q_state=$(jq -n --arg team "${TEAM_KEY}" --arg name "${RELEASED_STATE}" '{
+            query: "query($team:String!,$name:String!){workflowStates(filter:{team:{key:{eq:$team}},name:{eq:$name}}){nodes{id name}}}",
+            variables: {team:$team, name:$name}
+          }')
+          state_id=$(curl -sf -H "${AUTH}" -H "${CT}" -d "${q_state}" "${API}" \
+            | jq -r '.data.workflowStates.nodes[0].id // empty')
+          if [ -z "${state_id}" ]; then
+            echo "::error::No workflow state named '${RELEASED_STATE}' in team ${TEAM_KEY}. Create it in Linear (type: Completed)."
+            exit 1
+          fi
+
+          # 3. For each issue: resolve UUID + current state, then transition.
+          #    Skip canceled/duplicate so a release never resurrects dropped work.
+          rc=0
+          for id in "${IDS[@]}"; do
+            num="${id#${TEAM_KEY}-}"
+            q_issue=$(jq -n --arg team "${TEAM_KEY}" --argjson number "${num}" '{
+              query: "query($team:String!,$number:Float!){issues(filter:{team:{key:{eq:$team}},number:{eq:$number}}){nodes{id identifier state{name type}}}}",
+              variables: {team:$team, number:$number}
+            }')
+            resp=$(curl -sf -H "${AUTH}" -H "${CT}" -d "${q_issue}" "${API}" || true)
+            uuid=$(printf '%s' "${resp}" | jq -r '.data.issues.nodes[0].id // empty')
+            curtype=$(printf '%s' "${resp}" | jq -r '.data.issues.nodes[0].state.type // empty')
+
+            if [ -z "${uuid}" ]; then
+              echo "  ${id}: not found in ${TEAM_KEY}, skipping"
+              continue
+            fi
+            if [ "${curtype}" = "canceled" ] || [ "${curtype}" = "duplicate" ]; then
+              echo "  ${id}: current state is '${curtype}', skipping (won't resurrect)"
+              continue
+            fi
+
+            m=$(jq -n --arg id "${uuid}" --arg s "${state_id}" '{
+              query: "mutation($id:String!,$stateId:String!){issueUpdate(id:$id,input:{stateId:$stateId}){success}}",
+              variables: {id:$id, stateId:$s}
+            }')
+            ok=$(curl -sf -H "${AUTH}" -H "${CT}" -d "${m}" "${API}" \
+              | jq -r '.data.issueUpdate.success // false')
+            if [ "${ok}" = "true" ]; then
+              echo "  ${id} -> ${RELEASED_STATE}"
+              c=$(jq -n --arg id "${uuid}" --arg body "Released in [\`${RELEASE_TAG}\`](${RELEASE_URL})." '{
+                query: "mutation($id:String!,$body:String!){commentCreate(input:{issueId:$id,body:$body}){success}}",
+                variables: {id:$id, body:$body}
+              }')
+              curl -sf -H "${AUTH}" -H "${CT}" -d "${c}" "${API}" >/dev/null \
+                || echo "  ${id}: comment failed (non-fatal)"
+            else
+              echo "::warning::${id}: issueUpdate failed"
+              rc=1
+            fi
+          done
+          exit "${rc}"
