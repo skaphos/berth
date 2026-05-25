@@ -1,6 +1,6 @@
 # Workload Gating via Init-Container Injection (Design)
 
-- **Status**: Draft (rev. 2026-05-24)
+- **Status**: Accepted (rev. 2026-05-25) — decisions ratified in ADRs [0001](../adr/0001-pod-level-gating-for-injected-singletons.md), [0002](../adr/0002-label-annotation-opt-in-over-crd.md), [0003](../adr/0003-sidecar-runtime-enforcement-by-container-kill.md)
 - **Design ticket**: [SKA-437](https://linear.app/rillan/issue/SKA-437) (this document is its deliverable)
 - **Track**: [SKA-274](https://linear.app/rillan/issue/SKA-274) — children [SKA-438](https://linear.app/rillan/issue/SKA-438) (helper), [SKA-439](https://linear.app/rillan/issue/SKA-439) (webhook), [SKA-440](https://linear.app/rillan/issue/SKA-440) (Helm), [SKA-441](https://linear.app/rillan/issue/SKA-441) (docs/test)
 - **Parent Epic**: [SKA-268](https://linear.app/rillan/issue/SKA-268) (Cross-cluster singleton Deployment via Berth lease)
