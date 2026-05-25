@@ -14,6 +14,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	berthv1alpha1 "github.com/skaphos/berth/api/v1alpha1"
+	"github.com/skaphos/berth/internal/clientauth"
 	"github.com/skaphos/berth/internal/operator"
 	"github.com/skaphos/berth/pkg/client"
 )
@@ -94,7 +95,7 @@ func run() int {
 	clientOpts := []client.Option{}
 	switch {
 	case apiKeyFile != "":
-		ts, err := operator.NewFileTokenSource(apiKeyFile, tokenFileCacheTTL)
+		ts, err := clientauth.NewFileTokenSource(apiKeyFile, tokenFileCacheTTL)
 		if err != nil {
 			ctrl.Log.Error(err, "load Berth API key file")
 			return 1
@@ -104,7 +105,7 @@ func run() int {
 		clientOpts = append(clientOpts, client.WithAPIKey(apiKey))
 	}
 
-	tlsCfg, err := operator.LoadTLSConfig(caBundleFile, serverName, insecureSkipVerify)
+	tlsCfg, err := clientauth.LoadTLSConfig(caBundleFile, serverName, insecureSkipVerify)
 	if err != nil {
 		ctrl.Log.Error(err, "load Berth API server TLS config")
 		return 1

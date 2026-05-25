@@ -1,4 +1,9 @@
-package operator
+// Package clientauth holds the auth and TLS plumbing shared by Berth
+// components that talk to the central API server as clients: the
+// operator, and the injected berth-acquire helper. It deliberately
+// avoids controller-runtime and other heavy dependencies so it can be
+// linked into the small, distroless berth-acquire image.
+package clientauth
 
 import (
 	"crypto/tls"
