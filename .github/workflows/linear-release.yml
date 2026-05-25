@@ -58,12 +58,12 @@ jobs:
           AUTH="Authorization: ${LINEAR_API_KEY}"
           CT="Content-Type: application/json"
 
-          # gql QUERY_JSON: POST a GraphQL request. On a clean HTTP 200 with no
-          # GraphQL "errors", print the response body and return 0. On any
-          # transport error, non-200 status, or GraphQL error, warn to stderr
-          # and return non-zero. This lets callers tell a real "not found"
-          # (empty nodes in a 200) apart from a failed request -- `curl -sf`
-          # alone conflates the two into empty output.
+          # gql QUERY_JSON: POST a GraphQL request. On a clean HTTP 200 whose
+          # body is valid JSON with no GraphQL "errors", print the body and
+          # return 0. On any transport error, non-200 status, non-JSON body, or
+          # GraphQL error, warn to stderr and return non-zero. This lets callers
+          # tell a real "not found" (empty nodes in a 200) apart from a failed
+          # request -- `curl -sf` alone conflates the two into empty output.
           gql() {
             local out rc http body
             out=$(curl -s -w $'\n%{http_code}' -H "${AUTH}" -H "${CT}" -d "$1" "${API}")
@@ -78,7 +78,15 @@ jobs:
               echo "::warning::Linear API returned HTTP ${http}" >&2
               return 1
             fi
-            if printf '%s' "${body}" | jq -e 'has("errors")' >/dev/null 2>&1; then
+            # Validate the body parses as JSON before inspecting it. A non-JSON
+            # 200 (e.g. an upstream proxy error page) would otherwise slip past
+            # the errors check and surface later as misleading empty-field
+            # "not found" results.
+            if ! printf '%s' "${body}" | jq -e . >/dev/null 2>&1; then
+              echo "::warning::Linear returned a non-JSON body on HTTP 200" >&2
+              return 1
+            fi
+            if [ "$(printf '%s' "${body}" | jq -r '(.errors // []) | length')" -gt 0 ]; then
               echo "::warning::Linear GraphQL errors: $(printf '%s' "${body}" | jq -c '.errors')" >&2
               return 1
             fi
