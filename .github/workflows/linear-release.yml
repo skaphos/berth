@@ -1,0 +1,188 @@
+name: Linear Release Sync
+
+# When a GitHub release is published (by release.yml on a v* tag), move every
+# Linear issue referenced in the release notes to the "Released" status. This is
+# the second half of the merge -> Done -> Released lifecycle: PR merge lands an
+# issue in "Done" (via Linear's GitHub integration), and shipping it in a
+# release lands it in "Released".
+#
+# It intentionally triggers on the published *release*, NOT the release-please
+# PR. Keying off the PR is what reopens already-closed issues, because the
+# release PR re-surfaces each commit's `closes SKA-NNN` keyword. The release
+# event carries no such side effect.
+#
+# Untrusted input (the release body) is passed via env and never interpolated
+# into the run script. Requires repo secret LINEAR_API_KEY: a Linear personal
+# API key (or service account key) with write access to the team. See
+# docs/release-and-issue-workflow.md.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linear-release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Move released issues to Released
+    runs-on: ubuntu-latest
+    env:
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      TEAM_KEY: SKA
+      RELEASED_STATE: Released
+      RELEASE_BODY: ${{ github.event.release.body }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_URL: ${{ github.event.release.html_url }}
+    steps:
+      - name: Sync Linear statuses
+        shell: bash
+        run: |
+          # Disable errexit: per-issue Linear calls are best-effort (a transient
+          # failure should warn + continue, not abort the whole release sync).
+          # nounset + pipefail stay on; GitHub's default shell sets -e, so we
+          # explicitly turn it off here.
+          set +e -uo pipefail
+
+          if [ -z "${LINEAR_API_KEY}" ]; then
+            echo "::notice::LINEAR_API_KEY not set; skipping Linear release sync."
+            exit 0
+          fi
+
+          API="https://api.linear.app/graphql"
+          # Linear personal/service API keys are sent raw (no "Bearer" prefix).
+          AUTH="Authorization: ${LINEAR_API_KEY}"
+          CT="Content-Type: application/json"
+
+          # gql QUERY_JSON: POST a GraphQL request. On a clean HTTP 200 whose
+          # body is valid JSON with no GraphQL "errors", print the body and
+          # return 0. On any transport error, non-200 status, non-JSON body, or
+          # GraphQL error, warn to stderr and return non-zero. This lets callers
+          # tell a real "not found" (empty nodes in a 200) apart from a failed
+          # request -- `curl -sf` alone conflates the two into empty output.
+          gql() {
+            local out rc http body
+            out=$(curl -s -w $'\n%{http_code}' -H "${AUTH}" -H "${CT}" -d "$1" "${API}")
+            rc=$?
+            http="${out##*$'\n'}"
+            body="${out%$'\n'*}"
+            if [ "${rc}" -ne 0 ]; then
+              echo "::warning::Linear API request failed (curl exit ${rc})" >&2
+              return 1
+            fi
+            if [ "${http}" != "200" ]; then
+              echo "::warning::Linear API returned HTTP ${http}" >&2
+              return 1
+            fi
+            # Validate the body parses as JSON before inspecting it. A non-JSON
+            # 200 (e.g. an upstream proxy error page) would otherwise slip past
+            # the errors check and surface later as misleading empty-field
+            # "not found" results.
+            if ! printf '%s' "${body}" | jq -e . >/dev/null 2>&1; then
+              echo "::warning::Linear returned a non-JSON body on HTTP 200" >&2
+              return 1
+            fi
+            if [ "$(printf '%s' "${body}" | jq -r '(.errors // []) | length')" -gt 0 ]; then
+              echo "::warning::Linear GraphQL errors: $(printf '%s' "${body}" | jq -c '.errors')" >&2
+              return 1
+            fi
+            printf '%s' "${body}"
+          }
+
+          # 1. Collect unique SKA-NNN identifiers from the release notes.
+          mapfile -t IDS < <(printf '%s' "${RELEASE_BODY}" | grep -oE "${TEAM_KEY}-[0-9]+" | sort -u)
+          if [ "${#IDS[@]}" -eq 0 ]; then
+            echo "No ${TEAM_KEY}-NNN references in ${RELEASE_TAG}; nothing to do."
+            exit 0
+          fi
+          echo "Referenced issues: ${IDS[*]}"
+
+          # 2. Resolve the target 'Released' workflow state id for the team. A
+          #    failure here is fatal: it affects every issue, so there is no
+          #    point continuing. We distinguish a failed request from a genuinely
+          #    missing state so the operator knows whether to retry or to create
+          #    the state in Linear.
+          q_state=$(jq -n --arg team "${TEAM_KEY}" --arg name "${RELEASED_STATE}" '{
+            query: "query($team:String!,$name:String!){workflowStates(filter:{team:{key:{eq:$team}},name:{eq:$name}}){nodes{id name}}}",
+            variables: {team:$team, name:$name}
+          }')
+          resp=$(gql "${q_state}") \
+            || { echo "::error::Request to resolve workflow state '${RELEASED_STATE}' failed (see warning above)."; exit 1; }
+          state_id=$(printf '%s' "${resp}" | jq -r '.data.workflowStates.nodes[0].id // empty')
+          if [ -z "${state_id}" ]; then
+            echo "::error::No workflow state named '${RELEASED_STATE}' in team ${TEAM_KEY}. Create it in Linear (type: Completed)."
+            exit 1
+          fi
+
+          # 3. For each issue: resolve UUID + current state, then transition.
+          #    Per-issue work is best-effort -- failures are counted and warned,
+          #    never fatal (see the exit 0 below). Cases handled distinctly:
+          #      - request failure (counted)        - genuine not-found (skip)
+          #      - already in Released (idempotent) - canceled/duplicate (skip)
+          failed=0
+          for id in "${IDS[@]}"; do
+            num="${id#${TEAM_KEY}-}"
+            q_issue=$(jq -n --arg team "${TEAM_KEY}" --argjson number "${num}" '{
+              query: "query($team:String!,$number:Float!){issues(filter:{team:{key:{eq:$team}},number:{eq:$number}}){nodes{id identifier state{name type}}}}",
+              variables: {team:$team, number:$number}
+            }')
+            resp=$(gql "${q_issue}")
+            if [ $? -ne 0 ]; then
+              echo "  ${id}: lookup request failed, skipping"
+              failed=$((failed + 1))
+              continue
+            fi
+            uuid=$(printf '%s' "${resp}" | jq -r '.data.issues.nodes[0].id // empty')
+            curname=$(printf '%s' "${resp}" | jq -r '.data.issues.nodes[0].state.name // empty')
+            curtype=$(printf '%s' "${resp}" | jq -r '.data.issues.nodes[0].state.type // empty')
+
+            if [ -z "${uuid}" ]; then
+              echo "  ${id}: not found in ${TEAM_KEY}, skipping"
+              continue
+            fi
+            if [ "${curname}" = "${RELEASED_STATE}" ]; then
+              echo "  ${id}: already in '${RELEASED_STATE}', skipping (idempotent)"
+              continue
+            fi
+            if [ "${curtype}" = "canceled" ] || [ "${curtype}" = "duplicate" ]; then
+              echo "  ${id}: current state is '${curtype}', skipping (won't resurrect)"
+              continue
+            fi
+
+            m=$(jq -n --arg id "${uuid}" --arg s "${state_id}" '{
+              query: "mutation($id:String!,$stateId:String!){issueUpdate(id:$id,input:{stateId:$stateId}){success}}",
+              variables: {id:$id, stateId:$s}
+            }')
+            resp=$(gql "${m}")
+            if [ $? -ne 0 ]; then
+              echo "::warning::${id}: issueUpdate request failed"
+              failed=$((failed + 1))
+              continue
+            fi
+            if [ "$(printf '%s' "${resp}" | jq -r '.data.issueUpdate.success // false')" != "true" ]; then
+              echo "::warning::${id}: issueUpdate returned success=false"
+              failed=$((failed + 1))
+              continue
+            fi
+            echo "  ${id} -> ${RELEASED_STATE}"
+
+            c=$(jq -n --arg id "${uuid}" --arg body "Released in [\`${RELEASE_TAG}\`](${RELEASE_URL})." '{
+              query: "mutation($id:String!,$body:String!){commentCreate(input:{issueId:$id,body:$body}){success}}",
+              variables: {id:$id, body:$body}
+            }')
+            resp=$(gql "${c}")
+            if [ $? -ne 0 ] || [ "$(printf '%s' "${resp}" | jq -r '.data.commentCreate.success // false')" != "true" ]; then
+              echo "  ${id}: comment failed (non-fatal)"
+            fi
+          done
+
+          # Best-effort by design: surface partial failures but exit 0 so a
+          # transient Linear hiccup never marks the published release as failed.
+          if [ "${failed}" -gt 0 ]; then
+            echo "::warning::Linear release sync finished with ${failed} issue(s) not synced; see warnings above."
+          fi
+          exit 0
