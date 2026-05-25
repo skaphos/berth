@@ -1,9 +1,9 @@
 # 1. Pod-level gating for injected singletons, not BerthLease scale actions
 
-- **Status**: proposed
+- **Status**: accepted
 - **Date**: 2026-05-24
 - **Deciders**: Shawn Stratton
-- **Consulted**: Skaphos team (pending SKA-437 design review)
+- **Consulted**: Skaphos team
 - **Informed**: Berth contributors
 
 ## Context and Problem Statement

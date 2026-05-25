@@ -17,10 +17,10 @@ the old one rather than editing it.
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [0001](0001-pod-level-gating-for-injected-singletons.md) | Pod-level gating for injected singletons, not BerthLease scale actions | proposed |
-| [0002](0002-label-annotation-opt-in-over-crd.md) | Opt into injection via pod-template labels/annotations, not a wrapper CRD | proposed |
-| [0003](0003-sidecar-runtime-enforcement-by-container-kill.md) | Enforce at-most-once by killing the main container; probe default, signal opt-in | proposed |
+| [0001](0001-pod-level-gating-for-injected-singletons.md) | Pod-level gating for injected singletons, not BerthLease scale actions | accepted |
+| [0002](0002-label-annotation-opt-in-over-crd.md) | Opt into injection via pod-template labels/annotations, not a wrapper CRD | accepted |
+| [0003](0003-sidecar-runtime-enforcement-by-container-kill.md) | Enforce at-most-once by killing the main container; probe default, signal opt-in | accepted |
 
 ADRs 0001–0003 are extracted from
-`docs/design/2026-05-workload-gating-injection-model.md` (SKA-437) and become
-`accepted` when that design review concludes.
+`docs/design/2026-05-workload-gating-injection-model.md` (SKA-437) and were
+accepted on 2026-05-24.
