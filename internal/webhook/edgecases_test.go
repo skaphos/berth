@@ -356,6 +356,18 @@ func TestInjectorConfigValidate(t *testing.T) {
 			c.APIKeyFile = "/berth/token"
 			c.APIKeySecretName = "berth-token"
 		}, true},
+		{"api-key file mounts at root", func(c *InjectorConfig) {
+			c.APIKeyFile = "/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"api-key file trailing slash", func(c *InjectorConfig) {
+			c.APIKeyFile = "/var/run/berth/token/"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"api-key file with dotdot", func(c *InjectorConfig) {
+			c.APIKeyFile = "/var/run/../berth/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
 		{"valid auth pair", func(c *InjectorConfig) {
 			c.APIKeyFile = "/var/run/berth/token"
 			c.APIKeySecretName = "berth-token"

@@ -92,13 +92,19 @@ func (c *InjectorConfig) Validate() error {
 	if (c.CABundleFile == "") != (c.CABundleConfigMapName == "") {
 		return fmt.Errorf("injection webhook: ca-bundle file and configmap must be set together (file=%q configmap=%q)", c.CABundleFile, c.CABundleConfigMapName)
 	}
-	// Each auth file becomes a VolumeMount.mountPath (its parent dir), which
-	// Kubernetes requires to be absolute.
-	if c.APIKeyFile != "" && !path.IsAbs(c.APIKeyFile) {
-		return fmt.Errorf("injection webhook: api-key file must be an absolute path, got %q", c.APIKeyFile)
+	// Each auth file is split into a VolumeMount.mountPath (its parent dir) and
+	// a KeyToPath.Path (its basename) at mount-construction time. Validate that
+	// the split is well-formed so the mounted file actually lands at the env-var
+	// value the helper reads.
+	if c.APIKeyFile != "" {
+		if err := validateMountableFile("api-key file", c.APIKeyFile); err != nil {
+			return err
+		}
 	}
-	if c.CABundleFile != "" && !path.IsAbs(c.CABundleFile) {
-		return fmt.Errorf("injection webhook: ca-bundle file must be an absolute path, got %q", c.CABundleFile)
+	if c.CABundleFile != "" {
+		if err := validateMountableFile("ca-bundle file", c.CABundleFile); err != nil {
+			return err
+		}
 	}
 	// Auth volumes mount at the file's parent directory; a collision with the
 	// state dir (or with each other) would produce an invalid PodSpec. Compare
@@ -113,6 +119,26 @@ func (c *InjectorConfig) Validate() error {
 	}
 	if c.APIKeyFile != "" && c.CABundleFile != "" && path.Dir(c.APIKeyFile) == path.Dir(c.CABundleFile) {
 		return fmt.Errorf("injection webhook: api-key and ca-bundle files must be in different directories (both %q)", path.Dir(c.APIKeyFile))
+	}
+	return nil
+}
+
+// validateMountableFile checks that p can be split into a volumeMount.mountPath
+// (path.Dir) and a Secret/ConfigMap KeyToPath.Path (path.Base) such that the
+// file mounts back exactly at p. It must be absolute, already clean (a trailing
+// slash, ".", or ".." would make path.Dir/path.Base diverge from p, so the
+// helper would read a different path than the env var names), and have a
+// non-root parent (mounting at "/" has no real directory and would clobber the
+// container root).
+func validateMountableFile(field, p string) error {
+	if !path.IsAbs(p) {
+		return fmt.Errorf("injection webhook: %s must be an absolute path, got %q", field, p)
+	}
+	if path.Clean(p) != p {
+		return fmt.Errorf("injection webhook: %s must be a clean path with no trailing slash, %q, or %q segments, got %q", field, ".", "..", p)
+	}
+	if path.Dir(p) == "/" {
+		return fmt.Errorf("injection webhook: %s must have a non-root parent directory, got %q", field, p)
 	}
 	return nil
 }
