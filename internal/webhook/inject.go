@@ -343,6 +343,15 @@ func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
 			}
 			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
 				c.VolumeMounts = append(c.VolumeMounts, roMount)
+			} else {
+				// Ensure the existing state mount is read-only so the workload
+				// cannot recreate the health marker and bypass enforcement.
+				for mi := range c.VolumeMounts {
+					m := &c.VolumeMounts[mi]
+					if m.Name == VolumeName && m.MountPath == i.cfg.StateDir {
+						m.ReadOnly = true
+					}
+				}
 			}
 		}
 	}
