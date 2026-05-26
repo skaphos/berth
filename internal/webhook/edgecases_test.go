@@ -163,6 +163,39 @@ func TestInjectPropagatesInsecureSkipVerify(t *testing.T) {
 	}
 }
 
+// TestInjectForcesExistingStateMountReadOnly ensures that when a workload
+// container already mounts berth-state at StateDir read-write, probe
+// enforcement forces it read-only so the workload cannot recreate the health
+// marker and bypass lease-loss enforcement.
+func TestInjectForcesExistingStateMountReadOnly(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	pod.Spec.Volumes = []corev1.Volume{{
+		Name:         VolumeName,
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}}
+	pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+		{Name: VolumeName, MountPath: acquire.DefaultStateDir, ReadOnly: false},
+	}
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	app := findContainer(pod.Spec.Containers, "app")
+	n := 0
+	for _, m := range app.VolumeMounts {
+		if m.Name == VolumeName && m.MountPath == acquire.DefaultStateDir {
+			n++
+			if !m.ReadOnly {
+				t.Errorf("existing state mount at %s must be forced read-only", acquire.DefaultStateDir)
+			}
+		}
+	}
+	if n != 1 {
+		t.Errorf("state mount count at %s = %d, want 1 (reused in place, not duplicated)", acquire.DefaultStateDir, n)
+	}
+}
+
 // TestInjectorConfigValidate covers the startup fail-fast checks so a
 // misconfigured operator never admits traffic it would only reject.
 func TestInjectorConfigValidate(t *testing.T) {
