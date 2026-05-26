@@ -160,6 +160,7 @@ func run() int {
 			CABundleFile:           caBundleFile,
 			ServerName:             serverName,
 			ClusterID:              clusterID,
+			InsecureSkipVerify:     insecureSkipVerify,
 			ControlPlaneNamespaces: splitCSV(injControlPlaneNS),
 			DefaultTTLSeconds:      injDefaultTTLSecs,
 			DefaultMode:            acquire.Mode(injDefaultMode),

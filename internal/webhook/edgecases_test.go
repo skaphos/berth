@@ -116,6 +116,53 @@ func TestInjectRejectsContainerNameCollision(t *testing.T) {
 	}
 }
 
+// TestInjectRejectsForeignMountAtStateDir ensures probe injection refuses a
+// pod where a different volume is already mounted at StateDir, which would
+// otherwise produce a duplicate-mountPath PodSpec the API server rejects.
+func TestInjectRejectsForeignMountAtStateDir(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	pod.Spec.Volumes = []corev1.Volume{{
+		Name:         "cache",
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}}
+	pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+		{Name: "cache", MountPath: acquire.DefaultStateDir},
+	}
+
+	if err := testInjector().Default(context.Background(), pod); err == nil {
+		t.Fatal("expected rejection when a foreign volume is mounted at the state dir")
+	}
+}
+
+// TestInjectPropagatesInsecureSkipVerify verifies the operator's TLS-skip
+// setting reaches the injected helper via BERTH_INSECURE_SKIP_TLS_VERIFY, and
+// is omitted (defaulting to verify) when not set.
+func TestInjectPropagatesInsecureSkipVerify(t *testing.T) {
+	inj := NewPodInjector(InjectorConfig{
+		HelperImage:        "ghcr.io/skaphos/berth-acquire:test",
+		DefaultTTLSeconds:  30,
+		InsecureSkipVerify: true,
+	})
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := inj.Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+	env := envMap(findContainer(pod.Spec.InitContainers, InitContainerName))
+	if env[acquire.EnvInsecure] != "true" {
+		t.Errorf("%s = %q, want true", acquire.EnvInsecure, env[acquire.EnvInsecure])
+	}
+
+	// Default (verify) must not emit the var at all.
+	pod2 := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod2); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+	env2 := envMap(findContainer(pod2.Spec.InitContainers, InitContainerName))
+	if _, ok := env2[acquire.EnvInsecure]; ok {
+		t.Errorf("%s should be absent when InsecureSkipVerify is false", acquire.EnvInsecure)
+	}
+}
+
 // TestInjectorConfigValidate covers the startup fail-fast checks so a
 // misconfigured operator never admits traffic it would only reject.
 func TestInjectorConfigValidate(t *testing.T) {

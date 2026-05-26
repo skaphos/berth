@@ -22,11 +22,12 @@ type InjectorConfig struct {
 	ImagePullPolicy corev1.PullPolicy
 
 	// API client config handed to the injected helper via env.
-	APIServer    string
-	APIKeyFile   string
-	CABundleFile string
-	ServerName   string
-	ClusterID    string
+	APIServer          string
+	APIKeyFile         string
+	CABundleFile       string
+	ServerName         string
+	ClusterID          string
+	InsecureSkipVerify bool
 
 	// ControlPlaneNamespaces are never mutated (the Berth control plane
 	// must not inject itself).
@@ -147,8 +148,17 @@ func (i *PodInjector) preflight(pod *corev1.Pod, r resolved) error {
 
 	if r.mode == acquire.ModeRuntimeSingleton && r.enforce == acquire.EnforceProbe {
 		for idx := range pod.Spec.Containers {
-			if pod.Spec.Containers[idx].LivenessProbe != nil {
-				return fmt.Errorf("cannot inject probe enforcement: container %q already defines a livenessProbe; set %s=%s to enforce by signal instead", pod.Spec.Containers[idx].Name, AnnEnforce, acquire.EnforceSignal)
+			c := &pod.Spec.Containers[idx]
+			if c.LivenessProbe != nil {
+				return fmt.Errorf("cannot inject probe enforcement: container %q already defines a livenessProbe; set %s=%s to enforce by signal instead", c.Name, AnnEnforce, acquire.EnforceSignal)
+			}
+			// We add a read-only state mount at StateDir for the probe; a
+			// different volume already mounted there would make the PodSpec
+			// invalid (duplicate mountPath), so reject it up front.
+			for _, m := range c.VolumeMounts {
+				if m.MountPath == i.cfg.StateDir && m.Name != VolumeName {
+					return fmt.Errorf("cannot inject probe enforcement: container %q already mounts volume %q at the state dir %s", c.Name, m.Name, i.cfg.StateDir)
+				}
 			}
 		}
 	}
@@ -358,6 +368,7 @@ func (i *PodInjector) buildEnv(r resolved) []corev1.EnvVar {
 	env = appendIf(env, i.cfg.APIKeyFile != "", acquire.EnvAPIKeyFile, i.cfg.APIKeyFile)
 	env = appendIf(env, i.cfg.CABundleFile != "", acquire.EnvCABundleFile, i.cfg.CABundleFile)
 	env = appendIf(env, i.cfg.ServerName != "", acquire.EnvServerName, i.cfg.ServerName)
+	env = appendIf(env, i.cfg.InsecureSkipVerify, acquire.EnvInsecure, "true")
 	return env
 }
 
