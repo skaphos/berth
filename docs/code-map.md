@@ -40,8 +40,8 @@ and points to the files most likely to matter when changing behavior.
 | `internal/auth/noauth.go` | Development-only no-auth implementation. |
 | `internal/auth/static.go` | Static API-key file loading, hashing, and reload behavior. |
 | `internal/auth/oidc.go` | OIDC discovery, JWT validation, and required-claim checks. |
-| `internal/operator/tokensource.go` | Operator token-file reads with a short cache for sidecar rotation. |
-| `internal/operator/tlsconfig.go` | Operator API-server TLS client configuration. |
+| `internal/clientauth/tokensource.go` | Bearer-token file reads with a short cache for sidecar rotation. Shared by the operator and the `berth-acquire` helper. |
+| `internal/clientauth/tlsconfig.go` | API-server TLS client configuration (CA bundle, server name, insecure-skip). Shared by the operator and helper. |
 
 ## Operator
 
@@ -51,6 +51,24 @@ and points to the files most likely to matter when changing behavior.
 | `internal/operator/reconciler.go` | `BerthLease` reconcile lifecycle, finalizer, status, and requeue policy. |
 | `internal/operator/actions.go` | Suspend and scale action application. |
 | `internal/operator/leaseclient.go` | Interface between reconciler and central lease client. |
+
+## Workload-Gating Injection
+
+The fallback path that gates unmodifiable workloads on a lease by injecting the
+`berth-acquire` helper. See [Workload gating via injection](workload-gating-injection.md).
+
+| Path | Owns |
+| --- | --- |
+| `cmd/berth-acquire/main.go` | `berth-acquire` CLI (`acquire` / `renew` / `check` subcommands); thin wrapper over `internal/acquire`. |
+| `internal/acquire/config.go` | Helper config, mode/enforce types, holder-identity defaulting, validation. |
+| `internal/acquire/env.go` | `BERTH_*`/`POD_*` env contract (`ConfigFromEnv`) — the single source of truth shared with the webhook. |
+| `internal/acquire/acquire.go`, `renew.go` | Acquire-and-hold and the renew state machine with local-expiry enforcement (SKA-436 guarantee). |
+| `internal/acquire/enforce.go` | Probe-marker and signal enforcement of lease loss (ADR-0003). |
+| `internal/acquire/state.go` | Shared `/berth` state: token, holder, health marker, self-copied `check` binary. |
+| `internal/webhook/contract.go` | Opt-in label, annotation keys, and injected resource names. |
+| `internal/webhook/inject.go` | `PodInjector` (typed `CustomDefaulter`): opt-in guard, control-plane skip, idempotency, annotation resolve/validate, container/volume/probe/signal injection, and `InjectorConfig.Validate`. |
+| `internal/webhook/setup.go` | Registers the Pod mutating webhook with the operator's manager. |
+| `deploy/helm/berth-operator` (`injection.*`) | `MutatingWebhookConfiguration`, webhook `Service`, cert-manager `Certificate`, and the deployment wiring (`templates/mutatingwebhookconfiguration.yaml`, `webhook-service.yaml`, `webhook-certificate.yaml`). |
 
 ## Deployment
 

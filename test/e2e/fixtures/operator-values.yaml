@@ -38,3 +38,25 @@ resources:
 metrics:
   serviceMonitor:
     enabled: false
+
+# Exercise the berth-acquire injection webhook (SKA-441). The webhook serving
+# cert (existingSecret + caBundle) is generated and passed per-cluster by up.sh
+# because the caBundle is the freshly minted self-signed cert. The injected
+# helper inherits berth.* above (apiServer/insecureSkipVerify) and reads its
+# bearer token from injection.helper.apiKeyFile, which the test workload mounts.
+injection:
+  enabled: true
+  helper:
+    repository: berth-acquire
+    tag: e2e
+    pullPolicy: IfNotPresent
+    apiKeyFile: /var/run/berth/api-key
+  defaults:
+    mode: runtime-singleton
+    enforce: probe
+    ttlSeconds: 15
+  webhook:
+    # Ignore so a webhook hiccup can't wedge the shared runner cluster; the
+    # injection test asserts the mutation happened, so a non-firing webhook
+    # still fails loudly.
+    failurePolicy: Ignore

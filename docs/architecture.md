@@ -36,6 +36,8 @@ it holds that lease.
 | Operator | `cmd/operator`, `internal/operator` | Watches `BerthLease` resources and applies workload actions in tenant clusters. |
 | OIDC broker | `cmd/berth-oidc-broker` | Fetches OAuth2 client-credentials tokens and writes them atomically to a shared file. |
 | Go client | `pkg/client` | Direct integration surface for acquire, renew, and release calls. |
+| Injection webhook | `internal/webhook` (in the operator process) | Optional mutating webhook that injects the `berth-acquire` helper into opted-in Pods. Off unless `--enable-injection-webhook`. |
+| `berth-acquire` helper | `cmd/berth-acquire`, `internal/acquire` | Injected init container (and sidecar) that gates a Pod on a lease. |
 | Helm charts | `deploy/helm` | Deploy the API server and operator. |
 
 ## Lease API
@@ -112,6 +114,25 @@ The operator watches namespaced `BerthLease` resources.
 | `scale` | Patches the target scale subresource. | `Deployment`, `StatefulSet`, `ReplicaSet` |
 
 Each action may set at most one of `suspend` or `scale`.
+
+## Injected Workload Gating
+
+For workloads whose image cannot be changed, the operator can run a mutating
+admission webhook (`--enable-injection-webhook`) that injects the
+`berth-acquire` helper into Pods carrying `berth.skaphos.io/inject: acquire`.
+Unlike operator-as-holder — which gates a workload by **scaling** it from
+outside — injection gates **at the Pod level** from inside:
+
+- An init container blocks Pod startup until it acquires the lease (the "hold").
+- In `runtime-singleton` mode a native sidecar renews the lease and, on loss,
+  stops the main container (kubelet kills it via an injected liveness probe with
+  `enforce=probe`, or the sidecar signals it with `enforce=signal`) and keeps it
+  gated until it re-acquires.
+
+This path talks to the lease API directly and does **not** require a
+`BerthLease` object. It creates more potential holders than operator-as-holder,
+so its split-brain surface is larger; it is a deliberate fallback. Full
+contract, modes, and trade-offs: [Workload gating via injection](workload-gating-injection.md).
 
 ## Failure Behavior
 

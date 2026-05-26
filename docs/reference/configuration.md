@@ -62,6 +62,17 @@ a Secret and pass `--sql-dsn-file`; the Helm chart does this from
 | `--berth-ca-bundle-file` | empty | PEM CA bundle appended to system trust for API server TLS verification. |
 | `--berth-server-name` | API server host | SNI and certificate name override. |
 | `--berth-insecure-skip-tls-verify` | `false` | Development-only TLS verification bypass. |
+| `--enable-injection-webhook` | `false` | Serve the `berth-acquire` pod-injection mutating webhook from the operator. |
+| `--injection-helper-image` | empty | `berth-acquire` image stamped into opted-in Pods. Required when the webhook is enabled. |
+| `--injection-control-plane-namespaces` | `berth-system` | Comma-separated namespaces the webhook never mutates. |
+| `--injection-helper-api-key-file` | empty | Token-file path passed to injected helpers (mounted into the workload Pod by the platform). |
+| `--injection-state-dir` | `/berth` | Shared-volume mount path used by the injected init container and sidecar. Must be absolute. |
+| `--injection-default-mode` | `runtime-singleton` | Default `berth.skaphos.io/mode` for Pods that omit the annotation. |
+| `--injection-default-enforce` | `probe` | Default `berth.skaphos.io/enforce` for Pods that omit the annotation. |
+| `--injection-default-ttl-seconds` | `30` | Default `berth.skaphos.io/ttl-seconds` for Pods that omit the annotation. |
+
+See [Workload gating via injection](../workload-gating-injection.md) for the
+opt-in label/annotation contract and usage.
 
 ## OIDC Broker Flags
 
@@ -110,6 +121,12 @@ a repository variable or secret.
 | `berth-operator` | `berth.tokenFile.path` | Token file path written by a sidecar. |
 | `berth-operator` | `berth.tls.*` | CA bundle, server name, and development-only insecure mode. |
 | `berth-operator` | `sidecarBroker.*` | Optional OIDC broker sidecar configuration. |
+| `berth-operator` | `injection.enabled` | Serve the `berth-acquire` pod-injection webhook. Off by default. |
+| `berth-operator` | `injection.helper.*` | Injected helper image, pull policy, token-file path, and shared `stateDir` (must be absolute). |
+| `berth-operator` | `injection.defaults.*` | Default `mode`, `enforce`, and `ttlSeconds` for Pods that omit the annotation. |
+| `berth-operator` | `injection.controlPlaneNamespaces` | Namespaces the webhook never mutates (the release namespace is always added). |
+| `berth-operator` | `injection.webhook.*` | `failurePolicy`, `timeoutSeconds`, service port, object/namespace selectors. |
+| `berth-operator` | `injection.webhook.tls.certManager.*`, `injection.webhook.tls.existingSecret` + `caBundle` | Exactly one serving-cert source is required when injection is enabled. |
 
 ## Static API Key File
 

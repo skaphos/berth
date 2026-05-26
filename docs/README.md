@@ -9,6 +9,7 @@ It is published with MkDocs Material and `mike` at
 | Document | Purpose |
 | --- | --- |
 | [Architecture](architecture.md) | System model, runtime shape, storage backends, and failure behavior. |
+| [Workload gating via injection](workload-gating-injection.md) | Gate unmodifiable workloads on a lease with the injected `berth-acquire` helper. |
 | [Configuration reference](reference/configuration.md) | API server, operator, broker, Helm values, and environment inputs. |
 | [API reference](reference/api.md) | Generated CRD reference for `berth.skaphos.io/v1alpha1`. |
 | [Code map](code-map.md) | Package and entrypoint tour for contributors. |

@@ -28,6 +28,7 @@ markdown_extensions:
 nav:
   - Home: README.md
   - Architecture: architecture.md
+  - Workload Gating (Injection): workload-gating-injection.md
   - Code Map: code-map.md
   - Reference:
       - API: reference/api.md
