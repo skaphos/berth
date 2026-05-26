@@ -249,6 +249,9 @@ func (r resolved) validate() error {
 	if r.ttlSeconds <= 0 {
 		return fmt.Errorf("%s must be positive", AnnTTLSeconds)
 	}
+	if r.heartbeatSeconds < 0 {
+		return fmt.Errorf("%s must not be negative", AnnHeartbeatSeconds)
+	}
 	if r.heartbeatSeconds > 0 && r.heartbeatSeconds >= r.ttlSeconds {
 		return fmt.Errorf("%s (%d) must be less than %s (%d)", AnnHeartbeatSeconds, r.heartbeatSeconds, AnnTTLSeconds, r.ttlSeconds)
 	}
