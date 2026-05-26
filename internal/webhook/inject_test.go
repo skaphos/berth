@@ -75,7 +75,8 @@ func TestInjectRuntimeSingletonProbe(t *testing.T) {
 	if app.LivenessProbe == nil || app.LivenessProbe.Exec == nil {
 		t.Fatal("probe mode should inject an exec liveness probe on the main container")
 	}
-	wantCmd := []string{"/berth/check", "check", "/berth/healthy"}
+	stateDir := acquire.DefaultStateDir
+	wantCmd := []string{stateDir + "/check", "check", stateDir + "/healthy"}
 	got := app.LivenessProbe.Exec.Command
 	if len(got) != 3 || got[0] != wantCmd[0] || got[1] != wantCmd[1] || got[2] != wantCmd[2] {
 		t.Errorf("probe command = %v, want %v", got, wantCmd)
