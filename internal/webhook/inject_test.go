@@ -203,6 +203,7 @@ func TestInjectInvalidConfig(t *testing.T) {
 		{"bad enforce", map[string]string{AnnLeaseName: "x", AnnEnforce: "nuke"}},
 		{"non-integer ttl", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "soon"}},
 		{"negative ttl", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "-5"}},
+		{"negative heartbeat", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "30", AnnHeartbeatSeconds: "-5"}},
 		{"heartbeat >= ttl", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "10", AnnHeartbeatSeconds: "10"}},
 		{"bad release-on-shutdown", map[string]string{AnnLeaseName: "x", AnnReleaseOnShutdown: "maybe"}},
 	}
