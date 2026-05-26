@@ -59,6 +59,17 @@ spec:
             {{- with .Values.injection.helper.apiKeyFile }}
             - --injection-helper-api-key-file={{ . }}
             {{- end }}
+            {{- with .Values.injection.helper.apiKeySecret.name }}
+            - --injection-helper-api-key-secret={{ . }}
+            - --injection-helper-api-key-secret-key={{ $.Values.injection.helper.apiKeySecret.key }}
+            {{- end }}
+            {{- with .Values.injection.helper.caBundleFile }}
+            - --injection-helper-ca-bundle-file={{ . }}
+            {{- end }}
+            {{- with .Values.injection.helper.caBundleConfigMap.name }}
+            - --injection-helper-ca-bundle-configmap={{ . }}
+            - --injection-helper-ca-bundle-key={{ $.Values.injection.helper.caBundleConfigMap.key }}
+            {{- end }}
             {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}

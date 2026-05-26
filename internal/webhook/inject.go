@@ -30,6 +30,16 @@ type InjectorConfig struct {
 	ClusterID          string
 	InsecureSkipVerify bool
 
+	// Sources that back APIKeyFile / CABundleFile inside the workload pod.
+	// The webhook mounts these into the injected helper containers so those
+	// file paths actually resolve (SKA-444); without them the helper would
+	// reference paths that do not exist. The referenced Secret/ConfigMap must
+	// exist in each opted-in workload's own namespace.
+	APIKeySecretName      string
+	APIKeySecretKey       string
+	CABundleConfigMapName string
+	CABundleKey           string
+
 	// ControlPlaneNamespaces are never mutated (the Berth control plane
 	// must not inject itself).
 	ControlPlaneNamespaces []string
@@ -72,6 +82,64 @@ func (c *InjectorConfig) Validate() error {
 	if !path.IsAbs(c.StateDir) {
 		return fmt.Errorf("injection webhook: state-dir must be an absolute path, got %q", c.StateDir)
 	}
+	// An auth file path is only useful if the webhook can mount a source at it;
+	// otherwise the helper points at a path that does not exist (SKA-444).
+	// Require the file and its source together (or neither, for an
+	// auth-mode=none / system-trust API server).
+	if (c.APIKeyFile == "") != (c.APIKeySecretName == "") {
+		return fmt.Errorf("injection webhook: api-key file and secret must be set together (file=%q secret=%q)", c.APIKeyFile, c.APIKeySecretName)
+	}
+	if (c.CABundleFile == "") != (c.CABundleConfigMapName == "") {
+		return fmt.Errorf("injection webhook: ca-bundle file and configmap must be set together (file=%q configmap=%q)", c.CABundleFile, c.CABundleConfigMapName)
+	}
+	// Each auth file is split into a VolumeMount.mountPath (its parent dir) and
+	// a KeyToPath.Path (its basename) at mount-construction time. Validate that
+	// the split is well-formed so the mounted file actually lands at the env-var
+	// value the helper reads.
+	if c.APIKeyFile != "" {
+		if err := validateMountableFile("api-key file", c.APIKeyFile); err != nil {
+			return err
+		}
+	}
+	if c.CABundleFile != "" {
+		if err := validateMountableFile("ca-bundle file", c.CABundleFile); err != nil {
+			return err
+		}
+	}
+	// Auth volumes mount at the file's parent directory; a collision with the
+	// state dir (or with each other) would produce an invalid PodSpec. Compare
+	// normalized paths (path.Dir already cleans its result) so a trailing slash
+	// cannot slip a collision past the guard.
+	stateDir := path.Clean(c.StateDir)
+	if c.APIKeyFile != "" && path.Dir(c.APIKeyFile) == stateDir {
+		return fmt.Errorf("injection webhook: api-key file directory %q must differ from state-dir %q", path.Dir(c.APIKeyFile), stateDir)
+	}
+	if c.CABundleFile != "" && path.Dir(c.CABundleFile) == stateDir {
+		return fmt.Errorf("injection webhook: ca-bundle file directory %q must differ from state-dir %q", path.Dir(c.CABundleFile), stateDir)
+	}
+	if c.APIKeyFile != "" && c.CABundleFile != "" && path.Dir(c.APIKeyFile) == path.Dir(c.CABundleFile) {
+		return fmt.Errorf("injection webhook: api-key and ca-bundle files must be in different directories (both %q)", path.Dir(c.APIKeyFile))
+	}
+	return nil
+}
+
+// validateMountableFile checks that p can be split into a volumeMount.mountPath
+// (path.Dir) and a Secret/ConfigMap KeyToPath.Path (path.Base) such that the
+// file mounts back exactly at p. It must be absolute, already clean (a trailing
+// slash, ".", or ".." would make path.Dir/path.Base diverge from p, so the
+// helper would read a different path than the env var names), and have a
+// non-root parent (mounting at "/" has no real directory and would clobber the
+// container root).
+func validateMountableFile(field, p string) error {
+	if !path.IsAbs(p) {
+		return fmt.Errorf("injection webhook: %s must be an absolute path, got %q", field, p)
+	}
+	if path.Clean(p) != p {
+		return fmt.Errorf("injection webhook: %s must be a clean path with no trailing slash, %q, or %q segments, got %q", field, ".", "..", p)
+	}
+	if path.Dir(p) == "/" {
+		return fmt.Errorf("injection webhook: %s must have a non-root parent directory, got %q", field, p)
+	}
 	return nil
 }
 
@@ -87,6 +155,12 @@ func (c *InjectorConfig) withDefaults() *InjectorConfig {
 	}
 	if c.StateDir == "" {
 		c.StateDir = acquire.DefaultStateDir
+	}
+	if c.APIKeySecretName != "" && c.APIKeySecretKey == "" {
+		c.APIKeySecretKey = "token"
+	}
+	if c.CABundleConfigMapName != "" && c.CABundleKey == "" {
+		c.CABundleKey = "ca.crt"
 	}
 	return c
 }
@@ -154,6 +228,17 @@ func (i *PodInjector) preflight(pod *corev1.Pod, r resolved) error {
 		if v.Name == VolumeName && v.EmptyDir == nil {
 			return fmt.Errorf("cannot inject: pod already has a volume named %q that is not an emptyDir", VolumeName)
 		}
+	}
+
+	// The auth volume names are reserved. A pre-existing volume with one of
+	// these names would be silently reused by mutate (hasVolume matches by
+	// name), pointing the helper at the wrong token/CA, so reject it up front
+	// when we would inject that source.
+	if i.cfg.APIKeySecretName != "" && hasVolume(pod, AuthTokenVolume) {
+		return fmt.Errorf("cannot inject: pod already has a volume named %q (reserved for the injected auth token)", AuthTokenVolume)
+	}
+	if i.cfg.CABundleConfigMapName != "" && hasVolume(pod, AuthCABundleVolume) {
+		return fmt.Errorf("cannot inject: pod already has a volume named %q (reserved for the injected CA bundle)", AuthCABundleVolume)
 	}
 
 	if r.mode == acquire.ModeRuntimeSingleton && r.enforce == acquire.EnforceProbe {
@@ -286,8 +371,18 @@ func (i *PodInjector) mutate(pod *corev1.Pod, r resolved) {
 		})
 	}
 
+	// Mount the bearer-token / CA sources the helper's BERTH_*_FILE env vars
+	// point at (SKA-444), alongside the shared state volume.
+	authVols, authMounts := i.authVolumeMounts()
+	for _, v := range authVols {
+		if !hasVolume(pod, v.Name) {
+			pod.Spec.Volumes = append(pod.Spec.Volumes, v)
+		}
+	}
+
 	env := i.buildEnv(r)
 	stateMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir}
+	helperMounts := append([]corev1.VolumeMount{stateMount}, authMounts...)
 
 	// Blocking init container: the "hold".
 	injected := []corev1.Container{{
@@ -296,7 +391,7 @@ func (i *PodInjector) mutate(pod *corev1.Pod, r resolved) {
 		ImagePullPolicy: i.cfg.ImagePullPolicy,
 		Args:            []string{"acquire"},
 		Env:             env,
-		VolumeMounts:    []corev1.VolumeMount{stateMount},
+		VolumeMounts:    helperMounts,
 	}}
 
 	if r.mode == acquire.ModeRuntimeSingleton {
@@ -311,7 +406,7 @@ func (i *PodInjector) mutate(pod *corev1.Pod, r resolved) {
 			Args:            []string{"renew"},
 			Env:             env,
 			RestartPolicy:   &always,
-			VolumeMounts:    []corev1.VolumeMount{stateMount},
+			VolumeMounts:    helperMounts,
 		})
 	}
 
@@ -329,6 +424,39 @@ func (i *PodInjector) mutate(pod *corev1.Pod, r resolved) {
 		pod.Annotations = map[string]string{}
 	}
 	pod.Annotations[AnnInjected] = "true"
+}
+
+// authVolumeMounts returns the volumes and matching mounts that place the
+// bearer token and CA bundle (referenced by BERTH_API_KEY_FILE /
+// BERTH_CA_BUNDLE_FILE) into the injected helper containers. Each source key
+// is projected to the basename of its configured file path and mounted at that
+// path's parent directory, so the file lands exactly where the env var points.
+// Returns nil when no source is configured (auth-mode=none + system-trust /
+// insecure TLS, where no files are needed).
+func (i *PodInjector) authVolumeMounts() ([]corev1.Volume, []corev1.VolumeMount) {
+	var vols []corev1.Volume
+	var mounts []corev1.VolumeMount
+	if i.cfg.APIKeySecretName != "" {
+		vols = append(vols, corev1.Volume{
+			Name: AuthTokenVolume,
+			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+				SecretName: i.cfg.APIKeySecretName,
+				Items:      []corev1.KeyToPath{{Key: i.cfg.APIKeySecretKey, Path: path.Base(i.cfg.APIKeyFile)}},
+			}},
+		})
+		mounts = append(mounts, corev1.VolumeMount{Name: AuthTokenVolume, MountPath: path.Dir(i.cfg.APIKeyFile), ReadOnly: true})
+	}
+	if i.cfg.CABundleConfigMapName != "" {
+		vols = append(vols, corev1.Volume{
+			Name: AuthCABundleVolume,
+			VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: i.cfg.CABundleConfigMapName},
+				Items:                []corev1.KeyToPath{{Key: i.cfg.CABundleKey, Path: path.Base(i.cfg.CABundleFile)}},
+			}},
+		})
+		mounts = append(mounts, corev1.VolumeMount{Name: AuthCABundleVolume, MountPath: path.Dir(i.cfg.CABundleFile), ReadOnly: true})
+	}
+	return vols, mounts
 }
 
 // applyEnforcement wires the runtime-singleton kill mechanism.

@@ -41,6 +41,11 @@ func run() int {
 		injHelperImage     string
 		injControlPlaneNS  string
 		injAPIKeyFile      string
+		injAPIKeySecret    string
+		injAPIKeySecretKey string
+		injCABundleFile    string
+		injCABundleCM      string
+		injCABundleKey     string
 		injStateDir        string
 		injDefaultMode     string
 		injDefaultEnforce  string
@@ -79,7 +84,21 @@ func run() int {
 	flag.StringVar(&injControlPlaneNS, "injection-control-plane-namespaces", "berth-system",
 		"comma-separated namespaces the webhook never mutates (the Berth control plane).")
 	flag.StringVar(&injAPIKeyFile, "injection-helper-api-key-file", "",
-		"token file path passed to injected helpers (mounted into the workload pod by the platform).")
+		"path the injected helper reads its bearer token from inside the workload pod. "+
+			"Set together with --injection-helper-api-key-secret.")
+	flag.StringVar(&injAPIKeySecret, "injection-helper-api-key-secret", "",
+		"name of a Secret in the workload namespace holding the helper's bearer token; "+
+			"the webhook mounts it at --injection-helper-api-key-file.")
+	flag.StringVar(&injAPIKeySecretKey, "injection-helper-api-key-secret-key", "token",
+		"data key within --injection-helper-api-key-secret containing the token.")
+	flag.StringVar(&injCABundleFile, "injection-helper-ca-bundle-file", "",
+		"path the injected helper reads its API server CA bundle from inside the workload pod. "+
+			"Set together with --injection-helper-ca-bundle-configmap.")
+	flag.StringVar(&injCABundleCM, "injection-helper-ca-bundle-configmap", "",
+		"name of a ConfigMap in the workload namespace holding the CA bundle; "+
+			"the webhook mounts it at --injection-helper-ca-bundle-file.")
+	flag.StringVar(&injCABundleKey, "injection-helper-ca-bundle-key", "ca.crt",
+		"data key within --injection-helper-ca-bundle-configmap containing the CA bundle.")
 	flag.StringVar(&injStateDir, "injection-state-dir", acquire.DefaultStateDir,
 		"shared volume mount path the injected init container and sidecar use.")
 	flag.StringVar(&injDefaultMode, "injection-default-mode", string(acquire.ModeRuntimeSingleton),
@@ -154,10 +173,17 @@ func run() int {
 
 	if enableWebhook {
 		injCfg := webhook.InjectorConfig{
-			HelperImage:            injHelperImage,
-			APIServer:              apiServerURL,
+			HelperImage: injHelperImage,
+			APIServer:   apiServerURL,
+			// Auth/CA file paths and the in-workload-namespace sources the
+			// webhook mounts at them. These are the injected helper's own
+			// paths, distinct from the operator's --berth-ca-bundle-file.
 			APIKeyFile:             injAPIKeyFile,
-			CABundleFile:           caBundleFile,
+			APIKeySecretName:       injAPIKeySecret,
+			APIKeySecretKey:        injAPIKeySecretKey,
+			CABundleFile:           injCABundleFile,
+			CABundleConfigMapName:  injCABundleCM,
+			CABundleKey:            injCABundleKey,
 			ServerName:             serverName,
 			ClusterID:              clusterID,
 			InsecureSkipVerify:     insecureSkipVerify,

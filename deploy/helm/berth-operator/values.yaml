@@ -104,10 +104,23 @@ injection:
     repository: ghcr.io/skaphos/berth-acquire
     tag: ""             # defaults to .Chart.AppVersion
     pullPolicy: IfNotPresent
-    # Path the injected helper reads its bearer token from, INSIDE the
-    # workload pod. The platform (not this chart) mounts the token there;
-    # leave empty when the Berth API server runs with --auth-mode=none.
+    # Bearer token for the injected helper. apiKeyFile is the path the helper
+    # reads INSIDE the workload pod; apiKeySecret names a Secret IN EACH
+    # OPTED-IN WORKLOAD'S NAMESPACE that the webhook mounts at that path. Set
+    # both together, or neither for an --auth-mode=none API server. The Secret
+    # must exist in every namespace that runs an opted-in workload.
     apiKeyFile: ""
+    apiKeySecret:
+      name: ""
+      key: token
+    # API server CA bundle for the injected helper, when TLS is not satisfied
+    # by system trust or insecure-skip. caBundleFile is the in-pod path;
+    # caBundleConfigMap names a ConfigMap in the workload namespace the webhook
+    # mounts there. Set both together or neither.
+    caBundleFile: ""
+    caBundleConfigMap:
+      name: ""
+      key: ca.crt
     # Shared volume mount path the injected init container and sidecar use
     # to exchange lease/health state. Matches berth-acquire's default.
     stateDir: /berth

@@ -196,6 +196,119 @@ func TestInjectForcesExistingStateMountReadOnly(t *testing.T) {
 	}
 }
 
+// TestInjectMountsAuthSourcesIntoHelpers verifies the webhook mounts the
+// bearer-token Secret and CA-bundle ConfigMap into both injected helper
+// containers at the paths the BERTH_*_FILE env vars point at (SKA-444), so the
+// helper can actually read them.
+func TestInjectMountsAuthSourcesIntoHelpers(t *testing.T) {
+	inj := NewPodInjector(InjectorConfig{
+		HelperImage:           "ghcr.io/skaphos/berth-acquire:test",
+		DefaultTTLSeconds:     30,
+		APIKeyFile:            "/var/run/berth/token",
+		APIKeySecretName:      "berth-token",
+		APIKeySecretKey:       "token",
+		CABundleFile:          "/etc/berth/ca/ca.crt",
+		CABundleConfigMapName: "berth-ca",
+		CABundleKey:           "ca.crt",
+	})
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := inj.Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	// Both helper containers mount token and CA at the file's parent dir.
+	for _, name := range []string{InitContainerName, SidecarContainerName} {
+		c := findContainer(pod.Spec.InitContainers, name)
+		if c == nil {
+			t.Fatalf("missing injected container %q", name)
+		}
+		if !containerHasMountAt(c, AuthTokenVolume, "/var/run/berth") {
+			t.Errorf("%s: token not mounted at /var/run/berth; mounts=%+v", name, c.VolumeMounts)
+		}
+		if !containerHasMountAt(c, AuthCABundleVolume, "/etc/berth/ca") {
+			t.Errorf("%s: CA not mounted at /etc/berth/ca; mounts=%+v", name, c.VolumeMounts)
+		}
+	}
+
+	// The pod carries the source volumes, projecting each key to the file base
+	// so it lands exactly at the configured path.
+	tok := findVolume(pod, AuthTokenVolume)
+	if tok == nil || tok.Secret == nil {
+		t.Fatalf("token secret volume missing: %+v", tok)
+	}
+	if tok.Secret.SecretName != "berth-token" || len(tok.Secret.Items) != 1 ||
+		tok.Secret.Items[0].Key != "token" || tok.Secret.Items[0].Path != "token" {
+		t.Errorf("token volume = %+v, want secret berth-token item token->token", tok.Secret)
+	}
+	ca := findVolume(pod, AuthCABundleVolume)
+	if ca == nil || ca.ConfigMap == nil {
+		t.Fatalf("CA configmap volume missing: %+v", ca)
+	}
+	if ca.ConfigMap.Name != "berth-ca" || len(ca.ConfigMap.Items) != 1 ||
+		ca.ConfigMap.Items[0].Key != "ca.crt" || ca.ConfigMap.Items[0].Path != "ca.crt" {
+		t.Errorf("CA volume = %+v, want configmap berth-ca item ca.crt->ca.crt", ca.ConfigMap)
+	}
+
+	// The helper still reads them through the file-path env vars.
+	env := envMap(findContainer(pod.Spec.InitContainers, InitContainerName))
+	if env[acquire.EnvAPIKeyFile] != "/var/run/berth/token" {
+		t.Errorf("%s = %q, want /var/run/berth/token", acquire.EnvAPIKeyFile, env[acquire.EnvAPIKeyFile])
+	}
+	if env[acquire.EnvCABundleFile] != "/etc/berth/ca/ca.crt" {
+		t.Errorf("%s = %q, want /etc/berth/ca/ca.crt", acquire.EnvCABundleFile, env[acquire.EnvCABundleFile])
+	}
+}
+
+// TestInjectNoAuthMountsWhenUnset confirms the no-auth path (auth-mode=none +
+// system-trust/insecure TLS) injects only the state volume — no token/CA mounts.
+func TestInjectNoAuthMountsWhenUnset(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+	if findVolume(pod, AuthTokenVolume) != nil || findVolume(pod, AuthCABundleVolume) != nil {
+		t.Error("no auth source configured, but an auth volume was injected")
+	}
+	init := findContainer(pod.Spec.InitContainers, InitContainerName)
+	if len(init.VolumeMounts) != 1 || init.VolumeMounts[0].Name != VolumeName {
+		t.Errorf("init container mounts = %+v, want only %s", init.VolumeMounts, VolumeName)
+	}
+}
+
+// TestInjectRejectsReservedAuthVolumeName ensures a pre-existing volume using
+// a reserved auth name is rejected rather than silently reused — which would
+// point the helper at the wrong token/CA.
+func TestInjectRejectsReservedAuthVolumeName(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cfg    InjectorConfig
+		volume string
+	}{
+		{"token", InjectorConfig{HelperImage: "x", DefaultTTLSeconds: 30, APIKeyFile: "/var/run/berth/token", APIKeySecretName: "berth-token"}, AuthTokenVolume},
+		{"ca", InjectorConfig{HelperImage: "x", DefaultTTLSeconds: 30, CABundleFile: "/etc/berth/ca/ca.crt", CABundleConfigMapName: "berth-ca"}, AuthCABundleVolume},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+			pod.Spec.Volumes = []corev1.Volume{{
+				Name:         tc.volume,
+				VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+			}}
+			if err := NewPodInjector(tc.cfg).Default(context.Background(), pod); err == nil {
+				t.Fatalf("expected rejection for pre-existing reserved volume %q", tc.volume)
+			}
+		})
+	}
+}
+
+func findVolume(pod *corev1.Pod, name string) *corev1.Volume {
+	for i := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[i].Name == name {
+			return &pod.Spec.Volumes[i]
+		}
+	}
+	return nil
+}
+
 // TestInjectorConfigValidate covers the startup fail-fast checks so a
 // misconfigured operator never admits traffic it would only reject.
 func TestInjectorConfigValidate(t *testing.T) {
@@ -220,6 +333,45 @@ func TestInjectorConfigValidate(t *testing.T) {
 		{"non-positive ttl", func(c *InjectorConfig) { c.DefaultTTLSeconds = 0 }, true},
 		{"relative state-dir", func(c *InjectorConfig) { c.StateDir = "berth" }, true},
 		{"empty state-dir", func(c *InjectorConfig) { c.StateDir = "" }, true},
+		{"api-key file without secret", func(c *InjectorConfig) { c.APIKeyFile = "/var/run/berth/token" }, true},
+		{"api-key secret without file", func(c *InjectorConfig) { c.APIKeySecretName = "berth-token" }, true},
+		{"ca file without configmap", func(c *InjectorConfig) { c.CABundleFile = "/etc/berth/ca/ca.crt" }, true},
+		{"ca configmap without file", func(c *InjectorConfig) { c.CABundleConfigMapName = "berth-ca" }, true},
+		{"api-key dir collides with state-dir", func(c *InjectorConfig) {
+			c.APIKeyFile = c.StateDir + "/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"api-key and ca share a dir", func(c *InjectorConfig) {
+			c.APIKeyFile = "/etc/berth/auth/token"
+			c.APIKeySecretName = "berth-token"
+			c.CABundleFile = "/etc/berth/auth/ca.crt"
+			c.CABundleConfigMapName = "berth-ca"
+		}, true},
+		{"relative api-key file", func(c *InjectorConfig) {
+			c.APIKeyFile = "var/run/berth/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"trailing-slash state-dir still collides", func(c *InjectorConfig) {
+			c.StateDir = "/berth/"
+			c.APIKeyFile = "/berth/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"api-key file mounts at root", func(c *InjectorConfig) {
+			c.APIKeyFile = "/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"api-key file trailing slash", func(c *InjectorConfig) {
+			c.APIKeyFile = "/var/run/berth/token/"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"api-key file with dotdot", func(c *InjectorConfig) {
+			c.APIKeyFile = "/var/run/../berth/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"valid auth pair", func(c *InjectorConfig) {
+			c.APIKeyFile = "/var/run/berth/token"
+			c.APIKeySecretName = "berth-token"
+		}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := base()
