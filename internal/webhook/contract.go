@@ -37,29 +37,7 @@ const (
 	SidecarContainerName = "berth-sidecar"
 )
 
-// Environment variable names the injected helper reads. These mirror the
-// flag env-var defaults in cmd/berth-acquire/main.go; keep the two in sync.
-const (
-	EnvLeaseName      = "BERTH_LEASE_NAME"
-	EnvLeaseNamespace = "BERTH_LEASE_NAMESPACE"
-	EnvMode           = "BERTH_MODE"
-	EnvEnforce        = "BERTH_ENFORCE"
-	EnvTTLSeconds     = "BERTH_TTL_SECONDS"
-	EnvHeartbeatSecs  = "BERTH_HEARTBEAT_SECONDS"
-	EnvEnforceGrace   = "BERTH_ENFORCE_GRACE_SECONDS"
-	EnvReleaseOnDown  = "BERTH_RELEASE_ON_SHUTDOWN"
-	EnvHolderIdentity = "BERTH_HOLDER_IDENTITY"
-	EnvClusterID      = "BERTH_CLUSTER_ID"
-	EnvWorkloadKind   = "BERTH_WORKLOAD_KIND"
-	EnvWorkloadName   = "BERTH_WORKLOAD_NAME"
-	EnvStateDir       = "BERTH_STATE_DIR"
-	EnvAPIServer      = "BERTH_API_SERVER"
-	EnvAPIKeyFile     = "BERTH_API_KEY_FILE"
-	EnvCABundleFile   = "BERTH_CA_BUNDLE_FILE"
-	EnvServerName     = "BERTH_SERVER_NAME"
-	EnvInsecure       = "BERTH_INSECURE_SKIP_TLS_VERIFY"
-
-	// Downward-API env the helper uses for holder-identity defaulting.
-	EnvPodNamespace = "POD_NAMESPACE"
-	EnvPodName      = "POD_NAME"
-)
+// The environment-variable names the injected helper reads are owned by
+// package acquire (internal/acquire/env.go), which is the consumer side of
+// this contract. The webhook references acquire.Env* directly so the two
+// cannot drift; do not redeclare them here.

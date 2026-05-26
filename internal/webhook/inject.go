@@ -270,26 +270,26 @@ func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
 // buildEnv assembles the BERTH_*/POD_* environment the helper reads.
 func (i *PodInjector) buildEnv(r resolved) []corev1.EnvVar {
 	env := []corev1.EnvVar{
-		{Name: EnvLeaseName, Value: r.leaseName},
-		{Name: EnvLeaseNamespace, Value: r.leaseNamespace},
-		{Name: EnvMode, Value: string(r.mode)},
-		{Name: EnvEnforce, Value: string(r.enforce)},
-		{Name: EnvTTLSeconds, Value: strconv.Itoa(r.ttlSeconds)},
-		{Name: EnvStateDir, Value: i.cfg.StateDir},
-		{Name: EnvPodNamespace, ValueFrom: fieldRef("metadata.namespace")},
-		{Name: EnvPodName, ValueFrom: fieldRef("metadata.name")},
+		{Name: acquire.EnvLeaseName, Value: r.leaseName},
+		{Name: acquire.EnvLeaseNamespace, Value: r.leaseNamespace},
+		{Name: acquire.EnvMode, Value: string(r.mode)},
+		{Name: acquire.EnvEnforce, Value: string(r.enforce)},
+		{Name: acquire.EnvTTLSeconds, Value: strconv.Itoa(r.ttlSeconds)},
+		{Name: acquire.EnvStateDir, Value: i.cfg.StateDir},
+		{Name: acquire.EnvPodNamespace, ValueFrom: fieldRef("metadata.namespace")},
+		{Name: acquire.EnvPodName, ValueFrom: fieldRef("metadata.name")},
 	}
-	env = appendIf(env, r.heartbeatSeconds > 0, EnvHeartbeatSecs, strconv.Itoa(r.heartbeatSeconds))
-	env = appendIf(env, r.enforceGrace > 0, EnvEnforceGrace, strconv.Itoa(r.enforceGrace))
-	env = appendIf(env, r.releaseOnDown != "", EnvReleaseOnDown, r.releaseOnDown)
-	env = appendIf(env, r.holderIdentity != "", EnvHolderIdentity, r.holderIdentity)
-	env = appendIf(env, r.workloadKind != "", EnvWorkloadKind, r.workloadKind)
-	env = appendIf(env, r.workloadName != "", EnvWorkloadName, r.workloadName)
-	env = appendIf(env, i.cfg.ClusterID != "", EnvClusterID, i.cfg.ClusterID)
-	env = appendIf(env, i.cfg.APIServer != "", EnvAPIServer, i.cfg.APIServer)
-	env = appendIf(env, i.cfg.APIKeyFile != "", EnvAPIKeyFile, i.cfg.APIKeyFile)
-	env = appendIf(env, i.cfg.CABundleFile != "", EnvCABundleFile, i.cfg.CABundleFile)
-	env = appendIf(env, i.cfg.ServerName != "", EnvServerName, i.cfg.ServerName)
+	env = appendIf(env, r.heartbeatSeconds > 0, acquire.EnvHeartbeatSecs, strconv.Itoa(r.heartbeatSeconds))
+	env = appendIf(env, r.enforceGrace > 0, acquire.EnvEnforceGrace, strconv.Itoa(r.enforceGrace))
+	env = appendIf(env, r.releaseOnDown != "", acquire.EnvReleaseOnDown, r.releaseOnDown)
+	env = appendIf(env, r.holderIdentity != "", acquire.EnvHolderIdentity, r.holderIdentity)
+	env = appendIf(env, r.workloadKind != "", acquire.EnvWorkloadKind, r.workloadKind)
+	env = appendIf(env, r.workloadName != "", acquire.EnvWorkloadName, r.workloadName)
+	env = appendIf(env, i.cfg.ClusterID != "", acquire.EnvClusterID, i.cfg.ClusterID)
+	env = appendIf(env, i.cfg.APIServer != "", acquire.EnvAPIServer, i.cfg.APIServer)
+	env = appendIf(env, i.cfg.APIKeyFile != "", acquire.EnvAPIKeyFile, i.cfg.APIKeyFile)
+	env = appendIf(env, i.cfg.CABundleFile != "", acquire.EnvCABundleFile, i.cfg.CABundleFile)
+	env = appendIf(env, i.cfg.ServerName != "", acquire.EnvServerName, i.cfg.ServerName)
 	return env
 }
 

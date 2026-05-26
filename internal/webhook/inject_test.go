@@ -85,14 +85,14 @@ func TestInjectRuntimeSingletonProbe(t *testing.T) {
 	}
 
 	env := envMap(init)
-	if env[EnvLeaseName] != "checkout" || env[EnvMode] != string(acquire.ModeRuntimeSingleton) || env[EnvEnforce] != string(acquire.EnforceProbe) {
+	if env[acquire.EnvLeaseName] != "checkout" || env[acquire.EnvMode] != string(acquire.ModeRuntimeSingleton) || env[acquire.EnvEnforce] != string(acquire.EnforceProbe) {
 		t.Errorf("env defaults wrong: %v", env)
 	}
-	if env[EnvTTLSeconds] != "30" || env[EnvClusterID] != "east" || env[EnvAPIServer] == "" {
+	if env[acquire.EnvTTLSeconds] != "30" || env[acquire.EnvClusterID] != "east" || env[acquire.EnvAPIServer] == "" {
 		t.Errorf("env missing chart defaults: %v", env)
 	}
 	// Downward-API env carries pod identity via fieldRef, not a literal.
-	if findEnvSource(init, EnvPodName) == nil {
+	if findEnvSource(init, acquire.EnvPodName) == nil {
 		t.Error("expected POD_NAME fieldRef env")
 	}
 	if pod.Annotations[AnnInjected] != "true" {
@@ -229,14 +229,14 @@ func TestInjectHolderIdentityAndWorkloadEnv(t *testing.T) {
 		t.Fatalf("Default: %v", err)
 	}
 	env := envMap(findContainer(pod.Spec.InitContainers, InitContainerName))
-	if env[EnvHolderIdentity] != "explicit-holder" {
-		t.Errorf("holder env = %q, want explicit-holder", env[EnvHolderIdentity])
+	if env[acquire.EnvHolderIdentity] != "explicit-holder" {
+		t.Errorf("holder env = %q, want explicit-holder", env[acquire.EnvHolderIdentity])
 	}
-	if env[EnvReleaseOnDown] != "false" {
-		t.Errorf("release-on-shutdown env = %q, want false", env[EnvReleaseOnDown])
+	if env[acquire.EnvReleaseOnDown] != "false" {
+		t.Errorf("release-on-shutdown env = %q, want false", env[acquire.EnvReleaseOnDown])
 	}
-	if env[EnvWorkloadKind] != "ReplicaSet" || env[EnvWorkloadName] != "checkout-7f6c" {
-		t.Errorf("workload env = %q/%q, want ReplicaSet/checkout-7f6c", env[EnvWorkloadKind], env[EnvWorkloadName])
+	if env[acquire.EnvWorkloadKind] != "ReplicaSet" || env[acquire.EnvWorkloadName] != "checkout-7f6c" {
+		t.Errorf("workload env = %q/%q, want ReplicaSet/checkout-7f6c", env[acquire.EnvWorkloadKind], env[acquire.EnvWorkloadName])
 	}
 }
 
