@@ -33,4 +33,28 @@
   {{- /* informational; not a failure */ -}}
 {{- end -}}
 
+{{- /* Injection webhook (SKA-440). Only validated when enabled. */ -}}
+{{- if .Values.injection.enabled -}}
+  {{- if not .Values.injection.helper.repository -}}
+  {{- fail "injection.enabled=true requires injection.helper.repository — the berth-acquire image stamped into opted-in pods." -}}
+  {{- end -}}
+  {{- if not (hasPrefix "/" .Values.injection.helper.stateDir) -}}
+  {{- fail "injection.helper.stateDir must be an absolute path starting with '/' — it is injected as the shared-state Pod volumeMount.mountPath and used to build the probe marker paths." -}}
+  {{- end -}}
+  {{- $tls := .Values.injection.webhook.tls -}}
+  {{- $cm := $tls.certManager -}}
+  {{- if and $cm.enabled $tls.existingSecret -}}
+  {{- fail "injection.webhook.tls.certManager.enabled and injection.webhook.tls.existingSecret are mutually exclusive — pick one serving-cert source." -}}
+  {{- end -}}
+  {{- if and (not $cm.enabled) (not $tls.existingSecret) -}}
+  {{- fail "injection.enabled=true requires a webhook serving certificate. Set injection.webhook.tls.certManager.enabled=true (with an issuerRef) or injection.webhook.tls.existingSecret=<kubernetes.io/tls Secret>." -}}
+  {{- end -}}
+  {{- if and $cm.enabled (not $cm.issuerRef) -}}
+  {{- fail "injection.webhook.tls.certManager.enabled=true but injection.webhook.tls.certManager.issuerRef is empty — set issuerRef to a cert-manager Issuer or ClusterIssuer reference." -}}
+  {{- end -}}
+  {{- if and $tls.existingSecret (not $tls.caBundle) -}}
+  {{- fail "injection.webhook.tls.existingSecret is set but injection.webhook.tls.caBundle is empty. Supply the base64-encoded PEM CA chain so the API server can verify the webhook (cert-manager populates this automatically; existing Secrets cannot)." -}}
+  {{- end -}}
+{{- end -}}
+
 {{- end -}}

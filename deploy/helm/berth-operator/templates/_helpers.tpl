@@ -54,3 +54,30 @@ explicit berth.tokenFile.path.
 {{- .Values.berth.tokenFile.path -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Name of the injection webhook's Service and MutatingWebhookConfiguration.
+*/}}
+{{- define "berth-operator.webhookName" -}}
+{{- printf "%s-injection" (include "berth-operator.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Serving-cert Secret for the webhook listener. Either an externally-created
+Secret (webhook.tls.existingSecret) or the cert-manager-managed Secret
+named after the webhook.
+*/}}
+{{- define "berth-operator.webhookTLSSecretName" -}}
+{{- with .Values.injection.webhook.tls.existingSecret -}}
+{{- . -}}
+{{- else -}}
+{{- printf "%s-tls" (include "berth-operator.webhookName" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Directory the controller-runtime webhook server reads tls.crt/tls.key from.
+*/}}
+{{- define "berth-operator.webhookCertDir" -}}
+/tmp/k8s-webhook-server/serving-certs
+{{- end -}}

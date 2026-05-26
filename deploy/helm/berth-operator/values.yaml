@@ -85,6 +85,84 @@ sidecarBroker:
       cpu: 100m
       memory: 64Mi
 
+# -- berth-acquire pod-injection mutating webhook (SKA-274 / SKA-440).
+# Fallback path for gating workloads on a Berth lease WITHOUT modifying
+# their images: opted-in pods get an injected berth-acquire init container
+# (and optional sidecar). Off by default — the operator-as-holder pattern
+# (clusterID + BerthLease) remains the recommended approach; injection is
+# for legacy/vendor images and deliberate active/warm-standby failover.
+#
+# The injected helper inherits this chart's berth.* connection settings
+# (apiServer, tls.caBundleConfigMap, tls.serverName, clusterID,
+# tls.insecureSkipVerify), so they are NOT repeated here.
+injection:
+  enabled: false
+
+  # berth-acquire image stamped into opted-in pods. repository is REQUIRED
+  # when injection.enabled=true. tag defaults to this chart's appVersion.
+  helper:
+    repository: ghcr.io/skaphos/berth-acquire
+    tag: ""             # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+    # Path the injected helper reads its bearer token from, INSIDE the
+    # workload pod. The platform (not this chart) mounts the token there;
+    # leave empty when the Berth API server runs with --auth-mode=none.
+    apiKeyFile: ""
+    # Shared volume mount path the injected init container and sidecar use
+    # to exchange lease/health state. Matches berth-acquire's default.
+    stateDir: /berth
+
+  # Namespaces the webhook never mutates (the Berth control plane). Always
+  # includes the release namespace implicitly via the namespaceSelector
+  # below; list any additional control-plane namespaces here.
+  controlPlaneNamespaces:
+    - berth-system
+
+  # Defaults applied to opted-in pods that omit the matching annotation.
+  defaults:
+    mode: runtime-singleton   # runtime-singleton | startup-gate
+    enforce: probe            # probe | signal
+    ttlSeconds: 30
+
+  webhook:
+    # MutatingWebhookConfiguration behavior.
+    # failurePolicy=Ignore (default) keeps a webhook outage from blocking
+    # pod creation; because the objectSelector already scopes admission to
+    # opted-in pods, set Fail for strict singleton guarantees (opted-in
+    # pods will not start while the webhook is unavailable).
+    failurePolicy: Ignore
+    timeoutSeconds: 10
+    # ClusterIP Service port fronting the controller-runtime webhook server
+    # (container port 9443). Rarely needs changing.
+    servicePort: 443
+    # Limit admission calls to opted-in pods. Defense in depth: the webhook
+    # also skips pods lacking the opt-in label internally.
+    objectSelector:
+      matchLabels:
+        berth.skaphos.io/inject: acquire
+    # Restrict which namespaces the webhook applies to. Empty = all
+    # namespaces (minus controlPlaneNamespaces, which are skipped in-code).
+    namespaceSelector: {}
+
+    # Serving certificate for the webhook listener. Exactly one of
+    # `certManager.enabled` or `existingSecret` must be set when injection
+    # is enabled. Mirrors the berth-apiserver TLS convention.
+    tls:
+      # cert-manager-issued Certificate. The MutatingWebhookConfiguration's
+      # caBundle is populated automatically by cert-manager's ca-injector
+      # via the cert-manager.io/inject-ca-from annotation.
+      certManager:
+        enabled: false
+        issuerRef: {}      # e.g. { name: berth-ca, kind: ClusterIssuer }
+        duration: 8760h    # 1 year
+        renewBefore: 720h  # 30 days
+        dnsNames: []       # additional names beyond the Service DNS
+      # Pre-created kubernetes.io/tls Secret (tls.crt + tls.key). When used,
+      # you MUST also supply caBundle (the PEM CA chain, base64-encoded)
+      # so the API server can verify the webhook.
+      existingSecret: ""
+      caBundle: ""
+
 # -- Install the BerthLease CRD as part of this chart. Helm only installs
 # CRDs on first install (no upgrade), so toggle off and apply CRDs
 # out-of-band when you need schema changes managed separately.

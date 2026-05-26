@@ -78,6 +78,17 @@ jobs:
           kind load docker-image berth-operator:ci --name "$CLUSTER_NAME"
           kind load docker-image berth-oidc-broker:ci --name "$CLUSTER_NAME"
 
+      - name: Install cert-manager
+        # The berth-operator injection ci values issue the webhook serving
+        # cert via cert-manager (its primary TLS path). Install it and a
+        # self-signed ClusterIssuer the chart's Certificate references.
+        run: |
+          set -euo pipefail
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
+
       - name: Pre-create chart test fixtures
         run: |
           set -euo pipefail
@@ -100,6 +111,7 @@ jobs:
           kubectl create secret generic berth-api-key --from-literal=api-key=test
           kubectl create configmap berth-ca-bundle --from-file=ca.crt=/tmp/tls.crt
           kubectl create secret generic berth-oidc-client --from-literal=client-secret=test
+          printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: berth-ca\nspec:\n  selfSigned: {}\n' | kubectl apply -f -
 
       - name: Run ct install
         run: ct install --config .github/ct.yaml
