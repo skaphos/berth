@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,8 +15,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	berthv1alpha1 "github.com/skaphos/berth/api/v1alpha1"
+	"github.com/skaphos/berth/internal/acquire"
 	"github.com/skaphos/berth/internal/clientauth"
 	"github.com/skaphos/berth/internal/operator"
+	"github.com/skaphos/berth/internal/webhook"
 	"github.com/skaphos/berth/pkg/client"
 )
 
@@ -34,6 +37,14 @@ func run() int {
 		apiKeyFile         string
 		clusterID          string
 		caBundleFile       string
+		enableWebhook      bool
+		injHelperImage     string
+		injControlPlaneNS  string
+		injAPIKeyFile      string
+		injStateDir        string
+		injDefaultMode     string
+		injDefaultEnforce  string
+		injDefaultTTLSecs  int
 		serverName         string
 		insecureSkipVerify bool
 	)
@@ -61,6 +72,22 @@ func run() int {
 	flag.BoolVar(&insecureSkipVerify, "berth-insecure-skip-tls-verify", false,
 		"disable Berth API server TLS certificate verification. Development only — never "+
 			"set this in production.")
+	flag.BoolVar(&enableWebhook, "enable-injection-webhook", false,
+		"serve the berth-acquire pod-injection mutating webhook from this operator.")
+	flag.StringVar(&injHelperImage, "injection-helper-image", "",
+		"berth-acquire image injected into opted-in pods. Required when --enable-injection-webhook is set.")
+	flag.StringVar(&injControlPlaneNS, "injection-control-plane-namespaces", "berth-system",
+		"comma-separated namespaces the webhook never mutates (the Berth control plane).")
+	flag.StringVar(&injAPIKeyFile, "injection-helper-api-key-file", "",
+		"token file path passed to injected helpers (mounted into the workload pod by the platform).")
+	flag.StringVar(&injStateDir, "injection-state-dir", acquire.DefaultStateDir,
+		"shared volume mount path the injected init container and sidecar use.")
+	flag.StringVar(&injDefaultMode, "injection-default-mode", string(acquire.ModeRuntimeSingleton),
+		"default berth.skaphos.io/mode for pods that omit the annotation.")
+	flag.StringVar(&injDefaultEnforce, "injection-default-enforce", string(acquire.EnforceProbe),
+		"default berth.skaphos.io/enforce for pods that omit the annotation.")
+	flag.IntVar(&injDefaultTTLSecs, "injection-default-ttl-seconds", 30,
+		"default berth.skaphos.io/ttl-seconds for pods that omit the annotation.")
 	flag.Parse()
 
 	if apiServerURL == "" {
@@ -125,6 +152,31 @@ func run() int {
 		return 1
 	}
 
+	if enableWebhook {
+		if injHelperImage == "" {
+			ctrl.Log.Error(nil, "--injection-helper-image is required when --enable-injection-webhook is set")
+			return 1
+		}
+		injCfg := webhook.InjectorConfig{
+			HelperImage:            injHelperImage,
+			APIServer:              apiServerURL,
+			APIKeyFile:             injAPIKeyFile,
+			CABundleFile:           caBundleFile,
+			ServerName:             serverName,
+			ClusterID:              clusterID,
+			ControlPlaneNamespaces: splitCSV(injControlPlaneNS),
+			DefaultTTLSeconds:      injDefaultTTLSecs,
+			DefaultMode:            acquire.Mode(injDefaultMode),
+			DefaultEnforce:         acquire.Enforce(injDefaultEnforce),
+			StateDir:               injStateDir,
+		}
+		if err := webhook.SetupWithManager(mgr, injCfg); err != nil {
+			ctrl.Log.Error(err, "unable to set up injection webhook")
+			return 1
+		}
+		ctrl.Log.Info("berth-acquire injection webhook enabled", "helperImage", injHelperImage)
+	}
+
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		ctrl.Log.Error(err, "unable to set up health check")
 		return 1
@@ -141,4 +193,16 @@ func run() int {
 	}
 
 	return 0
+}
+
+// splitCSV splits a comma-separated flag value into trimmed, non-empty
+// entries.
+func splitCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
