@@ -71,7 +71,7 @@
             "repository": {"type": "string"},
             "tag":        {"type": "string"},
             "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]},
-            "apiKeyFile": {"type": "string"},
+            "apiKeyFile": {"type": "string", "pattern": "^(/.*)?$"},
             "apiKeySecret": {
               "type": "object",
               "properties": {
@@ -79,7 +79,7 @@
                 "key":  {"type": "string"}
               }
             },
-            "caBundleFile": {"type": "string"},
+            "caBundleFile": {"type": "string", "pattern": "^(/.*)?$"},
             "caBundleConfigMap": {
               "type": "object",
               "properties": {

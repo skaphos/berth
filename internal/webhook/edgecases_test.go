@@ -275,6 +275,31 @@ func TestInjectNoAuthMountsWhenUnset(t *testing.T) {
 	}
 }
 
+// TestInjectRejectsReservedAuthVolumeName ensures a pre-existing volume using
+// a reserved auth name is rejected rather than silently reused — which would
+// point the helper at the wrong token/CA.
+func TestInjectRejectsReservedAuthVolumeName(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cfg    InjectorConfig
+		volume string
+	}{
+		{"token", InjectorConfig{HelperImage: "x", DefaultTTLSeconds: 30, APIKeyFile: "/var/run/berth/token", APIKeySecretName: "berth-token"}, AuthTokenVolume},
+		{"ca", InjectorConfig{HelperImage: "x", DefaultTTLSeconds: 30, CABundleFile: "/etc/berth/ca/ca.crt", CABundleConfigMapName: "berth-ca"}, AuthCABundleVolume},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+			pod.Spec.Volumes = []corev1.Volume{{
+				Name:         tc.volume,
+				VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+			}}
+			if err := NewPodInjector(tc.cfg).Default(context.Background(), pod); err == nil {
+				t.Fatalf("expected rejection for pre-existing reserved volume %q", tc.volume)
+			}
+		})
+	}
+}
+
 func findVolume(pod *corev1.Pod, name string) *corev1.Volume {
 	for i := range pod.Spec.Volumes {
 		if pod.Spec.Volumes[i].Name == name {
@@ -321,6 +346,15 @@ func TestInjectorConfigValidate(t *testing.T) {
 			c.APIKeySecretName = "berth-token"
 			c.CABundleFile = "/etc/berth/auth/ca.crt"
 			c.CABundleConfigMapName = "berth-ca"
+		}, true},
+		{"relative api-key file", func(c *InjectorConfig) {
+			c.APIKeyFile = "var/run/berth/token"
+			c.APIKeySecretName = "berth-token"
+		}, true},
+		{"trailing-slash state-dir still collides", func(c *InjectorConfig) {
+			c.StateDir = "/berth/"
+			c.APIKeyFile = "/berth/token"
+			c.APIKeySecretName = "berth-token"
 		}, true},
 		{"valid auth pair", func(c *InjectorConfig) {
 			c.APIKeyFile = "/var/run/berth/token"

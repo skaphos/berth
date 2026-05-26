@@ -92,13 +92,24 @@ func (c *InjectorConfig) Validate() error {
 	if (c.CABundleFile == "") != (c.CABundleConfigMapName == "") {
 		return fmt.Errorf("injection webhook: ca-bundle file and configmap must be set together (file=%q configmap=%q)", c.CABundleFile, c.CABundleConfigMapName)
 	}
-	// Auth volumes mount at the file's parent directory; a collision with the
-	// state dir (or with each other) would produce an invalid PodSpec.
-	if c.APIKeyFile != "" && path.Dir(c.APIKeyFile) == c.StateDir {
-		return fmt.Errorf("injection webhook: api-key file directory %q must differ from state-dir %q", path.Dir(c.APIKeyFile), c.StateDir)
+	// Each auth file becomes a VolumeMount.mountPath (its parent dir), which
+	// Kubernetes requires to be absolute.
+	if c.APIKeyFile != "" && !path.IsAbs(c.APIKeyFile) {
+		return fmt.Errorf("injection webhook: api-key file must be an absolute path, got %q", c.APIKeyFile)
 	}
-	if c.CABundleFile != "" && path.Dir(c.CABundleFile) == c.StateDir {
-		return fmt.Errorf("injection webhook: ca-bundle file directory %q must differ from state-dir %q", path.Dir(c.CABundleFile), c.StateDir)
+	if c.CABundleFile != "" && !path.IsAbs(c.CABundleFile) {
+		return fmt.Errorf("injection webhook: ca-bundle file must be an absolute path, got %q", c.CABundleFile)
+	}
+	// Auth volumes mount at the file's parent directory; a collision with the
+	// state dir (or with each other) would produce an invalid PodSpec. Compare
+	// normalized paths (path.Dir already cleans its result) so a trailing slash
+	// cannot slip a collision past the guard.
+	stateDir := path.Clean(c.StateDir)
+	if c.APIKeyFile != "" && path.Dir(c.APIKeyFile) == stateDir {
+		return fmt.Errorf("injection webhook: api-key file directory %q must differ from state-dir %q", path.Dir(c.APIKeyFile), stateDir)
+	}
+	if c.CABundleFile != "" && path.Dir(c.CABundleFile) == stateDir {
+		return fmt.Errorf("injection webhook: ca-bundle file directory %q must differ from state-dir %q", path.Dir(c.CABundleFile), stateDir)
 	}
 	if c.APIKeyFile != "" && c.CABundleFile != "" && path.Dir(c.APIKeyFile) == path.Dir(c.CABundleFile) {
 		return fmt.Errorf("injection webhook: api-key and ca-bundle files must be in different directories (both %q)", path.Dir(c.APIKeyFile))
@@ -191,6 +202,17 @@ func (i *PodInjector) preflight(pod *corev1.Pod, r resolved) error {
 		if v.Name == VolumeName && v.EmptyDir == nil {
 			return fmt.Errorf("cannot inject: pod already has a volume named %q that is not an emptyDir", VolumeName)
 		}
+	}
+
+	// The auth volume names are reserved. A pre-existing volume with one of
+	// these names would be silently reused by mutate (hasVolume matches by
+	// name), pointing the helper at the wrong token/CA, so reject it up front
+	// when we would inject that source.
+	if i.cfg.APIKeySecretName != "" && hasVolume(pod, AuthTokenVolume) {
+		return fmt.Errorf("cannot inject: pod already has a volume named %q (reserved for the injected auth token)", AuthTokenVolume)
+	}
+	if i.cfg.CABundleConfigMapName != "" && hasVolume(pod, AuthCABundleVolume) {
+		return fmt.Errorf("cannot inject: pod already has a volume named %q (reserved for the injected CA bundle)", AuthCABundleVolume)
 	}
 
 	if r.mode == acquire.ModeRuntimeSingleton && r.enforce == acquire.EnforceProbe {

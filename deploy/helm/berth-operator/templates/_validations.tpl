@@ -44,6 +44,12 @@
   {{- /* Auth/CA file paths need a mountable source, or the helper points at a
          path that doesn't exist (SKA-444). Require each file with its source. */ -}}
   {{- $h := .Values.injection.helper -}}
+  {{- if and $h.apiKeyFile (not (hasPrefix "/" $h.apiKeyFile)) -}}
+  {{- fail "injection.helper.apiKeyFile must be an absolute path starting with '/' — its parent directory becomes the injected helper's volumeMount.mountPath." -}}
+  {{- end -}}
+  {{- if and $h.caBundleFile (not (hasPrefix "/" $h.caBundleFile)) -}}
+  {{- fail "injection.helper.caBundleFile must be an absolute path starting with '/' — its parent directory becomes the injected helper's volumeMount.mountPath." -}}
+  {{- end -}}
   {{- if and $h.apiKeyFile (not $h.apiKeySecret.name) -}}
   {{- fail "injection.helper.apiKeyFile is set but injection.helper.apiKeySecret.name is empty — the webhook needs a Secret to mount the token at that path." -}}
   {{- end -}}
