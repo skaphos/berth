@@ -141,20 +141,22 @@ tasks:
   # --- Build ---
 
   build:
-    desc: Build all four binaries to ./bin
+    desc: Build all five binaries to ./bin
     cmds:
       - mkdir -p bin
       - go build -o bin/apiserver ./cmd/apiserver
       - go build -o bin/operator ./cmd/operator
       - go build -o bin/berth ./cmd/berth
       - go build -o bin/berth-oidc-broker ./cmd/berth-oidc-broker
+      - go build -o bin/berth-acquire ./cmd/berth-acquire
 
   docker-build:
-    desc: Build all three container images locally
+    desc: Build all four container images locally
     cmds:
       - docker build -f Dockerfile.apiserver -t berth-apiserver:local .
       - docker build -f Dockerfile.operator -t berth-operator:local .
       - docker build -f Dockerfile.broker -t berth-oidc-broker:local .
+      - docker build -f Dockerfile.acquire -t berth-acquire:local .
 
   # --- e2e (cross-cluster singleton harness) ---
 
