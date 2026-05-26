@@ -41,6 +41,29 @@ type InjectorConfig struct {
 	StateDir string
 }
 
+// Validate checks the operator-supplied defaults so a misconfigured webhook
+// fails fast at startup rather than admitting traffic and then rejecting
+// every opted-in pod that relies on a default. Call it after withDefaults.
+func (c *InjectorConfig) Validate() error {
+	if c.HelperImage == "" {
+		return fmt.Errorf("injection webhook: helper image is required")
+	}
+	switch c.DefaultMode {
+	case acquire.ModeStartupGate, acquire.ModeRuntimeSingleton:
+	default:
+		return fmt.Errorf("injection webhook: invalid default mode %q", c.DefaultMode)
+	}
+	switch c.DefaultEnforce {
+	case acquire.EnforceProbe, acquire.EnforceSignal:
+	default:
+		return fmt.Errorf("injection webhook: invalid default enforce %q", c.DefaultEnforce)
+	}
+	if c.DefaultTTLSeconds <= 0 {
+		return fmt.Errorf("injection webhook: default ttl-seconds must be positive, got %d", c.DefaultTTLSeconds)
+	}
+	return nil
+}
+
 func (c *InjectorConfig) withDefaults() *InjectorConfig {
 	if c.ImagePullPolicy == "" {
 		c.ImagePullPolicy = corev1.PullIfNotPresent
@@ -92,7 +115,43 @@ func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	if err != nil {
 		return err
 	}
+	if err := i.preflight(pod, r); err != nil {
+		return err
+	}
 	i.mutate(pod, r)
+	return nil
+}
+
+// preflight rejects pods the injector cannot safely mutate, so the failure
+// surfaces as a clear admission error rather than a silently-broken pod or a
+// generic API-server validation rejection. It guards against: a collision
+// with an injected container name; a pre-existing berth-state volume that is
+// not the emptyDir the helper relies on; and (in probe mode) a main container
+// that already defines a livenessProbe we would otherwise clobber.
+func (i *PodInjector) preflight(pod *corev1.Pod, r resolved) error {
+	reserved := []string{InitContainerName}
+	if r.mode == acquire.ModeRuntimeSingleton {
+		reserved = append(reserved, SidecarContainerName)
+	}
+	for _, name := range reserved {
+		if hasContainerNamed(pod.Spec.InitContainers, name) || hasContainerNamed(pod.Spec.Containers, name) {
+			return fmt.Errorf("cannot inject: pod already has a container named %q", name)
+		}
+	}
+
+	for _, v := range pod.Spec.Volumes {
+		if v.Name == VolumeName && v.EmptyDir == nil {
+			return fmt.Errorf("cannot inject: pod already has a volume named %q that is not an emptyDir", VolumeName)
+		}
+	}
+
+	if r.mode == acquire.ModeRuntimeSingleton && r.enforce == acquire.EnforceProbe {
+		for idx := range pod.Spec.Containers {
+			if pod.Spec.Containers[idx].LivenessProbe != nil {
+				return fmt.Errorf("cannot inject probe enforcement: container %q already defines a livenessProbe; set %s=%s to enforce by signal instead", pod.Spec.Containers[idx].Name, AnnEnforce, acquire.EnforceSignal)
+			}
+		}
+	}
 	return nil
 }
 
@@ -208,21 +267,21 @@ func (i *PodInjector) mutate(pod *corev1.Pod, r resolved) {
 	stateMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir}
 
 	// Blocking init container: the "hold".
-	pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
+	injected := []corev1.Container{{
 		Name:            InitContainerName,
 		Image:           i.cfg.HelperImage,
 		ImagePullPolicy: i.cfg.ImagePullPolicy,
 		Args:            []string{"acquire"},
 		Env:             env,
 		VolumeMounts:    []corev1.VolumeMount{stateMount},
-	})
+	}}
 
 	if r.mode == acquire.ModeRuntimeSingleton {
 		always := corev1.ContainerRestartPolicyAlways
 		// Native sidecar: an init container with restartPolicy: Always so
 		// it runs alongside the main containers and does not block Job
 		// completion.
-		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
+		injected = append(injected, corev1.Container{
 			Name:            SidecarContainerName,
 			Image:           i.cfg.HelperImage,
 			ImagePullPolicy: i.cfg.ImagePullPolicy,
@@ -231,6 +290,15 @@ func (i *PodInjector) mutate(pod *corev1.Pod, r resolved) {
 			RestartPolicy:   &always,
 			VolumeMounts:    []corev1.VolumeMount{stateMount},
 		})
+	}
+
+	// Prepend so the hold (and, for runtime-singleton, the renew sidecar)
+	// run ahead of any workload init containers: gating must cover the
+	// entire pod startup, and renewal must be live during long init
+	// sequences so the lease TTL cannot lapse before the app starts.
+	pod.Spec.InitContainers = append(injected, pod.Spec.InitContainers...)
+
+	if r.mode == acquire.ModeRuntimeSingleton {
 		i.applyEnforcement(pod, r)
 	}
 
@@ -260,7 +328,7 @@ func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
 				PeriodSeconds:    2,
 				FailureThreshold: 1,
 			}
-			if !containerHasMount(c, VolumeName) {
+			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
 				c.VolumeMounts = append(c.VolumeMounts, roMount)
 			}
 		}
@@ -344,9 +412,23 @@ func hasVolume(pod *corev1.Pod, name string) bool {
 	return false
 }
 
-func containerHasMount(c *corev1.Container, name string) bool {
+func hasContainerNamed(cs []corev1.Container, name string) bool {
+	for i := range cs {
+		if cs[i].Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// containerHasMountAt reports whether c already mounts volume name at path.
+// Matching the mount path (not just the volume name) matters because the
+// probe command reads marker files under StateDir: a berth-state mount at a
+// different path would leave the probe without the files it needs, so we must
+// still add the StateDir mount in that case.
+func containerHasMountAt(c *corev1.Container, name, path string) bool {
 	for _, m := range c.VolumeMounts {
-		if m.Name == name {
+		if m.Name == name && m.MountPath == path {
 			return true
 		}
 	}

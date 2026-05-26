@@ -80,7 +80,7 @@ func TestInjectRuntimeSingletonProbe(t *testing.T) {
 	if len(got) != 3 || got[0] != wantCmd[0] || got[1] != wantCmd[1] || got[2] != wantCmd[2] {
 		t.Errorf("probe command = %v, want %v", got, wantCmd)
 	}
-	if !containerHasMount(app, VolumeName) {
+	if !containerHasMountAt(app, VolumeName, acquire.DefaultStateDir) {
 		t.Error("main container should mount the state volume for the probe")
 	}
 

@@ -11,7 +11,11 @@ import (
 // (SKA-440) points the API server there and scopes it with object and
 // namespace selectors.
 func SetupWithManager(mgr ctrl.Manager, cfg InjectorConfig) error {
+	injector := NewPodInjector(cfg)
+	if err := injector.cfg.Validate(); err != nil {
+		return err
+	}
 	return ctrl.NewWebhookManagedBy(mgr, &corev1.Pod{}).
-		WithDefaulter(NewPodInjector(cfg)).
+		WithDefaulter(injector).
 		Complete()
 }

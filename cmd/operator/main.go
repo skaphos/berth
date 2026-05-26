@@ -153,10 +153,6 @@ func run() int {
 	}
 
 	if enableWebhook {
-		if injHelperImage == "" {
-			ctrl.Log.Error(nil, "--injection-helper-image is required when --enable-injection-webhook is set")
-			return 1
-		}
 		injCfg := webhook.InjectorConfig{
 			HelperImage:            injHelperImage,
 			APIServer:              apiServerURL,
