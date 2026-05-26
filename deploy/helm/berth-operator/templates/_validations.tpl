@@ -41,6 +41,21 @@
   {{- if not (hasPrefix "/" .Values.injection.helper.stateDir) -}}
   {{- fail "injection.helper.stateDir must be an absolute path starting with '/' — it is injected as the shared-state Pod volumeMount.mountPath and used to build the probe marker paths." -}}
   {{- end -}}
+  {{- /* Auth/CA file paths need a mountable source, or the helper points at a
+         path that doesn't exist (SKA-444). Require each file with its source. */ -}}
+  {{- $h := .Values.injection.helper -}}
+  {{- if and $h.apiKeyFile (not $h.apiKeySecret.name) -}}
+  {{- fail "injection.helper.apiKeyFile is set but injection.helper.apiKeySecret.name is empty — the webhook needs a Secret to mount the token at that path." -}}
+  {{- end -}}
+  {{- if and $h.apiKeySecret.name (not $h.apiKeyFile) -}}
+  {{- fail "injection.helper.apiKeySecret.name is set but injection.helper.apiKeyFile is empty — set the in-pod path the token mounts to." -}}
+  {{- end -}}
+  {{- if and $h.caBundleFile (not $h.caBundleConfigMap.name) -}}
+  {{- fail "injection.helper.caBundleFile is set but injection.helper.caBundleConfigMap.name is empty — the webhook needs a ConfigMap to mount the CA bundle at that path." -}}
+  {{- end -}}
+  {{- if and $h.caBundleConfigMap.name (not $h.caBundleFile) -}}
+  {{- fail "injection.helper.caBundleConfigMap.name is set but injection.helper.caBundleFile is empty — set the in-pod path the CA bundle mounts to." -}}
+  {{- end -}}
   {{- $tls := .Values.injection.webhook.tls -}}
   {{- $cm := $tls.certManager -}}
   {{- if and $cm.enabled $tls.existingSecret -}}

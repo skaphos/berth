@@ -72,6 +72,21 @@
             "tag":        {"type": "string"},
             "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]},
             "apiKeyFile": {"type": "string"},
+            "apiKeySecret": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "key":  {"type": "string"}
+              }
+            },
+            "caBundleFile": {"type": "string"},
+            "caBundleConfigMap": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "key":  {"type": "string"}
+              }
+            },
             "stateDir":   {"type": "string", "minLength": 1, "pattern": "^/"}
           }
         },

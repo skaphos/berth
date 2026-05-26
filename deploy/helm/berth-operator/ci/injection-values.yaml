@@ -18,6 +18,9 @@ injection:
     repository: ghcr.io/skaphos/berth-acquire
     tag: ci
     apiKeyFile: /var/run/berth/token
+    apiKeySecret:
+      name: berth-api-key
+      key: api-key
   defaults:
     mode: runtime-singleton
     enforce: probe

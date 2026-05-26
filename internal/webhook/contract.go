@@ -35,6 +35,12 @@ const (
 	VolumeName           = "berth-state"
 	InitContainerName    = "berth-acquire"
 	SidecarContainerName = "berth-sidecar"
+
+	// AuthTokenVolume / AuthCABundleVolume mount the bearer token and CA
+	// bundle into the injected helper containers when those sources are
+	// configured (SKA-444).
+	AuthTokenVolume    = "berth-auth-token"
+	AuthCABundleVolume = "berth-auth-ca"
 )
 
 // The environment-variable names the injected helper reads are owned by
