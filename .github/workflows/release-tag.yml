@@ -30,6 +30,6 @@ jobs:
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
-      - uses: skaphos/actions/release-tag@v1.0.0
+      - uses: skaphos/actions/release-tag@v1.1.0
         with:
           token: ${{ steps.app-token.outputs.token }}
