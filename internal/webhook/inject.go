@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"path"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -61,6 +62,15 @@ func (c *InjectorConfig) Validate() error {
 	}
 	if c.DefaultTTLSeconds <= 0 {
 		return fmt.Errorf("injection webhook: default ttl-seconds must be positive, got %d", c.DefaultTTLSeconds)
+	}
+	// StateDir becomes a Pod volumeMount.mountPath and the base for the probe
+	// marker paths (<StateDir>/healthy, <StateDir>/check). Kubernetes requires
+	// an absolute mountPath, so a relative or empty value would produce invalid
+	// PodSpecs (or broken enforcement) for every opted-in pod. Fail fast here
+	// instead. Defaulting runs before Validate, so this only trips on an
+	// explicit bad --injection-state-dir.
+	if !path.IsAbs(c.StateDir) {
+		return fmt.Errorf("injection webhook: state-dir must be an absolute path, got %q", c.StateDir)
 	}
 	return nil
 }

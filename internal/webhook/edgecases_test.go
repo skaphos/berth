@@ -205,6 +205,7 @@ func TestInjectorConfigValidate(t *testing.T) {
 			DefaultMode:       acquire.ModeRuntimeSingleton,
 			DefaultEnforce:    acquire.EnforceProbe,
 			DefaultTTLSeconds: 30,
+			StateDir:          acquire.DefaultStateDir,
 		}
 	}
 	for _, tc := range []struct {
@@ -217,6 +218,8 @@ func TestInjectorConfigValidate(t *testing.T) {
 		{"invalid mode", func(c *InjectorConfig) { c.DefaultMode = "bogus" }, true},
 		{"invalid enforce", func(c *InjectorConfig) { c.DefaultEnforce = "bogus" }, true},
 		{"non-positive ttl", func(c *InjectorConfig) { c.DefaultTTLSeconds = 0 }, true},
+		{"relative state-dir", func(c *InjectorConfig) { c.StateDir = "berth" }, true},
+		{"empty state-dir", func(c *InjectorConfig) { c.StateDir = "" }, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := base()
