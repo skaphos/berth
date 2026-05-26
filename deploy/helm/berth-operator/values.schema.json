@@ -72,7 +72,7 @@
             "tag":        {"type": "string"},
             "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]},
             "apiKeyFile": {"type": "string"},
-            "stateDir":   {"type": "string", "minLength": 1}
+            "stateDir":   {"type": "string", "minLength": 1, "pattern": "^/"}
           }
         },
         "controlPlaneNamespaces": {"type": "array", "items": {"type": "string"}},

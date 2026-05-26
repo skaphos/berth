@@ -16,7 +16,7 @@ spec:
       labels:
         {{- include "berth-operator.labels" . | nindent 8 }}
       annotations:
-        checksum/config: {{ printf "%s|%s|%s|%s|%t|%t|%s" .Values.clusterID .Values.berth.apiServer .Values.berth.apiKey.secretName .Values.berth.tls.caBundleConfigMap .Values.sidecarBroker.enabled .Values.injection.enabled (.Values.injection | toYaml) | sha256sum }}
+        checksum/config: {{ printf "%s|%s|%s|%s|%t|%s" .Values.clusterID .Values.berth.apiServer .Values.berth.apiKey.secretName .Values.berth.tls.caBundleConfigMap .Values.sidecarBroker.enabled (ternary (.Values.injection | toYaml) "injection-disabled" .Values.injection.enabled) | sha256sum }}
     spec:
       serviceAccountName: {{ include "berth-operator.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}

@@ -38,6 +38,9 @@
   {{- if not .Values.injection.helper.repository -}}
   {{- fail "injection.enabled=true requires injection.helper.repository — the berth-acquire image stamped into opted-in pods." -}}
   {{- end -}}
+  {{- if not (hasPrefix "/" .Values.injection.helper.stateDir) -}}
+  {{- fail "injection.helper.stateDir must be an absolute path starting with '/' — it is injected as the shared-state Pod volumeMount.mountPath and used to build the probe marker paths." -}}
+  {{- end -}}
   {{- $tls := .Values.injection.webhook.tls -}}
   {{- $cm := $tls.certManager -}}
   {{- if and $cm.enabled $tls.existingSecret -}}
