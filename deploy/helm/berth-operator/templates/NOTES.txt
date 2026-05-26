@@ -30,6 +30,23 @@ TLS:
   API server's certificate is not being verified. Development only.
 {{- end }}
 
+Injection webhook:
+{{- if .Values.injection.enabled }}
+  ENABLED. Pods labeled `berth.skaphos.io/inject: acquire` get an injected
+  berth-acquire init container ({{ .Values.injection.helper.repository }}:{{ .Values.injection.helper.tag | default .Chart.AppVersion }}).
+  failurePolicy: {{ .Values.injection.webhook.failurePolicy }} | default mode: {{ .Values.injection.defaults.mode }} | enforce: {{ .Values.injection.defaults.enforce }}
+  Serving cert: {{ if .Values.injection.webhook.tls.certManager.enabled }}cert-manager Certificate {{ include "berth-operator.webhookName" . }}{{ else }}existing Secret {{ .Values.injection.webhook.tls.existingSecret }}{{ end }}
+  Skipped namespaces: {{ prepend .Values.injection.controlPlaneNamespaces .Release.Namespace | uniq | join ", " }}
+  {{- if eq .Values.injection.webhook.failurePolicy "Ignore" }}
+  NOTE: failurePolicy=Ignore means opted-in pods can start UN-gated during a
+  webhook outage. Set injection.webhook.failurePolicy=Fail for strict
+  singleton guarantees.
+  {{- end }}
+{{- else }}
+  Disabled. The operator-as-holder pattern (clusterID + BerthLease) is the
+  recommended path; enable injection only for images you cannot modify.
+{{- end }}
+
 CRDs:
 {{- if .Values.installCRDs }}
   Installed by this chart on first install. Helm does NOT manage CRD

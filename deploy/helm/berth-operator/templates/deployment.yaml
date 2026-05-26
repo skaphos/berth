@@ -16,7 +16,7 @@ spec:
       labels:
         {{- include "berth-operator.labels" . | nindent 8 }}
       annotations:
-        checksum/config: {{ printf "%s|%s|%s|%s|%t" .Values.clusterID .Values.berth.apiServer .Values.berth.apiKey.secretName .Values.berth.tls.caBundleConfigMap .Values.sidecarBroker.enabled | sha256sum }}
+        checksum/config: {{ printf "%s|%s|%s|%s|%t|%t|%s" .Values.clusterID .Values.berth.apiServer .Values.berth.apiKey.secretName .Values.berth.tls.caBundleConfigMap .Values.sidecarBroker.enabled .Values.injection.enabled (.Values.injection | toYaml) | sha256sum }}
     spec:
       serviceAccountName: {{ include "berth-operator.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
@@ -48,6 +48,18 @@ spec:
             {{- if .Values.berth.tls.insecureSkipVerify }}
             - --berth-insecure-skip-tls-verify
             {{- end }}
+            {{- if .Values.injection.enabled }}
+            - --enable-injection-webhook
+            - --injection-helper-image={{ .Values.injection.helper.repository }}:{{ .Values.injection.helper.tag | default .Chart.AppVersion }}
+            - --injection-control-plane-namespaces={{ prepend .Values.injection.controlPlaneNamespaces .Release.Namespace | uniq | join "," }}
+            - --injection-state-dir={{ .Values.injection.helper.stateDir }}
+            - --injection-default-mode={{ .Values.injection.defaults.mode }}
+            - --injection-default-enforce={{ .Values.injection.defaults.enforce }}
+            - --injection-default-ttl-seconds={{ .Values.injection.defaults.ttlSeconds | int }}
+            {{- with .Values.injection.helper.apiKeyFile }}
+            - --injection-helper-api-key-file={{ . }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -58,6 +70,11 @@ spec:
             - name: health
               containerPort: {{ trimPrefix ":" .Values.healthProbe.bindAddress | int }}
               protocol: TCP
+            {{- if .Values.injection.enabled }}
+            - name: webhook
+              containerPort: 9443
+              protocol: TCP
+            {{- end }}
           env:
             {{- if .Values.berth.apiKey.secretName }}
             - name: BERTH_API_KEY
@@ -91,6 +108,11 @@ spec:
             - name: berth-token
               mountPath: {{ include "berth-operator.tokenFilePath" . | dir }}
               readOnly: {{ not .Values.sidecarBroker.enabled }}
+            {{- end }}
+            {{- if .Values.injection.enabled }}
+            - name: webhook-certs
+              mountPath: {{ include "berth-operator.webhookCertDir" . }}
+              readOnly: true
             {{- end }}
             - name: tmp
               mountPath: /tmp
@@ -134,6 +156,11 @@ spec:
         - name: berth-token
           emptyDir:
             medium: Memory
+        {{- end }}
+        {{- if .Values.injection.enabled }}
+        - name: webhook-certs
+          secret:
+            secretName: {{ include "berth-operator.webhookTLSSecretName" . }}
         {{- end }}
         {{- if .Values.sidecarBroker.enabled }}
         - name: oidc-client-secret

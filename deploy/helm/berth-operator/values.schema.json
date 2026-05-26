@@ -61,6 +61,59 @@
       }
     },
 
+    "injection": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "helper": {
+          "type": "object",
+          "properties": {
+            "repository": {"type": "string"},
+            "tag":        {"type": "string"},
+            "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]},
+            "apiKeyFile": {"type": "string"},
+            "stateDir":   {"type": "string", "minLength": 1}
+          }
+        },
+        "controlPlaneNamespaces": {"type": "array", "items": {"type": "string"}},
+        "defaults": {
+          "type": "object",
+          "properties": {
+            "mode":       {"type": "string", "enum": ["runtime-singleton", "startup-gate"]},
+            "enforce":    {"type": "string", "enum": ["probe", "signal"]},
+            "ttlSeconds": {"type": "integer", "minimum": 1}
+          }
+        },
+        "webhook": {
+          "type": "object",
+          "properties": {
+            "failurePolicy":  {"type": "string", "enum": ["Ignore", "Fail"]},
+            "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 30},
+            "servicePort":    {"type": "integer", "minimum": 1, "maximum": 65535},
+            "objectSelector": {"type": "object"},
+            "namespaceSelector": {"type": "object"},
+            "tls": {
+              "type": "object",
+              "properties": {
+                "certManager": {
+                  "type": "object",
+                  "properties": {
+                    "enabled":     {"type": "boolean"},
+                    "issuerRef":   {"type": "object"},
+                    "duration":    {"type": "string"},
+                    "renewBefore": {"type": "string"},
+                    "dnsNames":    {"type": "array", "items": {"type": "string"}}
+                  }
+                },
+                "existingSecret": {"type": "string"},
+                "caBundle":       {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+
     "installCRDs": {"type": "boolean"},
 
     "rbac": {

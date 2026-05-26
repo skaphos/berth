@@ -1,0 +1,19 @@
+{{- if .Values.injection.enabled -}}
+{{- include "berth-operator.validate" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "berth-operator.webhookName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "berth-operator.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: https
+      port: {{ .Values.injection.webhook.servicePort | int }}
+      targetPort: webhook
+      protocol: TCP
+  selector:
+    {{- include "berth-operator.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,32 @@
+# Exercises the berth-acquire injection webhook path (SKA-440): webhook
+# Service, cert-manager Certificate, and MutatingWebhookConfiguration.
+image:
+  repository: berth-operator
+  tag: ci
+  pullPolicy: IfNotPresent
+clusterID: cluster-east
+berth:
+  apiServer: https://berth.example.com:8443
+  apiKey:
+    secretName: berth-api-key
+    secretKey: api-key
+  tls:
+    caBundleConfigMap: berth-ca-bundle
+injection:
+  enabled: true
+  helper:
+    repository: ghcr.io/skaphos/berth-acquire
+    tag: ci
+    apiKeyFile: /var/run/berth/token
+  defaults:
+    mode: runtime-singleton
+    enforce: probe
+    ttlSeconds: 30
+  webhook:
+    failurePolicy: Fail
+    tls:
+      certManager:
+        enabled: true
+        issuerRef:
+          name: berth-ca
+          kind: ClusterIssuer

@@ -1,0 +1,24 @@
+{{- if and .Values.injection.enabled .Values.injection.webhook.tls.certManager.enabled -}}
+{{- $cm := .Values.injection.webhook.tls.certManager -}}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "berth-operator.webhookName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "berth-operator.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "berth-operator.webhookTLSSecretName" . }}
+  duration: {{ $cm.duration | default "8760h" }}
+  renewBefore: {{ $cm.renewBefore | default "720h" }}
+  commonName: {{ include "berth-operator.webhookName" . }}
+  dnsNames:
+    - {{ include "berth-operator.webhookName" . }}
+    - {{ include "berth-operator.webhookName" . }}.{{ .Release.Namespace }}.svc
+    - {{ include "berth-operator.webhookName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+    {{- with $cm.dnsNames }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  issuerRef:
+    {{- toYaml $cm.issuerRef | nindent 4 }}
+{{- end }}
