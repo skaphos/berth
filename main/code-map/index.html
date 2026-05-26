@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://skaphos.github.io/berth/main/code-map/">
       
       
-        <link rel="prev" href="../architecture/">
+        <link rel="prev" href="../workload-gating-injection/">
       
       
         <link rel="next" href="../reference/api/">
@@ -267,6 +267,28 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Workload Gating (Injection)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -365,6 +387,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#workload-gating-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload-Gating Injection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#deployment" class="md-nav__link">
     <span class="md-ellipsis">
       Deployment
@@ -410,10 +441,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -426,8 +457,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Reference
           </label>
@@ -552,6 +583,15 @@
   <a href="#operator" class="md-nav__link">
     <span class="md-ellipsis">
       Operator
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workload-gating-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload-Gating Injection
     </span>
   </a>
   
@@ -717,12 +757,12 @@ and points to the files most likely to matter when changing behavior.</p>
 <td>OIDC discovery, JWT validation, and required-claim checks.</td>
 </tr>
 <tr>
-<td><code>internal/operator/tokensource.go</code></td>
-<td>Operator token-file reads with a short cache for sidecar rotation.</td>
+<td><code>internal/clientauth/tokensource.go</code></td>
+<td>Bearer-token file reads with a short cache for sidecar rotation. Shared by the operator and the <code>berth-acquire</code> helper.</td>
 </tr>
 <tr>
-<td><code>internal/operator/tlsconfig.go</code></td>
-<td>Operator API-server TLS client configuration.</td>
+<td><code>internal/clientauth/tlsconfig.go</code></td>
+<td>API-server TLS client configuration (CA bundle, server name, insecure-skip). Shared by the operator and helper.</td>
 </tr>
 </tbody>
 </table>
@@ -750,6 +790,59 @@ and points to the files most likely to matter when changing behavior.</p>
 <tr>
 <td><code>internal/operator/leaseclient.go</code></td>
 <td>Interface between reconciler and central lease client.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="workload-gating-injection">Workload-Gating Injection</h2>
+<p>The fallback path that gates unmodifiable workloads on a lease by injecting the
+<code>berth-acquire</code> helper. See <a href="../workload-gating-injection/">Workload gating via injection</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Owns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cmd/berth-acquire/main.go</code></td>
+<td><code>berth-acquire</code> CLI (<code>acquire</code> / <code>renew</code> / <code>check</code> subcommands); thin wrapper over <code>internal/acquire</code>.</td>
+</tr>
+<tr>
+<td><code>internal/acquire/config.go</code></td>
+<td>Helper config, mode/enforce types, holder-identity defaulting, validation.</td>
+</tr>
+<tr>
+<td><code>internal/acquire/env.go</code></td>
+<td><code>BERTH_*</code>/<code>POD_*</code> env contract (<code>ConfigFromEnv</code>) — the single source of truth shared with the webhook.</td>
+</tr>
+<tr>
+<td><code>internal/acquire/acquire.go</code>, <code>renew.go</code></td>
+<td>Acquire-and-hold and the renew state machine with local-expiry enforcement (SKA-436 guarantee).</td>
+</tr>
+<tr>
+<td><code>internal/acquire/enforce.go</code></td>
+<td>Probe-marker and signal enforcement of lease loss (ADR-0003).</td>
+</tr>
+<tr>
+<td><code>internal/acquire/state.go</code></td>
+<td>Shared <code>/berth</code> state: token, holder, health marker, self-copied <code>check</code> binary.</td>
+</tr>
+<tr>
+<td><code>internal/webhook/contract.go</code></td>
+<td>Opt-in label, annotation keys, and injected resource names.</td>
+</tr>
+<tr>
+<td><code>internal/webhook/inject.go</code></td>
+<td><code>PodInjector</code> (typed <code>CustomDefaulter</code>): opt-in guard, control-plane skip, idempotency, annotation resolve/validate, container/volume/probe/signal injection, and <code>InjectorConfig.Validate</code>.</td>
+</tr>
+<tr>
+<td><code>internal/webhook/setup.go</code></td>
+<td>Registers the Pod mutating webhook with the operator's manager.</td>
+</tr>
+<tr>
+<td><code>deploy/helm/berth-operator</code> (<code>injection.*</code>)</td>
+<td><code>MutatingWebhookConfiguration</code>, webhook <code>Service</code>, cert-manager <code>Certificate</code>, and the deployment wiring (<code>templates/mutatingwebhookconfiguration.yaml</code>, <code>webhook-service.yaml</code>, <code>webhook-certificate.yaml</code>).</td>
 </tr>
 </tbody>
 </table>

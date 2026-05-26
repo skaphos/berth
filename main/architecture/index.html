@@ -16,7 +16,7 @@
         <link rel="prev" href="..">
       
       
-        <link rel="next" href="../code-map/">
+        <link rel="next" href="../workload-gating-injection/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -370,6 +370,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#injected-workload-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Injected Workload Gating
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#failure-behavior" class="md-nav__link">
     <span class="md-ellipsis">
       Failure Behavior
@@ -391,6 +400,28 @@
   
 </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Workload Gating (Injection)
+    
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -437,10 +468,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -453,8 +484,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Reference
           </label>
@@ -612,6 +643,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#injected-workload-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Injected Workload Gating
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#failure-behavior" class="md-nav__link">
     <span class="md-ellipsis">
       Failure Behavior
@@ -709,6 +749,16 @@ it holds that lease.</p>
 <td>Go client</td>
 <td><code>pkg/client</code></td>
 <td>Direct integration surface for acquire, renew, and release calls.</td>
+</tr>
+<tr>
+<td>Injection webhook</td>
+<td><code>internal/webhook</code> (in the operator process)</td>
+<td>Optional mutating webhook that injects the <code>berth-acquire</code> helper into opted-in Pods. Off unless <code>--enable-injection-webhook</code>.</td>
+</tr>
+<tr>
+<td><code>berth-acquire</code> helper</td>
+<td><code>cmd/berth-acquire</code>, <code>internal/acquire</code></td>
+<td>Injected init container (and sidecar) that gates a Pod on a lease.</td>
 </tr>
 <tr>
 <td>Helm charts</td>
@@ -835,6 +885,23 @@ single-writer backend; run it with one API server replica only.</p>
 </tbody>
 </table>
 <p>Each action may set at most one of <code>suspend</code> or <code>scale</code>.</p>
+<h2 id="injected-workload-gating">Injected Workload Gating</h2>
+<p>For workloads whose image cannot be changed, the operator can run a mutating
+admission webhook (<code>--enable-injection-webhook</code>) that injects the
+<code>berth-acquire</code> helper into Pods carrying <code>berth.skaphos.io/inject: acquire</code>.
+Unlike operator-as-holder — which gates a workload by <strong>scaling</strong> it from
+outside — injection gates <strong>at the Pod level</strong> from inside:</p>
+<ul>
+<li>An init container blocks Pod startup until it acquires the lease (the "hold").</li>
+<li>In <code>runtime-singleton</code> mode a native sidecar renews the lease and, on loss,
+  stops the main container (kubelet kills it via an injected liveness probe with
+  <code>enforce=probe</code>, or the sidecar signals it with <code>enforce=signal</code>) and keeps it
+  gated until it re-acquires.</li>
+</ul>
+<p>This path talks to the lease API directly and does <strong>not</strong> require a
+<code>BerthLease</code> object. It creates more potential holders than operator-as-holder,
+so its split-brain surface is larger; it is a deliberate fallback. Full
+contract, modes, and trade-offs: <a href="../workload-gating-injection/">Workload gating via injection</a>.</p>
 <h2 id="failure-behavior">Failure Behavior</h2>
 <p>Failover time is bounded by the holder TTL plus the standby reacquire interval.
 For <code>ttlSeconds: 30</code> and <code>heartbeatIntervalSeconds: 10</code>, a standby should

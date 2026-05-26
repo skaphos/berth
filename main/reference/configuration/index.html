@@ -268,6 +268,28 @@
   
   
     <li class="md-nav__item">
+      <a href="../../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Workload Gating (Injection)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../code-map/" class="md-nav__link">
         
   
@@ -305,10 +327,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -321,8 +343,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Reference
           </label>
@@ -778,8 +800,50 @@ a Secret and pass <code>--sql-dsn-file</code>; the Helm chart does this from
 <td><code>false</code></td>
 <td>Development-only TLS verification bypass.</td>
 </tr>
+<tr>
+<td><code>--enable-injection-webhook</code></td>
+<td><code>false</code></td>
+<td>Serve the <code>berth-acquire</code> pod-injection mutating webhook from the operator.</td>
+</tr>
+<tr>
+<td><code>--injection-helper-image</code></td>
+<td>empty</td>
+<td><code>berth-acquire</code> image stamped into opted-in Pods. Required when the webhook is enabled.</td>
+</tr>
+<tr>
+<td><code>--injection-control-plane-namespaces</code></td>
+<td><code>berth-system</code></td>
+<td>Comma-separated namespaces the webhook never mutates.</td>
+</tr>
+<tr>
+<td><code>--injection-helper-api-key-file</code></td>
+<td>empty</td>
+<td>Token-file path passed to injected helpers (mounted into the workload Pod by the platform).</td>
+</tr>
+<tr>
+<td><code>--injection-state-dir</code></td>
+<td><code>/berth</code></td>
+<td>Shared-volume mount path used by the injected init container and sidecar. Must be absolute.</td>
+</tr>
+<tr>
+<td><code>--injection-default-mode</code></td>
+<td><code>runtime-singleton</code></td>
+<td>Default <code>berth.skaphos.io/mode</code> for Pods that omit the annotation.</td>
+</tr>
+<tr>
+<td><code>--injection-default-enforce</code></td>
+<td><code>probe</code></td>
+<td>Default <code>berth.skaphos.io/enforce</code> for Pods that omit the annotation.</td>
+</tr>
+<tr>
+<td><code>--injection-default-ttl-seconds</code></td>
+<td><code>30</code></td>
+<td>Default <code>berth.skaphos.io/ttl-seconds</code> for Pods that omit the annotation.</td>
+</tr>
 </tbody>
 </table>
+<p>See <a href="../../workload-gating-injection/">Workload gating via injection</a> for the
+opt-in label/annotation contract and usage.</p>
 <h2 id="oidc-broker-flags">OIDC Broker Flags</h2>
 <table>
 <thead>
@@ -941,6 +1005,36 @@ a repository variable or secret.</p>
 <td><code>berth-operator</code></td>
 <td><code>sidecarBroker.*</code></td>
 <td>Optional OIDC broker sidecar configuration.</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>injection.enabled</code></td>
+<td>Serve the <code>berth-acquire</code> pod-injection webhook. Off by default.</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>injection.helper.*</code></td>
+<td>Injected helper image, pull policy, token-file path, and shared <code>stateDir</code> (must be absolute).</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>injection.defaults.*</code></td>
+<td>Default <code>mode</code>, <code>enforce</code>, and <code>ttlSeconds</code> for Pods that omit the annotation.</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>injection.controlPlaneNamespaces</code></td>
+<td>Namespaces the webhook never mutates (the release namespace is always added).</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>injection.webhook.*</code></td>
+<td><code>failurePolicy</code>, <code>timeoutSeconds</code>, service port, object/namespace selectors.</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>injection.webhook.tls.certManager.*</code>, <code>injection.webhook.tls.existingSecret</code> + <code>caBundle</code></td>
+<td>Exactly one serving-cert source is required when injection is enabled.</td>
 </tr>
 </tbody>
 </table>
