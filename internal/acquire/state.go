@@ -122,15 +122,25 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	}
 	defer func() { _ = in.Close() }()
 
-	tmp := dst + ".tmp"
-	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode) //nolint:gosec // dst is in our own volume
+	// Use a unique temp name in the destination dir to avoid clobber/races
+	// with a concurrent writer.
+	out, err := os.CreateTemp(filepath.Dir(dst), ".check-")
 	if err != nil {
-		return fmt.Errorf("create %s: %w", tmp, err)
+		return fmt.Errorf("create temp in %s: %w", filepath.Dir(dst), err)
 	}
+	tmp := out.Name()
 	if _, err := io.Copy(out, in); err != nil {
 		_ = out.Close()
 		_ = os.Remove(tmp)
 		return fmt.Errorf("copy: %w", err)
+	}
+	// Chmod explicitly: os.CreateTemp makes 0600 and any create mode is
+	// subject to the umask, either of which would drop the execute bits the
+	// liveness probe needs to exec /berth/check.
+	if err := out.Chmod(mode); err != nil {
+		_ = out.Close()
+		_ = os.Remove(tmp)
+		return fmt.Errorf("chmod: %w", err)
 	}
 	if err := out.Close(); err != nil {
 		_ = os.Remove(tmp)

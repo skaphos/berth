@@ -35,7 +35,9 @@ func (p probeEnforcer) Release(context.Context) error { return p.state.MarkHealt
 // signalEnforcer stops the main process directly via a shared process
 // namespace: SIGTERM first, then SIGKILL once the grace period elapses,
 // re-signalling on every Hold so a kubelet-restarted process is re-gated.
-// Release is a no-op; the process simply stops being signalled.
+// Release does not signal the process; it resets the per-PID escalation
+// state so the next Hold starts a fresh SIGTERM rather than jumping
+// straight to SIGKILL.
 type signalEnforcer struct {
 	grace    time.Duration
 	now      func() time.Time

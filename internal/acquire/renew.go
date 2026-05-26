@@ -111,7 +111,7 @@ func (r *Renewer) tickHeld(ctx context.Context) {
 		r.token = res.FencingToken
 		r.expiresAt = res.ExpiresAt
 		if err := r.enforcer.Release(ctx); err != nil {
-			r.log.Warn("refresh health marker failed", "error", err)
+			r.log.Warn("enforcer release failed", "error", err)
 		}
 		r.log.Debug("lease renewed", "fencing_token", r.token, "expires_at", r.expiresAt)
 	}
@@ -137,7 +137,7 @@ func (r *Renewer) tickReacquire(ctx context.Context) {
 			r.log.Warn("persist reacquired state failed", "error", err)
 		}
 		if err := r.enforcer.Release(ctx); err != nil {
-			r.log.Warn("restore health marker failed", "error", err)
+			r.log.Warn("enforcer release failed", "error", err)
 		}
 		r.log.Info("lease reacquired; main container released", "fencing_token", r.token, "expires_at", r.expiresAt)
 	default:
@@ -163,9 +163,14 @@ func (r *Renewer) shutdown() {
 	// Use a short, independent context: the parent is already canceled.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := r.lc.Release(ctx, r.cfg.LeaseNamespace, r.cfg.LeaseName, r.holder, r.token); err != nil && !errors.Is(err, client.ErrConflict) {
+	switch err := r.lc.Release(ctx, r.cfg.LeaseNamespace, r.cfg.LeaseName, r.holder, r.token); {
+	case errors.Is(err, client.ErrConflict):
+		// Another holder already owns it; nothing to release. Not an error,
+		// but we did not release, so don't claim we did.
+		r.log.Info("release on shutdown skipped: lease already held by another (conflict)")
+	case err != nil:
 		r.log.Warn("best-effort release on shutdown failed", "error", err)
-		return
+	default:
+		r.log.Info("released lease on shutdown")
 	}
-	r.log.Info("released lease on shutdown")
 }
