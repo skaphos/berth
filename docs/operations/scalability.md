@@ -10,11 +10,13 @@ load-testing plan that produces evidence for it, and the measurement results
 once each phase lands. It is the durable artifact for the
 "how big can Berth get?" conversation.
 
-Status: **Phases 1–2 landing.** Store-level baselines for `mem` and `sqlite`
-are measured (Phase 1; see [Results](#results)), and the API server is now
-Prometheus-instrumented on a separate `/metrics` port (Phase 2). The predicted
-tables below stand until the durable backends (`k8s` etcd, Postgres / MariaDB)
-and the higher load-driving phases replace them.
+Status: **Phases 1–3 landing.** Store-level baselines for `mem` and `sqlite`
+are measured (Phase 1; see [Results](#results)), the API server is
+Prometheus-instrumented on a separate `/metrics` port (Phase 2), and the
+API-level load driver with all four scenarios is built and in-process-tested
+(Phase 3). What remains is running the harness against durable, deployed
+backends (`k8s` etcd, Postgres / MariaDB) to replace the predicted tables below,
+then the operator/injection phases.
 
 ## Target Workload
 
@@ -173,31 +175,47 @@ exposes no lease data — only RED and store-call series.
 
 ### Phase 3 — API-level load driver (`test/load/`)
 
-A Go binary that drives the API server using `pkg/client`. Knobs:
+A Go program that drives the API server through `pkg/client`. The thin
+entrypoint lives at [`test/load`](../../test/load) (run with `go run
+./test/load`); the scenario logic and latency math live in
+[`internal/load`](../../internal/load) so they are unit-testable. It is a
+test/dev tool, deliberately **not** a shipped binary (no `task build`, no image,
+not released). Knobs:
 
 ```
 --leases=2000      --pairs=8          --ttl=30s --heartbeat=10s
 --scenario={steady,coldstart,failover,churn}
---duration=10m     --target=https://...
+--duration=5m      --target=https://...   --concurrency=256
 --store-backend={k8s,sql}        # informational tag, not a switch
+--api-key-file=... --ca-file=... --metrics-addr=:9090
 ```
+
+(`--ttl` is whole-second granularity — the API expresses TTL as an int32
+`ttlSeconds`. `--heartbeat` is sub-second-capable; it only paces cadence.)
 
 Scenarios:
 
 | Scenario | Models |
 | --- | --- |
-| `steady` | N held + N standby, characterize p50/p95/p99/p99.9 |
-| `coldstart` | 2,000 simultaneous `acquire` inside a 30s window |
-| `failover` | half the holders stop renewing; standby acquire latency distribution |
-| `churn` | random holder restarts at a configurable rate |
+| `steady` | N held + N standby contending, characterize p50/p95/p99/p99.9 |
+| `coldstart` | every `acquire` fired near-simultaneously (no concurrency cap — that is the scenario) |
+| `failover` | the even-index half is left to expire for one TTL; standby acquire-after-expiry latency |
+| `churn` | each heartbeat a `--churn-fraction` of holders release and a fresh holder re-acquires |
 
-Emits Prometheus scrape on `/metrics` and a JSON summary suitable for CI
-assertions.
+Emits a JSON latency summary (per-op count/errors/min/mean/p50/p95/p99/p99.9) on
+stdout, and — when `--metrics-addr` is set — its own
+`berth_load_request_duration_seconds{op,result}` on `/metrics` so Prometheus can
+scrape the driver mid-run.
 
-- [ ] Driver binary at `cmd/berth-load/` (or `test/load/`, TBD).
-- [ ] Each scenario implemented and reproducible.
-- [ ] Run against both `k8s` and `sql` backends; results in
-      `docs/operations/results/`.
+- [x] Driver location decided: `test/load` entrypoint + `internal/load` logic
+      (not a shipped `cmd/*` binary).
+- [x] All four scenarios implemented, plus an in-process end-to-end test that
+      runs each against the real `api.NewMux` + mem store over `httptest` (no
+      external infra) — proves the driver works; `internal/load` is at ~94%
+      coverage.
+- [ ] Run against live `k8s` and `sql` backends; result tables in
+      `docs/operations/results/`. Needs a deployed, instrumented target —
+      pending alongside the Phase 1 durable-backend runs.
 
 ### Phase 4 — Operator-level load on the 3-cluster kind harness
 
