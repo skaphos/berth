@@ -100,7 +100,7 @@ func TestLoggingMiddlewareLogsIdentityNeverToken(t *testing.T) {
 	mgr := lease.NewManager(lease.NewMemStore())
 
 	logger, buf := capturingLogger()
-	handler := LoggingMiddleware(logger)(NewMux(mgr, authn))
+	handler := LoggingMiddleware(logger)(NewMux(mgr, authn, nil))
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
@@ -132,7 +132,7 @@ func TestLoggingMiddlewareHealthzAtDebug(t *testing.T) {
 	// An info-level logger drops the debug-level healthz line entirely.
 	buf := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	h := LoggingMiddleware(logger)(NewMux(nil, nil))
+	h := LoggingMiddleware(logger)(NewMux(nil, nil, nil))
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
@@ -157,7 +157,7 @@ func TestObservabilityChainRecordsOutcomes(t *testing.T) {
 	mgr := lease.NewManager(lease.NewMemStore())
 	rec := &recordingMetrics{}
 	logger, _ := capturingLogger()
-	handler := LoggingMiddleware(logger)(MetricsMiddleware(rec)(NewMux(mgr, authn)))
+	handler := LoggingMiddleware(logger)(MetricsMiddleware(rec)(NewMux(mgr, authn, nil)))
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
@@ -178,7 +178,7 @@ func TestObservabilityChainRecordsOutcomes(t *testing.T) {
 	}
 
 	post("team-a", "tok")            // first acquire → acquired
-	post("team-b", "tok")            // same lease, other holder → held-by-other
+	post("team-a/other", "tok")      // same lease, other holder in-tenant → held-by-other
 	post("team-a", "")               // missing token → unauthorized
 	authn.err = errors.New("denied") // force auth failure
 	if got := post("team-a", "tok"); got != http.StatusUnauthorized {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -50,9 +51,12 @@ type LeaseResponse struct {
 	AcquiredAt   time.Time `json:"acquiredAt,omitempty"`
 }
 
-// errorResponse is the standard error envelope.
+// errorResponse is the standard error envelope. RequestID is set on 5xx
+// responses so an operator can correlate the generic client-facing error with
+// the detailed server-side log line; it is omitted when empty.
 type errorResponse struct {
-	Error string `json:"error"`
+	Error     string `json:"error"`
+	RequestID string `json:"requestId,omitempty"`
 }
 
 func leaseResponseFrom(r lease.AcquireResult) LeaseResponse {
@@ -127,8 +131,7 @@ func handleAcquire(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		}
 		res, err := mgr.Acquire(r.Context(), key, req.Holder, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
-			recordOutcome(r.Context(), outcomeError)
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if res.Acquired {
@@ -164,8 +167,7 @@ func handleRenew(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		}
 		res, err := mgr.Renew(r.Context(), key, req.Holder, req.FencingToken, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
-			recordOutcome(r.Context(), outcomeError)
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if res.Acquired {
@@ -198,8 +200,7 @@ func handleRelease(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 				writeError(w, http.StatusConflict, "lease held by another identity or token")
 				return
 			}
-			recordOutcome(r.Context(), outcomeError)
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		recordOutcome(r.Context(), outcomeReleased)
@@ -225,4 +226,36 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, errorResponse{Error: msg})
+}
+
+// writeInternalError handles an unexpected backend failure: it records the
+// detailed err for the server-side log (keyed by the request's correlation id)
+// and returns a deliberately generic 500 envelope carrying only that id. The
+// backend kind and topology embedded in err never reach the client.
+//
+// The 5xx contract — a generic body that always carries a correlation id, with
+// the detail kept server-side — must hold even when no observability middleware
+// is installed (NewMux used directly by a test or a package client). In that
+// case there is no request context to carry the id or the detail, so this
+// helper synthesizes an id and logs the detail itself rather than dropping both.
+func writeInternalError(w http.ResponseWriter, r *http.Request, err error) {
+	ctx := r.Context()
+	recordOutcome(ctx, outcomeError)
+	recordError(ctx, err)
+
+	id := RequestIDFromContext(ctx)
+	if id == "" {
+		// No observability middleware in this chain: recordError had nowhere to
+		// stash the detail and no id was assigned. Mint one and log here so the
+		// operator can still correlate the generic response to the cause.
+		id = requestID(r)
+		slog.Default().LogAttrs(ctx, slog.LevelError, "api request error",
+			slog.String("request_id", id),
+			slog.String("error", err.Error()),
+		)
+	}
+	writeJSON(w, http.StatusInternalServerError, errorResponse{
+		Error:     "internal error",
+		RequestID: id,
+	})
 }
