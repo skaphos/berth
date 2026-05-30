@@ -74,25 +74,73 @@ func runColdStart(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorde
 	wg.Wait()
 }
 
-// runFailover populates every lease, lets the failover half (even indices)
-// expire by not renewing for one TTL, then times the standby acquire that
-// reclaims each expired lease.
+// runFailover populates every lease, then models a region-pair failover: the
+// failover half (even indices) is left to expire by not renewing for one TTL,
+// while the survivor half (odd indices) keeps renewing at heartbeat cadence
+// throughout the expiry window and the reclaim. It times the standby acquire
+// that reclaims each expired lease against that concurrent survivor traffic, so
+// the reclaim latency reflects a backend under steady load rather than one idle
+// except for the reclaim burst.
 func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder) {
-	initialAcquire(ctx, cli, cfg, rec)
+	// renewCtx governs only the survivor renew *loop* and its inter-renew sleep.
+	// The acquire/renew calls themselves run against ctx, so the teardown
+	// stopRenew() below tears the loops down without cancelling an in-flight
+	// request and recording it as a spurious context-canceled error.
+	renewCtx, stopRenew := context.WithCancel(ctx)
+	defer stopRenew()
 
-	// Wait out the TTL plus a margin so the un-renewed leases are reclaimable.
+	// Populate every lease under a single bounded acquire burst. As each survivor
+	// (odd index) is acquired it spawns a renew loop that holds it for the rest
+	// of the run — starting from the moment *that* lease is acquired, so none
+	// sits idle long enough to expire even when population is slow on a throttled
+	// backend. The failover half (even indices) is acquired and then left to
+	// expire. Routing both halves through one forEachLeaseBounded keeps the
+	// acquire burst at cfg.Concurrency (not 2x) and makes the pass a barrier: it
+	// returns only once every initial acquire has completed, so all survivors are
+	// already renewing before the expiry window opens and the reclaim is always
+	// measured against survivor load. The renew loops hold no bounded slot.
+	var survivors sync.WaitGroup
+	forEachLeaseBounded(ctx, cfg.Leases, cfg.Concurrency, func(c context.Context, i int) {
+		res, err := recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), cfg.TTL)
+		if i%2 == 0 {
+			return // failover half: acquired, now left to expire
+		}
+		var token int32
+		if err == nil && res.Acquired {
+			token = res.FencingToken
+		}
+		survivors.Add(1)
+		go func() {
+			defer survivors.Done()
+			for renewCtx.Err() == nil {
+				res, err := recRenew(ctx, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), token, cfg.TTL)
+				if err == nil && res.Acquired {
+					token = res.FencingToken
+				}
+				sleepCtx(renewCtx, cfg.Heartbeat)
+			}
+		}()
+	})
+
+	// Wait out the TTL plus a margin so the un-renewed even half is reclaimable.
+	// The odd half stays held throughout because its renewers never pause.
 	margin := cfg.TTL / 10
 	if margin < 100*time.Millisecond {
 		margin = 100 * time.Millisecond
 	}
 	sleepCtx(ctx, cfg.TTL+margin)
 
+	// Reclaim the failover half against the survivors' concurrent renew load.
 	forEachLeaseBounded(ctx, cfg.Leases, cfg.Concurrency, func(c context.Context, i int) {
 		if i%2 != 0 {
 			return // only the failover half is reclaimed
 		}
 		_, _ = recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), standbyHolder(i), cfg.TTL)
 	})
+
+	// Reclaim done: stop the survivor renewers and let in-flight calls drain.
+	stopRenew()
+	survivors.Wait()
 }
 
 // runChurn holds every lease and renews at cadence, but each heartbeat a

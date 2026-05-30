@@ -204,8 +204,15 @@ Scenarios:
 | --- | --- |
 | `steady` | N held + N standby contending, characterize p50/p95/p99/p99.9 |
 | `coldstart` | every `acquire` fired near-simultaneously (no concurrency cap — that is the scenario) |
-| `failover` | the even-index half is left to expire for one TTL; standby acquire-after-expiry latency |
+| `failover` | the even-index half is left to expire for one TTL while the odd-index survivor half keeps renewing at heartbeat cadence; standby acquire-after-expiry latency measured against that concurrent renew load |
 | `churn` | each heartbeat a `--churn-fraction` of holders release and a fresh holder re-acquires |
+
+> **`failover` semantics changed (SKA-458).** The scenario previously let *all*
+> leases expire and timed a reclaim burst against an otherwise idle backend — a
+> valid cold mass-expiry worst-case, but an optimistically low reclaim latency.
+> It now keeps the survivor half renewing throughout, so the reclaim is measured
+> under realistic concurrent load. Do not compare `failover` artifacts from
+> before this change 1:1 against ones after it.
 
 Emits a JSON latency summary (per-op count/errors/min/mean/p50/p95/p99/p99.9) on
 stdout, and — when `--metrics-addr` is set — its own

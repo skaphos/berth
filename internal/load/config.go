@@ -26,8 +26,9 @@ const (
 	// ScenarioColdStart fires all acquires near-simultaneously, modeling every
 	// holder racing for its lease inside the first heartbeat window.
 	ScenarioColdStart Scenario = "coldstart"
-	// ScenarioFailover lets a set of held leases expire and times the standby
-	// acquire-after-expiry that reclaims them.
+	// ScenarioFailover lets the failover half of the leases expire while the
+	// survivor half keeps renewing, and times the standby acquire-after-expiry
+	// that reclaims the expired half against that concurrent renew load.
 	ScenarioFailover Scenario = "failover"
 	// ScenarioChurn renews steadily while a fraction of holders release and a
 	// fresh holder re-acquires each heartbeat.
