@@ -69,7 +69,17 @@ func TestLeaseNamingIsDistinctAndStable(t *testing.T) {
 	if got := leaseName(7); got != "lease-000007" {
 		t.Fatalf("leaseName(7) = %q, want stable lease-000007", got)
 	}
-	if activeHolder(3) == standbyHolder(3) {
+
+	var noTenant Config
+	if noTenant.activeHolder(3) == noTenant.standbyHolder(3) {
 		t.Fatal("active and standby holders must differ for the same lease")
+	}
+	if got := noTenant.activeHolder(3); got != "active-000003" {
+		t.Fatalf("activeHolder(3) with empty tenant = %q, want unprefixed active-000003", got)
+	}
+
+	scoped := Config{Tenant: "load-key"}
+	if got := scoped.activeHolder(3); got != "load-key/active-000003" {
+		t.Fatalf("activeHolder(3) under tenant = %q, want load-key/active-000003", got)
 	}
 }

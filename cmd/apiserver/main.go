@@ -17,6 +17,7 @@ import (
 	"github.com/skaphos/berth/internal/auth"
 	"github.com/skaphos/berth/internal/lease"
 	"github.com/skaphos/berth/internal/metrics"
+	"github.com/skaphos/berth/internal/tenant"
 )
 
 const (
@@ -152,7 +153,12 @@ func run() int {
 
 	go watchSIGHUP(ctx, authn)
 
-	var handler http.Handler = api.NewMux(mgr, authn)
+	// The default authorizer is permissive on namespace and binds each holder to
+	// the caller's tenant. It is only consulted for authenticated requests, so it
+	// is inert under --auth-mode=none.
+	authz := tenant.NewDefaultAuthorizer()
+
+	var handler http.Handler = api.NewMux(mgr, authn, authz)
 	if met != nil {
 		handler = api.MetricsMiddleware(met)(handler)
 		go serveMetrics(ctx, met, metricsAddr)

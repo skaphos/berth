@@ -17,7 +17,7 @@ import (
 // with zero external infrastructure.
 func newInProcessClient(t *testing.T) LeaseClient {
 	t.Helper()
-	mux := api.NewMux(lease.NewManager(lease.NewMemStore()), nil)
+	mux := api.NewMux(lease.NewManager(lease.NewMemStore()), nil, nil)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return client.New(ts.URL)
