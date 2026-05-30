@@ -13,6 +13,7 @@ It is published with MkDocs Material and `mike` at
 | [Configuration reference](reference/configuration.md) | API server, operator, broker, Helm values, and environment inputs. |
 | [API reference](reference/api.md) | Generated CRD reference for `berth.skaphos.io/v1alpha1`. |
 | [Code map](code-map.md) | Package and entrypoint tour for contributors. |
+| [Scalability and load testing](operations/scalability.md) | Sizing model, target workload, and the phased load-testing plan. |
 | `test/e2e/fixtures/README.md` | Local three-cluster test topology. |
 
 ## Process Docs
