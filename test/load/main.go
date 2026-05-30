@@ -48,6 +48,10 @@ func run() int {
 
 	flag.StringVar(&target, "target", "", "API server base URL, e.g. https://berth.example.com:8443 (required)")
 	flag.StringVar(&cfg.Namespace, "namespace", "berth-load", "lease namespace for generated leases")
+	flag.StringVar(&cfg.Tenant, "tenant", "",
+		"tenant (API key id) the driver authenticates as; when set, every generated holder is scoped "+
+			"'<tenant>/...' so the API server's holder authorization accepts it. Leave empty for "+
+			"auth-mode=none targets.")
 	flag.StringVar(&cfg.Backend, "store-backend", "", "informational backend tag recorded in the summary (k8s|sql); does not change behavior")
 	flag.StringVar(&scenario, "scenario", "", "load scenario: steady, coldstart, failover, or churn (required)")
 	flag.IntVar(&cfg.Leases, "leases", 2000, "number of distinct leases to drive")

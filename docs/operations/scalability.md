@@ -192,11 +192,18 @@ not released). Knobs:
 --scenario={steady,coldstart,failover,churn}
 --duration=5m      --target=https://...   --concurrency=256
 --store-backend={k8s,sql}        # informational tag, not a switch
+--tenant=load-key  # API key id; scopes generated holders so authz admits them
 --api-key-file=... --ca-file=... --metrics-addr=:9090
 ```
 
 (`--ttl` is whole-second granularity — the API expresses TTL as an int32
 `ttlSeconds`. `--heartbeat` is sub-second-capable; it only paces cadence.)
+
+When the target enforces authentication (the deployed fixtures use
+`--auth-mode=static-keys` with key id `load-key`), pass `--tenant=load-key` so
+every generated holder is scoped `load-key/...`; the API server binds each holder
+to the caller's tenant and otherwise returns 403. Leave `--tenant` empty for an
+`--auth-mode=none` target, where holder authorization is bypassed.
 
 Scenarios:
 

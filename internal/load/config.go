@@ -48,6 +48,11 @@ const (
 type Config struct {
 	// Namespace is the lease namespace all generated leases live under.
 	Namespace string
+	// Tenant, when non-empty, scopes every generated holder under "<tenant>/" so
+	// the API server's holder authorization accepts them. Set it to the key id
+	// (tenant) the driver authenticates as; leave it empty for unauthenticated
+	// (auth-mode=none) or in-process runs, where holder authorization is bypassed.
+	Tenant string
 	// Backend is an informational tag recorded in the summary (e.g. "k8s",
 	// "sql"); it does not change driver behavior.
 	Backend string
@@ -125,12 +130,22 @@ func (c Config) Validate() error {
 // leaseName is the deterministic name of the i-th lease.
 func leaseName(i int) string { return fmt.Sprintf("lease-%06d", i) }
 
+// holderName scopes base under the configured tenant so the API server's holder
+// authorization accepts it. With an empty Tenant (in-process tests,
+// auth-mode=none) the base name is returned unchanged.
+func (c Config) holderName(base string) string {
+	if c.Tenant == "" {
+		return base
+	}
+	return c.Tenant + "/" + base
+}
+
 // activeHolder is the identity of the i-th lease's primary holder.
-func activeHolder(i int) string { return fmt.Sprintf("active-%06d", i) }
+func (c Config) activeHolder(i int) string { return c.holderName(fmt.Sprintf("active-%06d", i)) }
 
 // standbyHolder is the identity contending for the i-th lease from the paired
 // region.
-func standbyHolder(i int) string { return fmt.Sprintf("standby-%06d", i) }
+func (c Config) standbyHolder(i int) string { return c.holderName(fmt.Sprintf("standby-%06d", i)) }
 
 // acquireResult aliases the client's result type so the scenario runner can
 // reference it without importing pkg/client directly.

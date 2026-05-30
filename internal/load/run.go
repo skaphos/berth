@@ -44,13 +44,13 @@ func runSteady(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder) 
 	forEachLease(deadlineCtx, cfg.Leases, func(c context.Context, i int) {
 		token := tokens[i]
 		for c.Err() == nil {
-			res, err := recRenew(c, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), token, cfg.TTL)
+			res, err := recRenew(c, rec, cli, cfg.Namespace, leaseName(i), cfg.activeHolder(i), token, cfg.TTL)
 			if err == nil && res.Acquired {
 				token = res.FencingToken
 			}
 			// Standby contends and is expected to be denied; the latency of the
 			// denied acquire is itself part of the steady-state load.
-			_, _ = recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), standbyHolder(i), cfg.TTL)
+			_, _ = recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), cfg.standbyHolder(i), cfg.TTL)
 			sleepCtx(c, cfg.Heartbeat)
 		}
 	})
@@ -67,7 +67,7 @@ func runColdStart(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorde
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			_, _ = recAcquire(ctx, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), cfg.TTL)
+			_, _ = recAcquire(ctx, rec, cli, cfg.Namespace, leaseName(i), cfg.activeHolder(i), cfg.TTL)
 		}(i)
 	}
 	close(start)
@@ -101,7 +101,7 @@ func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder
 	// measured against survivor load. The renew loops hold no bounded slot.
 	var survivors sync.WaitGroup
 	forEachLeaseBounded(ctx, cfg.Leases, cfg.Concurrency, func(c context.Context, i int) {
-		res, err := recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), cfg.TTL)
+		res, err := recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), cfg.activeHolder(i), cfg.TTL)
 		if i%2 == 0 {
 			return // failover half: acquired, now left to expire
 		}
@@ -113,7 +113,7 @@ func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder
 		go func() {
 			defer survivors.Done()
 			for renewCtx.Err() == nil {
-				res, err := recRenew(ctx, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), token, cfg.TTL)
+				res, err := recRenew(ctx, rec, cli, cfg.Namespace, leaseName(i), cfg.activeHolder(i), token, cfg.TTL)
 				if err == nil && res.Acquired {
 					token = res.FencingToken
 				}
@@ -135,7 +135,7 @@ func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder
 		if i%2 != 0 {
 			return // only the failover half is reclaimed
 		}
-		_, _ = recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), standbyHolder(i), cfg.TTL)
+		_, _ = recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), cfg.standbyHolder(i), cfg.TTL)
 	})
 
 	// Reclaim done: stop the survivor renewers and let in-flight calls drain.
@@ -154,13 +154,13 @@ func runChurn(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder) {
 
 	forEachLease(deadlineCtx, cfg.Leases, func(c context.Context, i int) {
 		token := tokens[i]
-		holder := activeHolder(i)
+		holder := cfg.activeHolder(i)
 		gen := 0
 		for c.Err() == nil {
 			if rand.Float64() < cfg.ChurnFraction {
 				recRelease(c, rec, cli, cfg.Namespace, leaseName(i), holder, token)
 				gen++
-				holder = fmt.Sprintf("%s-r%d", activeHolder(i), gen)
+				holder = fmt.Sprintf("%s-r%d", cfg.activeHolder(i), gen)
 				res, err := recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), holder, cfg.TTL)
 				if err == nil && res.Acquired {
 					token = res.FencingToken
@@ -182,7 +182,7 @@ func runChurn(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder) {
 func initialAcquire(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder) []int32 {
 	tokens := make([]int32, cfg.Leases)
 	forEachLeaseBounded(ctx, cfg.Leases, cfg.Concurrency, func(c context.Context, i int) {
-		res, err := recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), cfg.TTL)
+		res, err := recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), cfg.activeHolder(i), cfg.TTL)
 		if err == nil && res.Acquired {
 			tokens[i] = res.FencingToken
 		}
