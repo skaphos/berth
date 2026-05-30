@@ -31,6 +31,16 @@ func (m *Manager) WithClock(fn func() time.Time) *Manager {
 	return &Manager{store: m.store, now: fn}
 }
 
+// Ready reports whether the backing store is reachable by performing a
+// lightweight List against it. It returns the store's error unmodified so a
+// readiness probe can fail (503) and drain the pod during a store outage,
+// distinct from an always-200 liveness check. A nil error means the store
+// answered, regardless of how many records exist.
+func (m *Manager) Ready(ctx context.Context) error {
+	_, err := m.store.List(ctx)
+	return err
+}
+
 // AcquireResult reports the outcome of an [Manager.Acquire] or
 // [Manager.Renew] call.
 type AcquireResult struct {

@@ -186,7 +186,10 @@ securityContext:
     drop:
       - ALL
 
-# -- Liveness / readiness probes hit /healthz on the TLS listener.
+# -- Probes on the TLS listener. Liveness hits the always-200 /healthz route;
+# readiness hits /readyz, which probes store reachability and fails (503)
+# during a backend outage so the pod is drained rather than routed 500s. See
+# SKA-450.
 livenessProbe:
   httpGet:
     path: /healthz
@@ -196,7 +199,7 @@ livenessProbe:
   periodSeconds: 10
 readinessProbe:
   httpGet:
-    path: /healthz
+    path: /readyz
     port: https
     scheme: HTTPS
   initialDelaySeconds: 2

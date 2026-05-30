@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -23,6 +25,10 @@ import (
 )
 
 const tokenFileCacheTTL = time.Second
+
+// readyzPingTimeout bounds the operator's readiness probe of the central
+// Berth API so a hung connection cannot block the readyz handler.
+const readyzPingTimeout = 5 * time.Second
 
 func main() {
 	os.Exit(run())
@@ -205,7 +211,15 @@ func run() int {
 		return 1
 	}
 
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+	// Readiness gates on reachability of the central Berth API: if the
+	// operator cannot reach it, it cannot reconcile leases and should be
+	// drained rather than reported ready. The probe context bounds a hung
+	// connection so the readyz handler cannot block indefinitely.
+	if err := mgr.AddReadyzCheck("berth-api", func(req *http.Request) error {
+		ctx, cancel := context.WithTimeout(req.Context(), readyzPingTimeout)
+		defer cancel()
+		return leaseClient.Ping(ctx)
+	}); err != nil {
 		ctrl.Log.Error(err, "unable to set up ready check")
 		return 1
 	}

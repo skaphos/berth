@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -35,11 +36,27 @@ func New(baseURL string, opts ...Option) *Client {
 	return c
 }
 
-// Ping verifies that the client is configured with a non-empty base URL.
+// Ping checks that the Berth API server is reachable by issuing an
+// unauthenticated GET against its /healthz liveness route. It returns a
+// non-nil error when the base URL is unset, the request cannot be sent, or
+// the server answers with a non-2xx status — so an operator readiness probe
+// gated on Ping is drained when the central API is unreachable. The caller
+// should pass a context with a deadline to bound a hung connection.
 func (c *Client) Ping(ctx context.Context) error {
-	_ = ctx
 	if c.baseURL == "" {
-		return errors.New("base URL is required")
+		return errors.New("client: base URL is required")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/healthz", nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("do request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("berth api healthz: status %d", resp.StatusCode)
 	}
 	return nil
 }
