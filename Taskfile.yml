@@ -145,8 +145,14 @@ tasks:
       COUNT: '{{.COUNT | default "6"}}'
     cmds:
       - mkdir -p docs/operations/benchmarks
-      - go test -run='^$' -bench='BenchmarkMemStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} ./internal/lease/ | tee docs/operations/benchmarks/mem.txt
-      - go test -run='^$' -bench='BenchmarkSQLiteStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/sqlite.txt
+      # pipefail so a failing `go test` is not masked by tee's exit status
+      # (which would report success and overwrite the committed baseline).
+      - |
+        set -o pipefail
+        go test -run='^$' -bench='BenchmarkMemStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} ./internal/lease/ | tee docs/operations/benchmarks/mem.txt
+      - |
+        set -o pipefail
+        go test -run='^$' -bench='BenchmarkSQLiteStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/sqlite.txt
 
   bench-integration:
     desc: Run store benchmarks against Postgres/MariaDB (requires BERTH_TEST_POSTGRES_DSN / BERTH_TEST_MYSQL_DSN)
@@ -155,8 +161,13 @@ tasks:
       COUNT: '{{.COUNT | default "6"}}'
     cmds:
       - mkdir -p docs/operations/benchmarks
-      - go test -tags=integration -run='^$' -bench='BenchmarkPostgresStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} -timeout=20m ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/postgres.txt
-      - go test -tags=integration -run='^$' -bench='BenchmarkMariaDBStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} -timeout=20m ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/mariadb.txt
+      # pipefail so a failing `go test` is not masked by tee's exit status.
+      - |
+        set -o pipefail
+        go test -tags=integration -run='^$' -bench='BenchmarkPostgresStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} -timeout=20m ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/postgres.txt
+      - |
+        set -o pipefail
+        go test -tags=integration -run='^$' -bench='BenchmarkMariaDBStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} -timeout=20m ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/mariadb.txt
 
   # --- Build ---
 

@@ -187,11 +187,16 @@ func forEachLease(ctx context.Context, leases int, fn func(ctx context.Context, 
 func forEachLeaseBounded(ctx context.Context, leases, concurrency int, fn func(ctx context.Context, i int)) {
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
+loop:
 	for i := 0; i < leases; i++ {
-		if ctx.Err() != nil {
-			break
+		// Acquire a slot, but stay responsive to cancellation while every slot
+		// is occupied — otherwise a slow/stuck client would block scheduling
+		// past ctx cancellation. In-flight goroutines drain at wg.Wait below.
+		select {
+		case <-ctx.Done():
+			break loop
+		case sem <- struct{}{}:
 		}
-		sem <- struct{}{}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
