@@ -50,9 +50,12 @@ type LeaseResponse struct {
 	AcquiredAt   time.Time `json:"acquiredAt,omitempty"`
 }
 
-// errorResponse is the standard error envelope.
+// errorResponse is the standard error envelope. RequestID is set on 5xx
+// responses so an operator can correlate the generic client-facing error with
+// the detailed server-side log line; it is omitted when empty.
 type errorResponse struct {
-	Error string `json:"error"`
+	Error     string `json:"error"`
+	RequestID string `json:"requestId,omitempty"`
 }
 
 func leaseResponseFrom(r lease.AcquireResult) LeaseResponse {
@@ -127,8 +130,7 @@ func handleAcquire(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		}
 		res, err := mgr.Acquire(r.Context(), key, req.Holder, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
-			recordOutcome(r.Context(), outcomeError)
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if res.Acquired {
@@ -164,8 +166,7 @@ func handleRenew(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		}
 		res, err := mgr.Renew(r.Context(), key, req.Holder, req.FencingToken, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
-			recordOutcome(r.Context(), outcomeError)
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		if res.Acquired {
@@ -198,8 +199,7 @@ func handleRelease(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 				writeError(w, http.StatusConflict, "lease held by another identity or token")
 				return
 			}
-			recordOutcome(r.Context(), outcomeError)
-			writeError(w, http.StatusInternalServerError, err.Error())
+			writeInternalError(w, r, err)
 			return
 		}
 		recordOutcome(r.Context(), outcomeReleased)
@@ -225,4 +225,17 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, errorResponse{Error: msg})
+}
+
+// writeInternalError handles an unexpected backend failure: it records the
+// detailed err for the server-side log (keyed by the request's correlation id)
+// and returns a deliberately generic 500 envelope carrying only that id. The
+// backend kind and topology embedded in err never reach the client.
+func writeInternalError(w http.ResponseWriter, r *http.Request, err error) {
+	recordOutcome(r.Context(), outcomeError)
+	recordError(r.Context(), err)
+	writeJSON(w, http.StatusInternalServerError, errorResponse{
+		Error:     "internal error",
+		RequestID: RequestIDFromContext(r.Context()),
+	})
 }

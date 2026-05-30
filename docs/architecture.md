@@ -66,7 +66,17 @@ id via the `X-Request-Id` response header (honoring an inbound W3C
 `berth_apiserver_lease_outcomes_total{outcome}` counter records each request's
 semantic result (`acquired`, `held-by-other`, `renewed`, `released`,
 `conflict`, `unauthorized`, `error`) — the contention and auth-failure signal
-that HTTP status alone hides. `/metrics` is served on a separate unauthenticated
+that HTTP status alone hides.
+
+An unexpected backend failure returns a deliberately generic
+`{"error":"internal error","requestId":"<id>"}` envelope: the wrapped store
+error — which names the backend kind (SQL vs Kubernetes) and adjacent topology —
+is recorded only in the server-side access-log line (at error level, under the
+same correlation id), never on the wire. Operators cross-reference the two via
+the `requestId`. Client-actionable `4xx` validation messages are returned
+verbatim.
+
+`/metrics` is served on a separate unauthenticated
 port (`--metrics-addr`); see
 [Scalability: Phase 2](operations/scalability.md#phase-2--api-server-prometheus-instrumentation).
 

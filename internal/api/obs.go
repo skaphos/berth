@@ -35,6 +35,10 @@ type requestContext struct {
 	id       string
 	identity *auth.Identity
 	outcome  string
+	// errDetail holds the unredacted server-side error for a 5xx. The logging
+	// middleware emits it (at error level) so the client can be handed a generic
+	// body — the backend kind and topology never cross the wire.
+	errDetail string
 }
 
 type requestContextKey struct{}
@@ -70,6 +74,15 @@ func RequestIDFromContext(ctx context.Context) string {
 func recordOutcome(ctx context.Context, outcome string) {
 	if rc := requestContextFrom(ctx); rc != nil {
 		rc.outcome = outcome
+	}
+}
+
+// recordError stashes the detailed error for a failed request so the logging
+// middleware can record it server-side, keyed by the same correlation id the
+// client receives. The detail is never written to the response body.
+func recordError(ctx context.Context, err error) {
+	if rc := requestContextFrom(ctx); rc != nil {
+		rc.errDetail = err.Error()
 	}
 }
 
@@ -185,8 +198,15 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 				attrs = append(attrs, slog.String("holder", rc.identity.Holder), slog.String("tenant", rc.identity.Tenant))
 			}
 
+			// A 5xx carries its unredacted detail here only — the client got a
+			// generic envelope. The error level and shared request_id let an
+			// operator find this line from the id echoed in that envelope.
 			level := slog.LevelInfo
-			if r.URL.Path == "/healthz" {
+			switch {
+			case rc.errDetail != "":
+				attrs = append(attrs, slog.String("error", rc.errDetail))
+				level = slog.LevelError
+			case r.URL.Path == "/healthz":
 				level = slog.LevelDebug
 			}
 			logger.LogAttrs(r.Context(), level, "api request", attrsToLogAttrs(attrs)...)
