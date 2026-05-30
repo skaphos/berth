@@ -33,3 +33,5 @@ nav:
   - Reference:
       - API: reference/api.md
       - Configuration: reference/configuration.md
+  - Operations:
+      - Scalability: operations/scalability.md

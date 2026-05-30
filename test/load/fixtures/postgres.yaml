@@ -1,0 +1,91 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Throwaway in-cluster Postgres for the sql-backend API server in the load
+# harness. NOT production-grade: emptyDir storage (state is lost on pod
+# restart), a fixed weak password, single replica. It exists only to give
+# the sql-backed apiserver a real SQL store to measure against.
+#
+# The DSN secret (berth-sql-dsn) consumed by berth-apiserver-sql is created
+# by up.sh, not here, so the apiserver chart can mount it as a file.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: berth-load-postgres
+  namespace: berth-system
+  labels:
+    app.kubernetes.io/name: berth-load-postgres
+    app.kubernetes.io/part-of: berth-load-harness
+type: Opaque
+stringData:
+  POSTGRES_DB: berth
+  POSTGRES_USER: berth
+  POSTGRES_PASSWORD: berth
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: berth-load-postgres
+  namespace: berth-system
+  labels:
+    app.kubernetes.io/name: berth-load-postgres
+    app.kubernetes.io/part-of: berth-load-harness
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: berth-load-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: berth-load-postgres
+        app.kubernetes.io/part-of: berth-load-harness
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          envFrom:
+            - secretRef:
+                name: berth-load-postgres
+          # PGDATA under a subdir of the emptyDir mount avoids the
+          # "directory not empty" lost+found issue on some volumes.
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "berth", "-d", "berth"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: berth-load-postgres
+  namespace: berth-system
+  labels:
+    app.kubernetes.io/name: berth-load-postgres
+    app.kubernetes.io/part-of: berth-load-harness
+spec:
+  selector:
+    app.kubernetes.io/name: berth-load-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

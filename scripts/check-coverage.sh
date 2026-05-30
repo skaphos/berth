@@ -35,6 +35,9 @@ skip_pkg() {
     # files; the binary lives or dies on integration / e2e coverage.
     github.com/skaphos/berth/cmd/apiserver) return 0 ;;
     github.com/skaphos/berth/cmd/operator) return 0 ;;
+    # test/load is a thin load-driver entrypoint; the scenario logic and
+    # latency math live in internal/load and are tested there.
+    github.com/skaphos/berth/test/load) return 0 ;;
     # internal/tenant is a placeholder package with no test files yet.
     github.com/skaphos/berth/internal/tenant) return 0 ;;
     # internal/lease/storetest is a reusable conformance suite that is

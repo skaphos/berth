@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +15,12 @@ import (
 	"github.com/skaphos/berth/internal/lease"
 	"github.com/skaphos/berth/internal/lease/storetest"
 )
+
+// benchDBSeq names each benchmark's in-memory SQLite database uniquely. The
+// benchmark runner re-invokes a sub-benchmark to grow N, and a cache=shared
+// memory DB outlives the run only while a connection is open; a per-store name
+// guarantees every newStore call starts from an empty schema.
+var benchDBSeq atomic.Uint64
 
 func newSQLiteStore(tb testing.TB) *Store {
 	tb.Helper()
@@ -51,6 +58,24 @@ func sampleRecord() *lease.Record {
 func TestSQLiteStoreConformance(t *testing.T) {
 	storetest.RunStoreConformance(t, func(tb testing.TB) lease.Store {
 		return newSQLiteStore(tb)
+	})
+}
+
+func BenchmarkSQLiteStore(b *testing.B) {
+	storetest.RunStoreBenchmarks(b, func(tb testing.TB) lease.Store {
+		store, err := New(context.Background(), Config{
+			Driver: DriverSQLite,
+			DSN:    fmt.Sprintf("file:bench-%d?mode=memory&cache=shared", benchDBSeq.Add(1)),
+		})
+		if err != nil {
+			tb.Fatal(err)
+		}
+		tb.Cleanup(func() {
+			if err := store.Close(); err != nil {
+				tb.Errorf("close sqlite store: %v", err)
+			}
+		})
+		return store
 	})
 }
 

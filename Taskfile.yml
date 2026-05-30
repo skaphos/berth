@@ -138,6 +138,37 @@ tasks:
     cmds:
       - go test -tags=integration -count=1 -timeout=10m ./internal/lease/sqlstore
 
+  bench:
+    desc: Run store-level lease benchmarks (mem + sqlite, no infra) — see docs/operations/scalability.md Phase 1
+    vars:
+      BENCHTIME: '{{.BENCHTIME | default "2s"}}'
+      COUNT: '{{.COUNT | default "6"}}'
+    cmds:
+      - mkdir -p docs/operations/benchmarks
+      # pipefail so a failing `go test` is not masked by tee's exit status
+      # (which would report success and overwrite the committed baseline).
+      - |
+        set -o pipefail
+        go test -run='^$' -bench='BenchmarkMemStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} ./internal/lease/ | tee docs/operations/benchmarks/mem.txt
+      - |
+        set -o pipefail
+        go test -run='^$' -bench='BenchmarkSQLiteStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/sqlite.txt
+
+  bench-integration:
+    desc: Run store benchmarks against Postgres/MariaDB (requires BERTH_TEST_POSTGRES_DSN / BERTH_TEST_MYSQL_DSN)
+    vars:
+      BENCHTIME: '{{.BENCHTIME | default "2s"}}'
+      COUNT: '{{.COUNT | default "6"}}'
+    cmds:
+      - mkdir -p docs/operations/benchmarks
+      # pipefail so a failing `go test` is not masked by tee's exit status.
+      - |
+        set -o pipefail
+        go test -tags=integration -run='^$' -bench='BenchmarkPostgresStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} -timeout=20m ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/postgres.txt
+      - |
+        set -o pipefail
+        go test -tags=integration -run='^$' -bench='BenchmarkMariaDBStore' -benchmem -benchtime={{.BENCHTIME}} -count={{.COUNT}} -timeout=20m ./internal/lease/sqlstore/ | tee docs/operations/benchmarks/mariadb.txt
+
   # --- Build ---
 
   build:
@@ -181,6 +212,36 @@ tasks:
       - task: e2e-up
       - task: e2e
       - task: e2e-down
+
+  # --- load (scalability harness, coord-only kind + Prometheus) ---
+
+  load-up:
+    desc: Bring up the load harness (kind + Prometheus + Postgres + k8s/sql API servers) — see docs/operations/scalability.md Phase 3
+    cmds:
+      - ./test/load/fixtures/up.sh
+
+  load-run:
+    desc: 'Drive one scenario (vars: BACKEND=k8s|sql SCENARIO=steady|coldstart|failover|churn LEASES DURATION CONCURRENCY TTL HEARTBEAT PAIRS)'
+    vars:
+      BACKEND: '{{.BACKEND | default "k8s"}}'
+      SCENARIO: '{{.SCENARIO | default "steady"}}'
+      LEASES: '{{.LEASES | default "500"}}'
+      DURATION: '{{.DURATION | default "60s"}}'
+      CONCURRENCY: '{{.CONCURRENCY | default "256"}}'
+      TTL: '{{.TTL | default "30s"}}'
+      HEARTBEAT: '{{.HEARTBEAT | default "10s"}}'
+      PAIRS: '{{.PAIRS | default "8"}}'
+    cmds:
+      - >-
+        BACKEND={{.BACKEND}} SCENARIO={{.SCENARIO}} LEASES={{.LEASES}}
+        DURATION={{.DURATION}} CONCURRENCY={{.CONCURRENCY}} TTL={{.TTL}}
+        HEARTBEAT={{.HEARTBEAT}} PAIRS={{.PAIRS}}
+        ./test/load/fixtures/run.sh
+
+  load-down:
+    desc: Tear down the load harness
+    cmds:
+      - ./test/load/fixtures/down.sh
 
   # --- Housekeeping ---
 

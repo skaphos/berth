@@ -114,6 +114,33 @@ service:
   type: ClusterIP
   port: 8443
 
+# -- Prometheus metrics. The API server serves /metrics on a SEPARATE,
+# unauthenticated plain-HTTP port (off the TLS/auth path), mirroring the
+# operator's controller-runtime endpoint. Restrict the port to the monitoring
+# stack with a NetworkPolicy — it exposes no lease data, only RED + store-call
+# series, but it is unauthenticated by design.
+metrics:
+  enabled: true
+  port: 8080
+  # Add the metrics port to the Service so a ServiceMonitor can target it.
+  service:
+    enabled: true
+  # Prometheus Operator ServiceMonitor. Requires the monitoring.coreos.com
+  # CRDs; leave disabled if you scrape via pod annotations or another path.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    # Extra labels on the ServiceMonitor (e.g. to match a Prometheus
+    # serviceMonitorSelector).
+    additionalLabels: {}
+    relabelings: []
+    metricRelabelings: []
+  # Alternative to a ServiceMonitor: prometheus.io/* scrape annotations on the
+  # pod, for Prometheus configured with the kubernetes_sd pod role.
+  podAnnotations:
+    enabled: false
+
 # -- Optional Ingress fronting the Service. Off by default; users hosting
 # a single cluster usually just expose the Service.
 ingress:

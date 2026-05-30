@@ -18,26 +18,37 @@ const (
 
 func TestPostgresStoreConformance(t *testing.T) {
 	dsn := integrationDSN(t, postgresDSNEnv)
-	runSQLStoreConformance(t, DriverPostgres, dsn)
+	storetest.RunStoreConformance(t, integrationStoreFactory(DriverPostgres, dsn))
 }
 
 func TestMariaDBStoreConformance(t *testing.T) {
 	dsn := integrationDSN(t, mysqlDSNEnv)
-	runSQLStoreConformance(t, DriverMySQL, dsn)
+	storetest.RunStoreConformance(t, integrationStoreFactory(DriverMySQL, dsn))
 }
 
-func integrationDSN(t *testing.T, env string) string {
-	t.Helper()
+func BenchmarkPostgresStore(b *testing.B) {
+	dsn := integrationDSN(b, postgresDSNEnv)
+	storetest.RunStoreBenchmarks(b, integrationStoreFactory(DriverPostgres, dsn))
+}
+
+func BenchmarkMariaDBStore(b *testing.B) {
+	dsn := integrationDSN(b, mysqlDSNEnv)
+	storetest.RunStoreBenchmarks(b, integrationStoreFactory(DriverMySQL, dsn))
+}
+
+func integrationDSN(tb testing.TB, env string) string {
+	tb.Helper()
 	dsn := os.Getenv(env)
 	if dsn == "" {
-		t.Skipf("set %s to run this integration test", env)
+		tb.Skipf("set %s to run this integration test", env)
 	}
 	return dsn
 }
 
-func runSQLStoreConformance(t *testing.T, driver, dsn string) {
-	t.Helper()
-	storetest.RunStoreConformance(t, func(tb testing.TB) lease.Store {
+// integrationStoreFactory returns a newStore func that opens a fresh store
+// against the given DSN and truncates the table so each store starts empty.
+func integrationStoreFactory(driver, dsn string) func(testing.TB) lease.Store {
+	return func(tb testing.TB) lease.Store {
 		tb.Helper()
 		store, err := New(context.Background(), Config{
 			Driver: driver,
@@ -56,5 +67,5 @@ func runSQLStoreConformance(t *testing.T, driver, dsn string) {
 			}
 		})
 		return store
-	})
+	}
 }
