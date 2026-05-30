@@ -10,7 +10,10 @@ load-testing plan that produces evidence for it, and the measurement results
 once each phase lands. It is the durable artifact for the
 "how big can Berth get?" conversation.
 
-Status: **plan, not measured.** Phases 1 onward fill in the numbers.
+Status: **Phase 1 in progress.** Store-level baselines for `mem` and `sqlite`
+are measured (see [Results](#results)); the predicted tables below stand until
+the durable backends (`k8s` etcd, Postgres / MariaDB) and the higher phases
+replace them.
 
 ## Target Workload
 
@@ -92,29 +95,43 @@ build on earlier ones.
 ### Phase 1 — Store-level benchmarks via `storetest`
 
 Adds `RunStoreBenchmarks(b, newStore)` to
-[`internal/lease/storetest`](../../internal/lease/storetest/storetest.go),
-mirroring the existing `RunStoreConformance`. Each store's test file calls it
-against the same factory, so the same workload runs on `mem`, `k8s` (envtest),
-and `sql` (testcontainers: Postgres, MariaDB, SQLite). This produces the **raw
-backend ceiling** with no HTTP, auth, controller, or network noise.
+[`internal/lease/storetest`](../../internal/lease/storetest/benchmarks.go),
+mirroring the existing `RunStoreConformance` and reusing the **same** store
+factory (`*testing.B` satisfies `testing.TB`). Each store's test file calls it,
+so one workload runs on every backend. This produces the **raw backend
+ceiling** with no HTTP, auth, controller, or network noise.
 
-Benchmarks:
+The three sub-benchmarks the suite runs:
 
-- `BenchmarkAcquireParallel` — N goroutines contending for a single lease;
-  measures CAS-conflict cost.
-- `BenchmarkRenewSteadyState` — pre-populated holders renewing at heartbeat
-  cadence; sustained QPS + per-op latency.
-- `BenchmarkFailoverFanout` — one holder lets its lease expire; M standbys
-  race; measures the acquire-after-expiry latency distribution.
+- `AcquireParallel` — N goroutines doing `Get`+CAS on a single hot key,
+  bumping the fencing token each write so writers genuinely collide; measures
+  CAS-conflict cost (the cold-start / standby herd).
+- `RenewSteadyState` — a fleet of independent holders renewing distinct keys at
+  full speed; the sustained renew ceiling that bounds steady-state QPS.
+- `FailoverFanout` — an already-expired lease with M standbys racing to
+  reclaim, exactly one winning; the acquire-after-expiry path. Per-iteration
+  setup/teardown is excluded from the timed region.
 
-Outputs are `benchstat`-comparable text files committed under
-`docs/operations/benchmarks/` and a `task bench` recipe in `Taskfile.yml`.
+Outputs are `benchstat`-comparable `-count`-batched text files committed under
+[`docs/operations/benchmarks/`](benchmarks/) and produced by a `task bench`
+recipe in `Taskfile.yml`.
 
-- [ ] `RunStoreBenchmarks` added to `internal/lease/storetest`.
-- [ ] Wired from `memstore_test.go`, `k8sstore_test.go`, and `sqlstore` tests.
-- [ ] Baseline numbers committed for `mem`, `k8s` (envtest), `sql` (Postgres,
-      MariaDB, SQLite).
-- [ ] `task bench` recipe.
+- [x] `RunStoreBenchmarks` added to `internal/lease/storetest`.
+- [x] Wired from `mem` (external `lease_test`, to avoid the `storetest`→`lease`
+      import cycle) and the `sqlstore` tests (SQLite, plus integration-tagged
+      Postgres and MariaDB).
+- [x] Baseline numbers committed for `mem` and `sql` (SQLite); see
+      [Results](#results). Postgres and MariaDB run via `task bench-integration`
+      against the DSN-gated integration path (`BERTH_TEST_POSTGRES_DSN` /
+      `BERTH_TEST_MYSQL_DSN`) — same env contract as the existing conformance
+      integration tests.
+- [ ] `k8s` backend benchmark. **Deferred:** the repo has no `envtest`
+      harness yet, and the unit tests use a fake clientset whose map+reactor
+      cost is not the real etcd ceiling. Standing up `envtest` (or running the
+      suite against a kind cluster) is tracked as its own follow-up so the
+      `k8s` number is honest rather than a fake-client artifact.
+- [x] `task bench` (mem + sqlite, no infra) and `task bench-integration`
+      (Postgres / MariaDB) recipes.
 
 ### Phase 2 — API-server Prometheus instrumentation
 
@@ -207,8 +224,40 @@ CPU/RAM per 1,000 leases, recommended coordination-cluster etcd sizing (for
 
 ## Results
 
-> Empty until Phase 1+ land. Each phase appends a dated section with the rig
-> description and the numbers.
+Each phase appends a dated section with the rig description and the numbers.
+
+### 2026-05-30 — Phase 1 store-level baseline (mem, SQLite)
+
+Rig: AMD Ryzen 9 9950X3D (32 hardware threads), Go test `-benchtime=2s
+-count=6`, in-process. SQLite is in-memory (`mode=memory&cache=shared`). Raw
+`go test -bench` output is committed under
+[`docs/operations/benchmarks/`](benchmarks/) (`mem.txt`, `sqlite.txt`) and is
+`benchstat`-ready. Median of six runs:
+
+| Benchmark | `mem` | `sqlite` (in-mem) | What it bounds |
+| --- | --- | --- | --- |
+| `AcquireParallel` (per `Get`+CAS op) | ~0.25 µs | ~19 µs | CAS-conflict cost on one hot key |
+| `RenewSteadyState` (per renew op) | ~0.40 µs | ~21 µs | sustained holder renew ceiling |
+| `FailoverFanout` (per 8-standby reclaim round) | ~39 µs | ~250 µs | acquire-after-expiry on failover |
+
+Read-out against the [sizing arithmetic](#sizing-arithmetic) (combined target
+~400 write req/s for 2,000 leases):
+
+- **The store layer is not the bottleneck at the target.** A single-process
+  renew ceiling of ~0.40 µs/op (`mem`) or ~21 µs/op (`sqlite`) is ~2.5M and
+  ~47k renews/s respectively — both orders of magnitude above the ~200 req/s
+  holder-renew load the 2,000-lease target implies.
+- This is the expected shape: the real ceiling lives in the **per-request
+  round-trip** — HTTP, auth, and the backend's network/durability cost — which
+  Phases 2–4 measure. `mem`/`sqlite` here are the in-process floor every
+  durable backend is compared against, not a production sizing.
+- `sqlite` is ~50–80× slower than `mem` per op but still far above target; it
+  remains single-writer (not on the production target) and is included only as
+  a cheap, infra-free regression signal.
+
+Pending for a complete Phase 1: `k8s` (etcd) and the DSN-backed Postgres /
+MariaDB numbers, which carry real network and durability cost and are the ones
+the sizing recommendation will actually rest on.
 
 ## Open Questions
 
@@ -217,9 +266,19 @@ CPU/RAM per 1,000 leases, recommended coordination-cluster etcd sizing (for
   NetworkPolicy concern; same TLS port behind auth needs Prometheus to hold a
   bearer token. Re-asked after Phase 1 produces baseline cost data.
 - **SQL backend matrix.** `sqlstore_integration_test.go` already covers
-  Postgres + MariaDB + SQLite for correctness; Phase 1 benchmarks should run
-  against all three but the sizing recommendation only targets Postgres /
-  MariaDB (SQLite is single-writer per the architecture doc).
+  Postgres + MariaDB + SQLite for correctness; Phase 1 benchmarks reuse the
+  same factory. SQLite runs infra-free in `task bench`; Postgres and MariaDB
+  run via `task bench-integration` against the existing DSN env contract
+  (`BERTH_TEST_POSTGRES_DSN` / `BERTH_TEST_MYSQL_DSN`) — there is no
+  testcontainers wiring in the repo, so the earlier "testcontainers" framing
+  was aspirational. The sizing recommendation only targets Postgres / MariaDB
+  (SQLite is single-writer per the architecture doc).
+
+- **`k8s` (etcd) benchmark needs a real backend.** The unit tests use a fake
+  clientset; benchmarking it would measure the fake's map+reactor cost, not
+  etcd. A faithful `k8s` number needs `envtest` (not yet wired in this repo) or
+  a kind cluster. Tracked as a Phase 1 follow-up before the `k8s` row in
+  [Results](#results) can be filled in.
 - **Reporting cadence.** Once the harness is stable, a nightly CI job that
   re-runs Phase 1 benchmarks against `mem` and `sql` (sqlite + tc) and
   publishes `benchstat` deltas would catch regressions cheaply. Not in the
