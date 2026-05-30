@@ -54,6 +54,21 @@ The API server exposes three lease lifecycle endpoints:
 the API server is configured with `--auth-mode=static-keys` or
 `--auth-mode=oidc`.
 
+### Observability
+
+Every request is access-logged once and instrumented for Prometheus. The
+logging middleware (the outermost wrapper) emits method, path, route, status,
+latency, a correlation id, and — for authenticated callers — the holder and
+tenant; it never logs the bearer token, and assigns/propagates the correlation
+id via the `X-Request-Id` response header (honoring an inbound W3C
+`traceparent` trace id when present). Alongside the RED metrics, a
+`berth_apiserver_lease_outcomes_total{outcome}` counter records each request's
+semantic result (`acquired`, `held-by-other`, `renewed`, `released`,
+`conflict`, `unauthorized`, `error`) — the contention and auth-failure signal
+that HTTP status alone hides. `/metrics` is served on a separate unauthenticated
+port (`--metrics-addr`); see
+[Scalability: Phase 2](operations/scalability.md#phase-2--api-server-prometheus-instrumentation).
+
 ## Lease Model
 
 A lease is identified by namespace and name. Its record tracks:

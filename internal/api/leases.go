@@ -96,8 +96,14 @@ func handleAcquire(mgr LeaseManager) http.HandlerFunc {
 		key := lease.Key{Namespace: r.PathValue("namespace"), Name: r.PathValue("name")}
 		res, err := mgr.Acquire(r.Context(), key, req.Holder, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
+			recordOutcome(r.Context(), outcomeError)
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if res.Acquired {
+			recordOutcome(r.Context(), outcomeAcquired)
+		} else {
+			recordOutcome(r.Context(), outcomeHeldByOther)
 		}
 		writeJSON(w, http.StatusOK, leaseResponseFrom(res))
 	}
@@ -124,8 +130,14 @@ func handleRenew(mgr LeaseManager) http.HandlerFunc {
 		key := lease.Key{Namespace: r.PathValue("namespace"), Name: r.PathValue("name")}
 		res, err := mgr.Renew(r.Context(), key, req.Holder, req.FencingToken, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
+			recordOutcome(r.Context(), outcomeError)
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if res.Acquired {
+			recordOutcome(r.Context(), outcomeRenewed)
+		} else {
+			recordOutcome(r.Context(), outcomeHeldByOther)
 		}
 		writeJSON(w, http.StatusOK, leaseResponseFrom(res))
 	}
@@ -145,12 +157,15 @@ func handleRelease(mgr LeaseManager) http.HandlerFunc {
 		err := mgr.Release(r.Context(), key, req.Holder, req.FencingToken)
 		if err != nil {
 			if errors.Is(err, lease.ErrConflict) {
+				recordOutcome(r.Context(), outcomeConflict)
 				writeError(w, http.StatusConflict, "lease held by another identity or token")
 				return
 			}
+			recordOutcome(r.Context(), outcomeError)
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		recordOutcome(r.Context(), outcomeReleased)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -157,6 +157,9 @@ func run() int {
 		handler = api.MetricsMiddleware(met)(handler)
 		go serveMetrics(ctx, met, metricsAddr)
 	}
+	// Logging is the outermost wrapper: it owns the request correlation id and
+	// observes the final status, including auth rejections, for every request.
+	handler = api.LoggingMiddleware(slog.Default())(handler)
 
 	srv := api.NewServer(
 		api.WithAddress(listenAddr),

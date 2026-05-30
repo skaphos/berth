@@ -32,6 +32,7 @@ type Metrics struct {
 	reqDuration   *prometheus.HistogramVec
 	reqTotal      *prometheus.CounterVec
 	reqInflight   prometheus.Gauge
+	leaseOutcomes *prometheus.CounterVec
 	storeDuration *prometheus.HistogramVec
 }
 
@@ -54,6 +55,12 @@ func New() *Metrics {
 			Name: "berth_apiserver_requests_inflight",
 			Help: "API server HTTP requests currently being served.",
 		}),
+		leaseOutcomes: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "berth_apiserver_lease_outcomes_total",
+			Help: "Lease request outcomes by semantic result (acquired, held-by-other, " +
+				"renewed, released, conflict, unauthorized, error). Distinguishes signals " +
+				"that share an HTTP status — notably held-by-other, which is a 200.",
+		}, []string{"outcome"}),
 		storeDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "berth_lease_store_call_duration_seconds",
 			Help:    "Latency of lease store calls by operation, backend, and outcome.",
@@ -64,6 +71,7 @@ func New() *Metrics {
 		m.reqDuration,
 		m.reqTotal,
 		m.reqInflight,
+		m.leaseOutcomes,
 		m.storeDuration,
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
@@ -78,6 +86,12 @@ func (m *Metrics) ObserveRequest(route, method string, status int, dur time.Dura
 	code := fmt.Sprintf("%d", status)
 	m.reqDuration.WithLabelValues(route, method, code).Observe(dur.Seconds())
 	m.reqTotal.WithLabelValues(route, method, code).Inc()
+}
+
+// ObserveOutcome records one lease request's semantic outcome. The set of
+// outcome values is small and fixed, so label cardinality stays bounded.
+func (m *Metrics) ObserveOutcome(outcome string) {
+	m.leaseOutcomes.WithLabelValues(outcome).Inc()
 }
 
 // IncInflight increments the in-flight request gauge.
