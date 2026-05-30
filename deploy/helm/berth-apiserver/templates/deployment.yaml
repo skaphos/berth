@@ -42,6 +42,11 @@ spec:
         {{- include "berth-apiserver.labels" . | nindent 8 }}
       annotations:
         checksum/config: {{ printf "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" .Values.store.backend .Values.store.sql.driver .Values.store.sql.dsn .Values.store.sql.dsnSecret.name .Values.store.sql.dsnSecret.key .Values.store.sql.migrate .Values.coordination.namespace .Values.auth.mode .Values.auth.staticKeys.secretName .Values.auth.oidc.issuerURL | sha256sum }}
+        {{- if and .Values.metrics.enabled .Values.metrics.podAnnotations.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.metrics.port | quote }}
+        prometheus.io/path: /metrics
+        {{- end }}
     spec:
       serviceAccountName: {{ include "berth-apiserver.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
@@ -58,6 +63,11 @@ spec:
             - --listen-addr=:8443
             - --tls-cert-file=/etc/berth/tls/tls.crt
             - --tls-key-file=/etc/berth/tls/tls.key
+            {{- if .Values.metrics.enabled }}
+            - --metrics-addr=:{{ .Values.metrics.port }}
+            {{- else }}
+            - --metrics-addr=
+            {{- end }}
             {{- if .Values.store.backend }}
             - --store-backend={{ .Values.store.backend }}
             {{- end }}
@@ -102,6 +112,11 @@ spec:
             - name: https
               containerPort: 8443
               protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
           {{- with .Values.extraEnv }}
           env:
             {{- toYaml . | nindent 12 }}

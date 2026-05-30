@@ -10,10 +10,11 @@ load-testing plan that produces evidence for it, and the measurement results
 once each phase lands. It is the durable artifact for the
 "how big can Berth get?" conversation.
 
-Status: **Phase 1 in progress.** Store-level baselines for `mem` and `sqlite`
-are measured (see [Results](#results)); the predicted tables below stand until
-the durable backends (`k8s` etcd, Postgres / MariaDB) and the higher phases
-replace them.
+Status: **Phases 1–2 landing.** Store-level baselines for `mem` and `sqlite`
+are measured (Phase 1; see [Results](#results)), and the API server is now
+Prometheus-instrumented on a separate `/metrics` port (Phase 2). The predicted
+tables below stand until the durable backends (`k8s` etcd, Postgres / MariaDB)
+and the higher load-driving phases replace them.
 
 ## Target Workload
 
@@ -135,23 +136,40 @@ recipe in `Taskfile.yml`.
 
 ### Phase 2 — API-server Prometheus instrumentation
 
-The API server currently exposes no metrics endpoint (only the operator does,
+The API server previously exposed no metrics endpoint (only the operator did,
 via controller-runtime on `:8080`). Phase 2 adds `promhttp` with the standard
-RED metrics on the lease handlers and the backend store calls:
+RED metrics on the lease handlers and the backend store calls
+(`internal/metrics`):
 
 - `berth_apiserver_request_duration_seconds{route, method, status}`
 - `berth_apiserver_requests_total{route, method, status}`
 - `berth_apiserver_requests_inflight`
 - `berth_lease_store_call_duration_seconds{op, backend, outcome}`
 
-Endpoint placement (separate unauthenticated port vs. same TLS port behind
-auth) is deferred until Phase 1 numbers exist, since the decision affects how
-much per-request cost the scrape path itself adds.
+The `route` label is the matched mux pattern (templated, so cardinality is
+bounded), and `store-call` `outcome` separates the expected control-flow
+signals (`conflict`, `notfound`) from an unexpected backend `error`. The
+request middleware is the outermost wrapper, so recorded status includes auth
+rejections; the store wrapper is a transparent `lease.Store` decorator tagged
+with the resolved `backend`.
 
-- [ ] Endpoint placement decision (re-asked after Phase 1).
-- [ ] Handler middleware records request metrics.
-- [ ] Store wrapper records store-call metrics with backend label.
-- [ ] Helm chart wires the scrape target (`ServiceMonitor` or annotations).
+**Endpoint placement — decided: separate unauthenticated port.** `/metrics` is
+served on its own plain-HTTP port (`--metrics-addr`, default `:8080`), off the
+TLS/auth path, mirroring the operator's controller-runtime endpoint. This keeps
+the scrape path's per-request cost out of the instrumented lease path and
+matches the existing operational pattern; the cost is a new flag and a
+NetworkPolicy to restrict the port to the monitoring stack. The endpoint
+exposes no lease data — only RED and store-call series.
+
+- [x] Endpoint placement decision (separate unauthenticated port; see above).
+- [x] Handler middleware records request metrics (`api.MetricsMiddleware`).
+- [x] Store wrapper records store-call metrics with backend label
+      (`metrics.WrapStore`).
+- [x] Helm chart wires the scrape target: `metrics.service` adds the port,
+      `metrics.serviceMonitor.*` renders a `ServiceMonitor`, and
+      `metrics.podAnnotations.enabled` is the annotation-based alternative.
+      A NetworkPolicy restricting `:8080` to Prometheus is left to the
+      deploying cluster's policy set (documented, not yet templated).
 
 ### Phase 3 — API-level load driver (`test/load/`)
 
@@ -261,10 +279,12 @@ the sizing recommendation will actually rest on.
 
 ## Open Questions
 
-- **Metrics endpoint placement** (deferred from Phase 2). Separate
-  unauthenticated port matches the operator pattern but adds a flag and a
-  NetworkPolicy concern; same TLS port behind auth needs Prometheus to hold a
-  bearer token. Re-asked after Phase 1 produces baseline cost data.
+- **Metrics endpoint placement** — **resolved (Phase 2): separate
+  unauthenticated port** (`--metrics-addr`, default `:8080`), matching the
+  operator and keeping the scrape path off the instrumented TLS/auth path. The
+  remaining follow-up is a templated NetworkPolicy restricting `:8080` to the
+  monitoring stack — documented but left to the deploying cluster's policy set
+  for now.
 - **SQL backend matrix.** `sqlstore_integration_test.go` already covers
   Postgres + MariaDB + SQLite for correctness; Phase 1 benchmarks reuse the
   same factory. SQLite runs infra-free in `task bench`; Postgres and MariaDB

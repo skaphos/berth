@@ -21,6 +21,7 @@ For deployed components, the practical precedence is:
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--listen-addr` | `:8443` | HTTPS listen address. |
+| `--metrics-addr` | `:8080` | Plain-HTTP address for the unauthenticated Prometheus `/metrics` endpoint, served on a separate port off the TLS/auth path (mirrors the operator). Empty disables it. Restrict the port to the monitoring stack with a NetworkPolicy. |
 | `--tls-cert-file` | empty | TLS certificate file. Required. |
 | `--tls-key-file` | empty | TLS private key file. Required. |
 | `--store-backend` | empty | `mem`, `k8s`, or `sql`. Empty uses the deprecated coordination-namespace heuristic. |
@@ -115,6 +116,10 @@ a repository variable or secret.
 | `berth-apiserver` | `auth.mode` | `none`, `static-keys`, or `oidc`. Production should use `static-keys` or `oidc`. |
 | `berth-apiserver` | `auth.staticKeys.secretName` | Secret containing the static API-key hash file. |
 | `berth-apiserver` | `auth.oidc.*` | OIDC issuer, audience, JWKS override, claims, and tenant mapping. |
+| `berth-apiserver` | `metrics.enabled`, `metrics.port` | Toggle the `/metrics` endpoint and its port (rendered into `--metrics-addr`). |
+| `berth-apiserver` | `metrics.service.enabled` | Add the `metrics` port to the Service so a ServiceMonitor can target it. |
+| `berth-apiserver` | `metrics.serviceMonitor.*` | Prometheus Operator `ServiceMonitor` (requires the `monitoring.coreos.com` CRDs): `enabled`, `interval`, `scrapeTimeout`, `additionalLabels`, relabelings. |
+| `berth-apiserver` | `metrics.podAnnotations.enabled` | Alternative to a ServiceMonitor: render `prometheus.io/*` scrape annotations on the pod. |
 | `berth-operator` | `clusterID` | Required for cross-cluster singleton deployments. Must differ per cluster. |
 | `berth-operator` | `berth.apiServer` | Central API server URL. |
 | `berth-operator` | `berth.apiKey.*` | Static token Secret source. |

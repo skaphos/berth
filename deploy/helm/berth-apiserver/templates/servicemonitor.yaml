@@ -1,0 +1,36 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+{{- if not .Values.metrics.service.enabled }}
+{{- fail "metrics.serviceMonitor.enabled requires metrics.service.enabled (the ServiceMonitor targets the Service's metrics port)" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "berth-apiserver.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "berth-apiserver.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "berth-apiserver.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      scheme: http
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      {{- with .Values.metrics.serviceMonitor.relabelings }}
+      relabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.metricRelabelings }}
+      metricRelabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

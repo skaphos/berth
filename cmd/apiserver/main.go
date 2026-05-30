@@ -16,6 +16,7 @@ import (
 	"github.com/skaphos/berth/internal/api"
 	"github.com/skaphos/berth/internal/auth"
 	"github.com/skaphos/berth/internal/lease"
+	"github.com/skaphos/berth/internal/metrics"
 )
 
 const (
@@ -34,6 +35,7 @@ func main() {
 func run() int {
 	var (
 		listenAddr        string
+		metricsAddr       string
 		tlsCert           string
 		tlsKey            string
 		storeCfg          storeConfig
@@ -48,6 +50,10 @@ func run() int {
 	oidcRequiredClaims := map[string]string{}
 
 	flag.StringVar(&listenAddr, "listen-addr", ":8443", "address to listen on")
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
+		"address for the unauthenticated Prometheus metrics endpoint (/metrics); empty disables it. "+
+			"Served on a separate plain-HTTP port off the TLS/auth path, matching the operator; "+
+			"restrict it to the monitoring stack with a NetworkPolicy.")
 	flag.StringVar(&tlsCert, "tls-cert-file", "", "path to TLS certificate file")
 	flag.StringVar(&tlsKey, "tls-key-file", "", "path to TLS private key file")
 	flag.StringVar(&storeCfg.backend, "store-backend", storeBackendUnset,
@@ -123,6 +129,12 @@ func run() int {
 		slog.Error("build lease store", "error", err)
 		return exitCodeConfigError
 	}
+
+	var met *metrics.Metrics
+	if metricsAddr != "" {
+		met = metrics.New()
+		store = met.WrapStore(backend, store)
+	}
 	mgr := lease.NewManager(store)
 
 	authn, err := buildAuthenticator(authMode, apiKeysFile, oidcConfig{
@@ -140,10 +152,16 @@ func run() int {
 
 	go watchSIGHUP(ctx, authn)
 
+	var handler http.Handler = api.NewMux(mgr, authn)
+	if met != nil {
+		handler = api.MetricsMiddleware(met)(handler)
+		go serveMetrics(ctx, met, metricsAddr)
+	}
+
 	srv := api.NewServer(
 		api.WithAddress(listenAddr),
 		api.WithTLSFiles(tlsCert, tlsKey),
-		api.WithHandler(api.NewMux(mgr, authn)),
+		api.WithHandler(handler),
 	)
 
 	if err := srv.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -151,6 +169,16 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+// serveMetrics runs the unauthenticated Prometheus endpoint until ctx is
+// canceled. A failure here is logged but never tears down the API server: the
+// lease service must keep running even if metrics scraping is unavailable.
+func serveMetrics(ctx context.Context, met *metrics.Metrics, addr string) {
+	slog.Info("metrics endpoint listening", "addr", addr, "path", "/metrics")
+	if err := met.Serve(ctx, addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("metrics server exited", "error", err)
+	}
 }
 
 // resolveAuthMode applies the default-when-unset rule: a persistent store

@@ -12,5 +12,11 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: https
       protocol: TCP
+    {{- if and .Values.metrics.enabled .Values.metrics.service.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "berth-apiserver.selectorLabels" . | nindent 4 }}
