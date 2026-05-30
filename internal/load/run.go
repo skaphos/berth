@@ -74,13 +74,38 @@ func runColdStart(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorde
 	wg.Wait()
 }
 
-// runFailover populates every lease, lets the failover half (even indices)
-// expire by not renewing for one TTL, then times the standby acquire that
-// reclaims each expired lease.
+// runFailover populates every lease, then models a region-pair failover: the
+// failover half (even indices) is left to expire by not renewing for one TTL,
+// while the survivor half (odd indices) keeps renewing at heartbeat cadence
+// throughout the expiry window and the reclaim. It times the standby acquire
+// that reclaims each expired lease against that concurrent survivor traffic, so
+// the reclaim latency reflects a backend under steady load rather than one idle
+// except for the reclaim burst.
 func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder) {
-	initialAcquire(ctx, cli, cfg, rec)
+	tokens := initialAcquire(ctx, cli, cfg, rec)
 
-	// Wait out the TTL plus a margin so the un-renewed leases are reclaimable.
+	// The survivor half renews for the whole expiry-plus-reclaim window. Its
+	// context is cancelled once the reclaim finishes so the renewers drain.
+	renewCtx, stopRenew := context.WithCancel(ctx)
+	defer stopRenew()
+	var survivors sync.WaitGroup
+	for i := 1; i < cfg.Leases; i += 2 {
+		survivors.Add(1)
+		go func(i int) {
+			defer survivors.Done()
+			token := tokens[i]
+			for renewCtx.Err() == nil {
+				res, err := recRenew(renewCtx, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), token, cfg.TTL)
+				if err == nil && res.Acquired {
+					token = res.FencingToken
+				}
+				sleepCtx(renewCtx, cfg.Heartbeat)
+			}
+		}(i)
+	}
+
+	// Wait out the TTL plus a margin so the un-renewed even half is reclaimable.
+	// The odd half stays held throughout because its renewers never pause.
 	margin := cfg.TTL / 10
 	if margin < 100*time.Millisecond {
 		margin = 100 * time.Millisecond
@@ -93,6 +118,10 @@ func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder
 		}
 		_, _ = recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), standbyHolder(i), cfg.TTL)
 	})
+
+	// Reclaim done: stop the survivor renewers and let the goroutines drain.
+	stopRenew()
+	survivors.Wait()
 }
 
 // runChurn holds every lease and renews at cadence, but each heartbeat a

@@ -91,8 +91,14 @@ func TestRunFailoverInProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 4 initial acquires + 2 reclaims of the even-index failover half.
+	// 4 initial acquires + 2 reclaims of the even-index failover half. The
+	// odd-index survivor half renews instead of re-acquiring, so it adds no
+	// acquires.
 	assertOp(t, s, OpAcquire, 6)
+	// The survivor half (odd indices) renews at heartbeat cadence throughout the
+	// expiry window and reclaim, so the backend carries steady load while the
+	// even half is reclaimed.
+	assertOp(t, s, OpRenew, -1)
 }
 
 func TestRunChurnInProcess(t *testing.T) {
