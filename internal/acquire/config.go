@@ -64,6 +64,13 @@ type Config struct {
 	TTL               time.Duration
 	HeartbeatInterval time.Duration
 	EnforceGrace      time.Duration
+	// SignalTarget bounds enforce=signal to the workload process. It matches a
+	// process by comm or executable basename (e.g. "nginx"). When empty the
+	// enforcer falls back to a broad heuristic that signals every process in the
+	// shared PID namespace except a small exclusion set — which can take down
+	// co-located sidecars — so it warns loudly. Set it to scope the blast radius
+	// to the gated workload. Ignored unless Enforce is EnforceSignal.
+	SignalTarget string
 	// ReleaseOnShutdown, when nil, defaults per mode (true for
 	// runtime-singleton, false for startup-gate). A non-nil value is an
 	// explicit override.

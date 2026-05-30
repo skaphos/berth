@@ -78,6 +78,13 @@ holder.
   reacquire). `probe` cannot be validated at admission because the webhook
   cannot introspect image contents, so a probe that can never pass will
   crashloop the container.
+- **Update (SKA-449)**: `signal` enforcement is scoped by the optional
+  `berth.skaphos.io/signal-target` annotation (env `BERTH_SIGNAL_TARGET`),
+  matched against process `comm`/executable basename. When set, only the
+  workload process is signaled; co-located sidecars are spared. When unset the
+  sidecar keeps the original broad behavior — signaling every non-excluded
+  process — but logs a warning, and the docs flag the multi-sidecar hazard.
+  `probe` stays the default.
 - **Neutral**: `enforce-grace-seconds` tunes the SIGTERM→SIGKILL delay for
   `signal`; a static check binary on the shared volume keeps `probe` viable for
   distroless/scratch images.

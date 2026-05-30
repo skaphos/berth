@@ -24,6 +24,11 @@ const (
 	AnnReleaseOnShutdown   = "berth.skaphos.io/release-on-shutdown"
 	AnnEnforce             = "berth.skaphos.io/enforce"
 	AnnEnforceGraceSeconds = "berth.skaphos.io/enforce-grace-seconds"
+	// AnnSignalTarget scopes enforce=signal to the workload process, matched by
+	// comm or executable basename (e.g. "nginx"). Without it the sidecar signals
+	// every process in the shared PID namespace except berth's own, which can
+	// terminate co-located sidecars on lease loss.
+	AnnSignalTarget = "berth.skaphos.io/signal-target"
 
 	// AnnInjected is set on a Pod once it has been mutated, so re-admission
 	// of an already-injected Pod is a no-op (idempotency).
