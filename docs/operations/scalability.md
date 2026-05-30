@@ -151,6 +151,7 @@ RED metrics on the lease handlers and the backend store calls
 - `berth_apiserver_request_duration_seconds{route, method, status}`
 - `berth_apiserver_requests_total{route, method, status}`
 - `berth_apiserver_requests_inflight`
+- `berth_apiserver_lease_outcomes_total{outcome}`
 - `berth_lease_store_call_duration_seconds{op, backend, outcome}`
 
 The `route` label is the matched mux pattern (templated, so cardinality is
@@ -159,6 +160,16 @@ signals (`conflict`, `notfound`) from an unexpected backend `error`. The
 request middleware is the outermost wrapper, so recorded status includes auth
 rejections; the store wrapper is a transparent `lease.Store` decorator tagged
 with the resolved `backend`.
+
+The `lease_outcomes` counter (SKA-447) names a request's **semantic** result —
+`acquired`, `held-by-other`, `renewed`, `released`, `conflict`, `unauthorized`,
+`error` — which HTTP status alone cannot express: a denied contender
+(`held-by-other`) is a `200`, so contention is invisible in the status-keyed
+series. This is the signal for contention rate and auth-failure storms. Each
+request is also access-logged once (method, path, route, status, latency,
+correlation id, and the authenticated holder/tenant — never the token) via
+`api.LoggingMiddleware`, the outermost wrapper; `/healthz` logs at debug to keep
+liveness probes out of the steady-state log.
 
 **Endpoint placement — decided: separate unauthenticated port.** `/metrics` is
 served on its own plain-HTTP port (`--metrics-addr`, default `:8080`), off the

@@ -13,6 +13,7 @@ type recordingMetrics struct {
 	status      int
 	dur         time.Duration
 	calls       int
+	outcomes    []string
 	inflightNow int
 	inflightMax int
 }
@@ -23,6 +24,10 @@ func (r *recordingMetrics) ObserveRequest(route, method string, status int, dur 
 	r.status = status
 	r.dur = dur
 	r.calls++
+}
+
+func (r *recordingMetrics) ObserveOutcome(outcome string) {
+	r.outcomes = append(r.outcomes, outcome)
 }
 
 func (r *recordingMetrics) IncInflight() {

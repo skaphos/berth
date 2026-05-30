@@ -33,6 +33,7 @@ func AuthMiddleware(authn auth.Authenticator) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token, ok := bearerToken(r)
 			if !ok {
+				recordOutcome(r.Context(), outcomeUnauthorized)
 				writeError(w, http.StatusUnauthorized, "missing or malformed Authorization header")
 				return
 			}
@@ -40,9 +41,11 @@ func AuthMiddleware(authn auth.Authenticator) func(http.Handler) http.Handler {
 			if err != nil {
 				// Deliberately generic so the response can't be used as an
 				// oracle to enumerate valid key ids.
+				recordOutcome(r.Context(), outcomeUnauthorized)
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
+			recordIdentity(r.Context(), id)
 			next.ServeHTTP(w, r.WithContext(WithIdentity(r.Context(), id)))
 		})
 	}

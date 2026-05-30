@@ -33,6 +33,22 @@ func TestObserveRequestCountsAndInflight(t *testing.T) {
 	}
 }
 
+func TestObserveOutcomeCountsPerLabel(t *testing.T) {
+	t.Parallel()
+
+	m := New()
+	m.ObserveOutcome("acquired")
+	m.ObserveOutcome("acquired")
+	m.ObserveOutcome("held-by-other")
+
+	if got := testutil.ToFloat64(m.leaseOutcomes.WithLabelValues("acquired")); got != 2 {
+		t.Fatalf("lease_outcomes{acquired} = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m.leaseOutcomes.WithLabelValues("held-by-other")); got != 1 {
+		t.Fatalf("lease_outcomes{held-by-other} = %v, want 1", got)
+	}
+}
+
 func TestWrapStoreIsTransparentAndRecords(t *testing.T) {
 	t.Parallel()
 
@@ -88,6 +104,7 @@ func TestHandlerExposesBerthSeries(t *testing.T) {
 
 	m := New()
 	m.ObserveRequest("GET /healthz", http.MethodGet, http.StatusOK, time.Millisecond)
+	m.ObserveOutcome("acquired")
 
 	rr := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/metrics", nil))
@@ -100,6 +117,7 @@ func TestHandlerExposesBerthSeries(t *testing.T) {
 		"berth_apiserver_requests_total",
 		"berth_apiserver_request_duration_seconds",
 		"berth_apiserver_requests_inflight",
+		"berth_apiserver_lease_outcomes_total",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("scrape body missing %q", want)
