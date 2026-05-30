@@ -124,3 +124,40 @@ func TestReleaseConflictStaysGenericNot500(t *testing.T) {
 		t.Fatalf("status = %d, want 409", resp.StatusCode)
 	}
 }
+
+// TestInternalErrorCarriesIDWithoutObservabilityMiddleware pins the 5xx
+// contract for the bare mux: NewMux can be used directly (tests, package
+// clients) with no LoggingMiddleware to mint or carry a correlation id. The
+// generic body must still include a non-empty requestId — and must still not
+// leak the backend detail — by synthesizing the id in writeInternalError.
+func TestInternalErrorCarriesIDWithoutObservabilityMiddleware(t *testing.T) {
+	t.Parallel()
+
+	const secret = "k8s lease store: get ns/a: connection refused"
+	srv := httptest.NewServer(NewMux(failingManager{err: errors.New(secret)}, nil, nil))
+	t.Cleanup(srv.Close)
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost,
+		srv.URL+"/v1alpha1/namespaces/ns/leases/a/acquire",
+		strings.NewReader(`{"holder":"h","ttlSeconds":30}`))
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+	if strings.Contains(string(raw), secret) {
+		t.Fatalf("response leaked backend detail without middleware: %s", raw)
+	}
+	var env errorResponse
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatalf("body not JSON: %v (%q)", err, raw)
+	}
+	if env.RequestID == "" {
+		t.Fatal("5xx body must carry a requestId even when no observability middleware is installed")
+	}
+}

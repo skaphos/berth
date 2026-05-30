@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -231,11 +232,30 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // detailed err for the server-side log (keyed by the request's correlation id)
 // and returns a deliberately generic 500 envelope carrying only that id. The
 // backend kind and topology embedded in err never reach the client.
+//
+// The 5xx contract — a generic body that always carries a correlation id, with
+// the detail kept server-side — must hold even when no observability middleware
+// is installed (NewMux used directly by a test or a package client). In that
+// case there is no request context to carry the id or the detail, so this
+// helper synthesizes an id and logs the detail itself rather than dropping both.
 func writeInternalError(w http.ResponseWriter, r *http.Request, err error) {
-	recordOutcome(r.Context(), outcomeError)
-	recordError(r.Context(), err)
+	ctx := r.Context()
+	recordOutcome(ctx, outcomeError)
+	recordError(ctx, err)
+
+	id := RequestIDFromContext(ctx)
+	if id == "" {
+		// No observability middleware in this chain: recordError had nowhere to
+		// stash the detail and no id was assigned. Mint one and log here so the
+		// operator can still correlate the generic response to the cause.
+		id = requestID(r)
+		slog.Default().LogAttrs(ctx, slog.LevelError, "api request error",
+			slog.String("request_id", id),
+			slog.String("error", err.Error()),
+		)
+	}
 	writeJSON(w, http.StatusInternalServerError, errorResponse{
 		Error:     "internal error",
-		RequestID: RequestIDFromContext(r.Context()),
+		RequestID: id,
 	})
 }
