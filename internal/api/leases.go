@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/skaphos/berth/internal/lease"
+	"github.com/skaphos/berth/internal/tenant"
 )
 
 // LeaseManager is the subset of [lease.Manager] consumed by the HTTP layer.
@@ -65,8 +66,9 @@ func leaseResponseFrom(r lease.AcquireResult) LeaseResponse {
 }
 
 // registerLeaseRoutes wires the lease HTTP endpoints onto mux. When wrap
-// is non-nil, each handler is composed through it (used for auth).
-func registerLeaseRoutes(mux *http.ServeMux, mgr LeaseManager, wrap func(http.Handler) http.Handler) {
+// is non-nil, each handler is composed through it (used for auth) and authz
+// gates the authenticated identity against the request namespace and holder.
+func registerLeaseRoutes(mux *http.ServeMux, mgr LeaseManager, wrap func(http.Handler) http.Handler, authz tenant.Authorizer) {
 	register := func(pattern string, h http.HandlerFunc) {
 		var handler http.Handler = h
 		if wrap != nil {
@@ -74,12 +76,38 @@ func registerLeaseRoutes(mux *http.ServeMux, mgr LeaseManager, wrap func(http.Ha
 		}
 		mux.Handle(pattern, handler)
 	}
-	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/acquire", handleAcquire(mgr))
-	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/renew", handleRenew(mgr))
-	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/release", handleRelease(mgr))
+	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/acquire", handleAcquire(mgr, authz))
+	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/renew", handleRenew(mgr, authz))
+	register("POST /v1alpha1/namespaces/{namespace}/leases/{name}/release", handleRelease(mgr, authz))
 }
 
-func handleAcquire(mgr LeaseManager) http.HandlerFunc {
+// authorize gates an authenticated request against the namespace and holder it
+// targets. It returns true (allow) when no identity is present — that is only
+// possible in auth-mode=none, where AuthMiddleware is not installed and no
+// identity is ever attached. When an identity is present, authz must be non-nil
+// (NewMux guarantees this whenever authentication is enabled); a nil authz fails
+// closed. On any denial it writes a generic 403 and returns false.
+func authorize(w http.ResponseWriter, r *http.Request, authz tenant.Authorizer, namespace, holder string) bool {
+	id := IdentityFromContext(r.Context())
+	if id == nil {
+		return true
+	}
+	if authz == nil {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return false
+	}
+	if err := authz.AuthorizeNamespace(id, namespace); err != nil {
+		writeError(w, http.StatusForbidden, "not authorized for this namespace")
+		return false
+	}
+	if err := authz.AuthorizeHolder(id, holder); err != nil {
+		writeError(w, http.StatusForbidden, "holder not authorized for this identity")
+		return false
+	}
+	return true
+}
+
+func handleAcquire(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req AcquireRequest
 		if !decodeJSON(w, r, &req) {
@@ -94,6 +122,9 @@ func handleAcquire(mgr LeaseManager) http.HandlerFunc {
 			return
 		}
 		key := lease.Key{Namespace: r.PathValue("namespace"), Name: r.PathValue("name")}
+		if !authorize(w, r, authz, key.Namespace, req.Holder) {
+			return
+		}
 		res, err := mgr.Acquire(r.Context(), key, req.Holder, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
 			recordOutcome(r.Context(), outcomeError)
@@ -109,7 +140,7 @@ func handleAcquire(mgr LeaseManager) http.HandlerFunc {
 	}
 }
 
-func handleRenew(mgr LeaseManager) http.HandlerFunc {
+func handleRenew(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req RenewRequest
 		if !decodeJSON(w, r, &req) {
@@ -128,6 +159,9 @@ func handleRenew(mgr LeaseManager) http.HandlerFunc {
 			return
 		}
 		key := lease.Key{Namespace: r.PathValue("namespace"), Name: r.PathValue("name")}
+		if !authorize(w, r, authz, key.Namespace, req.Holder) {
+			return
+		}
 		res, err := mgr.Renew(r.Context(), key, req.Holder, req.FencingToken, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
 			recordOutcome(r.Context(), outcomeError)
@@ -143,7 +177,7 @@ func handleRenew(mgr LeaseManager) http.HandlerFunc {
 	}
 }
 
-func handleRelease(mgr LeaseManager) http.HandlerFunc {
+func handleRelease(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ReleaseRequest
 		if !decodeJSON(w, r, &req) {
@@ -154,6 +188,9 @@ func handleRelease(mgr LeaseManager) http.HandlerFunc {
 			return
 		}
 		key := lease.Key{Namespace: r.PathValue("namespace"), Name: r.PathValue("name")}
+		if !authorize(w, r, authz, key.Namespace, req.Holder) {
+			return
+		}
 		err := mgr.Release(r.Context(), key, req.Holder, req.FencingToken)
 		if err != nil {
 			if errors.Is(err, lease.ErrConflict) {

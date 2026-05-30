@@ -54,6 +54,7 @@ The API server exposes three lease lifecycle endpoints:
 the API server is configured with `--auth-mode=static-keys` or
 `--auth-mode=oidc`.
 
+
 ### Observability
 
 Every request is access-logged once and instrumented for Prometheus. The
@@ -68,6 +69,30 @@ semantic result (`acquired`, `held-by-other`, `renewed`, `released`,
 that HTTP status alone hides. `/metrics` is served on a separate unauthenticated
 port (`--metrics-addr`); see
 [Scalability: Phase 2](operations/scalability.md#phase-2--api-server-prometheus-instrumentation).
+
+### Authorization
+
+Authentication establishes *who* the caller is; authorization decides *what*
+they may touch. Every authenticated lease request is additionally checked
+against the caller's resolved tenant (the static key id, or the OIDC tenant
+claim):
+
+- **Namespace** — the default policy is permissive: any authenticated caller may
+  operate on any namespace. The cross-cluster failover model deliberately has
+  distinct clusters (distinct tenants) contend for the same `namespace/name`, so
+  a namespace gate would break legitimate contention. Stricter, opt-in policies
+  (e.g. a tenant→namespace allow-list) can be layered on without changing the
+  wire contract.
+- **Holder** — the request `holder` must be *owned* by the caller's tenant: it
+  must equal the tenant or be scoped under `"<tenant>/"`. This is the
+  cross-tenant guard — a caller cannot acquire, renew, or release a lease as a
+  holder that belongs to another tenant (notably, it cannot impersonate another
+  holder after that holder's lease expires). A holder outside the caller's tenant
+  returns `403`.
+
+Under `--auth-mode=none` no identity is established and both checks are skipped;
+this is a development-only mode and the API server warns loudly at startup.
+
 
 ## Lease Model
 

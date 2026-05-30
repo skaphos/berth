@@ -17,7 +17,7 @@ func newTestServer() (*httptest.Server, *lease.Manager) {
 	mgr := lease.NewManager(lease.NewMemStore())
 	// These tests focus on lease HTTP semantics; auth is exercised in
 	// middleware_test.go. Pass nil authn to bypass.
-	srv := httptest.NewServer(NewMux(mgr, nil))
+	srv := httptest.NewServer(NewMux(mgr, nil, nil))
 	return srv, mgr
 }
 
@@ -201,12 +201,14 @@ func TestAuthIntegrationStaticKeysGatesLeaseRoutes(t *testing.T) {
 		"good-token": {Holder: "team-a", Tenant: "team-a"},
 	})
 	mgr := lease.NewManager(lease.NewMemStore())
-	srv := httptest.NewServer(NewMux(mgr, authn))
+	srv := httptest.NewServer(NewMux(mgr, authn, nil))
 	defer srv.Close()
 
 	url := srv.URL + "/v1alpha1/namespaces/ns/leases/a/acquire"
+	// Holder is tenant-scoped ("team-a/...") so the default authorizer admits the
+	// valid-token case; the auth outcomes below turn on the bearer token alone.
 	body := func() *strings.Reader {
-		return strings.NewReader(`{"holder":"h","ttlSeconds":30}`)
+		return strings.NewReader(`{"holder":"team-a/h","ttlSeconds":30}`)
 	}
 
 	cases := []struct {
