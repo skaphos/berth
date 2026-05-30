@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Berth API server values for the load harness — k8s (coordination Lease)
+# backend. Installed as release `berth-apiserver-k8s` into berth-system in
+# the berth-load kind cluster.
+#
+# Decisions specific to the load harness (mirrors test/e2e but adds metrics):
+# - Service type NodePort; up.sh pins the https nodePort to 30443, which
+#   kind-load.yaml publishes to the host as 127.0.0.1:18443 via
+#   extraPortMappings. This gives the load driver a real network path (not a
+#   single proxied port-forward, which would bottleneck the run).
+# - existingSecret TLS — the harness pre-creates berth-apiserver-tls with a
+#   throwaway self-signed cert; the driver runs --insecure-skip-tls-verify.
+# - static-keys auth — the secret berth-api-keys is pre-created by the harness.
+# - metrics + ServiceMonitor enabled so the in-cluster Prometheus scrapes the
+#   Phase 2 RED + store-call series. The backend="k8s" label on
+#   berth_lease_store_call_duration_seconds separates this release from the
+#   sql one in the same Prometheus.
+
+image:
+  repository: berth-apiserver
+  tag: load
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+store:
+  backend: k8s
+
+coordination:
+  namespace: berth-coordination
+  inCluster: true
+
+tls:
+  certManager:
+    enabled: false
+  existingSecret: berth-apiserver-tls
+
+auth:
+  mode: static-keys
+  staticKeys:
+    secretName: berth-api-keys
+    secretKey: api-keys
+
+service:
+  type: NodePort
+  port: 8443
+
+metrics:
+  enabled: true
+  port: 8080
+  service:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 5s
+    scrapeTimeout: 4s
+
+podDisruptionBudget:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 256Mi

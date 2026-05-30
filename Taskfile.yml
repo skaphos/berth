@@ -202,6 +202,36 @@ tasks:
       - task: e2e
       - task: e2e-down
 
+  # --- load (scalability harness, coord-only kind + Prometheus) ---
+
+  load-up:
+    desc: Bring up the load harness (kind + Prometheus + Postgres + k8s/sql API servers) — see docs/operations/scalability.md Phase 3
+    cmds:
+      - ./test/load/fixtures/up.sh
+
+  load-run:
+    desc: 'Drive one scenario (vars: BACKEND=k8s|sql SCENARIO=steady|coldstart|failover|churn LEASES DURATION CONCURRENCY TTL HEARTBEAT PAIRS)'
+    vars:
+      BACKEND: '{{.BACKEND | default "k8s"}}'
+      SCENARIO: '{{.SCENARIO | default "steady"}}'
+      LEASES: '{{.LEASES | default "500"}}'
+      DURATION: '{{.DURATION | default "60s"}}'
+      CONCURRENCY: '{{.CONCURRENCY | default "256"}}'
+      TTL: '{{.TTL | default "30s"}}'
+      HEARTBEAT: '{{.HEARTBEAT | default "10s"}}'
+      PAIRS: '{{.PAIRS | default "8"}}'
+    cmds:
+      - >-
+        BACKEND={{.BACKEND}} SCENARIO={{.SCENARIO}} LEASES={{.LEASES}}
+        DURATION={{.DURATION}} CONCURRENCY={{.CONCURRENCY}} TTL={{.TTL}}
+        HEARTBEAT={{.HEARTBEAT}} PAIRS={{.PAIRS}}
+        ./test/load/fixtures/run.sh
+
+  load-down:
+    desc: Tear down the load harness
+    cmds:
+      - ./test/load/fixtures/down.sh
+
   # --- Housekeeping ---
 
   clean:

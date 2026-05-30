@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Berth API server values for the load harness — sql (Postgres) backend.
+# Installed as release `berth-apiserver-sql` into berth-system in the
+# berth-load kind cluster, alongside the k8s release.
+#
+# The DSN points at the in-cluster Postgres deployed by postgres.yaml; the
+# harness pre-creates the berth-sql-dsn secret. migrate=auto lets the API
+# server create its schema on first start. The backend="sql" label on
+# berth_lease_store_call_duration_seconds separates this release from the
+# k8s one in the same Prometheus.
+
+image:
+  repository: berth-apiserver
+  tag: load
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+store:
+  backend: sql
+  sql:
+    driver: postgres
+    dsnSecret:
+      name: berth-sql-dsn
+      key: dsn
+    migrate: auto
+
+tls:
+  certManager:
+    enabled: false
+  existingSecret: berth-apiserver-tls
+
+auth:
+  mode: static-keys
+  staticKeys:
+    secretName: berth-api-keys
+    secretKey: api-keys
+
+service:
+  type: NodePort
+  port: 8443
+
+metrics:
+  enabled: true
+  port: 8080
+  service:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 5s
+    scrapeTimeout: 4s
+
+podDisruptionBudget:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 256Mi

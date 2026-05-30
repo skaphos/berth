@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Kind cluster config for the Berth scalability load harness (SKA-445).
+#
+# Unlike the e2e topology (coord + east + west), the load harness is
+# coord-only: the Phase 3 load driver simulates every holder/standby from
+# the host, so a single cluster hosting the API server(s) + their store
+# (etcd for the k8s backend, in-cluster Postgres for the sql backend) +
+# Prometheus is all that is needed.
+#
+# extraPortMappings publish three fixed NodePorts to the host so the load
+# driver reaches each Service over a real network path (host -> mapped port
+# -> NodePort -> pod). This deliberately avoids `kubectl port-forward`, whose
+# single proxied connection would itself bottleneck a load run and confound
+# the measurement. up.sh pins the matching NodePorts (30443/30444/30090).
+#
+# Node image is pinned in lockstep with the operator's
+# controller-runtime / client-go versions. Bump together with kind-coord.yaml.
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: berth-load
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.33.1
+    extraPortMappings:
+      - containerPort: 30443   # berth-apiserver-k8s NodePort
+        hostPort: 18443
+        listenAddress: 127.0.0.1
+      - containerPort: 30444   # berth-apiserver-sql NodePort
+        hostPort: 18444
+        listenAddress: 127.0.0.1
+      - containerPort: 30090   # Prometheus NodePort
+        hostPort: 19090
+        listenAddress: 127.0.0.1

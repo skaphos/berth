@@ -1,0 +1,80 @@
+# SPDX-FileCopyrightText: 2026 Skaphos
+# SPDX-License-Identifier: MIT
+#
+# Minimal-but-sufficient kube-prometheus-stack values for the Berth load
+# harness. The harness serves three purposes (SKA-445), and the scrape set is
+# chosen to cover all three:
+#   1. Size CPU/memory requests + plan scaling -> needs per-pod resource USAGE
+#      (kubelet/cAdvisor) compared against configured requests/limits
+#      (kube-state-metrics). These are ON for that reason — do not strip them.
+#   2. Identify bottlenecks -> the apiserver ServiceMonitors (RED + store-call
+#      latency by backend), plus the resource saturation above.
+#   3. Baseline future releases -> the run-window snapshots run.sh pulls.
+#
+# Grafana, Alertmanager, node-exporter, and the control-plane scrape jobs stay
+# off to keep bring-up fast and the cluster small.
+
+# --- dashboards / alerting / node-level: not needed for a load run ----------
+grafana:
+  enabled: false
+alertmanager:
+  enabled: false
+nodeExporter:
+  enabled: false
+defaultRules:
+  create: false
+
+# --- resource telemetry: ON (goal 1 + 2) ------------------------------------
+# kubelet brings the cAdvisor ServiceMonitor: container_cpu_usage_seconds_total
+# and container_memory_working_set_bytes, labelled by namespace/pod/container.
+kubelet:
+  enabled: true
+# kube-state-metrics exposes kube_pod_container_resource_requests/limits so a
+# run can compare measured usage against what the chart requested.
+kubeStateMetrics:
+  enabled: true
+kube-state-metrics:
+  # We only need pod/container resource series; trimming the rest keeps it light.
+  metricLabelsAllowlist:
+    - pods=[app.kubernetes.io/instance,app.kubernetes.io/name]
+
+# --- control-plane scrape jobs: off (not under test) ------------------------
+kubeApiServer:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+coreDns:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# --- the Prometheus we actually use -----------------------------------------
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090   # pinned to match kind-load.yaml extraPortMappings
+  prometheusSpec:
+    # Scrape ServiceMonitors/PodMonitors in any namespace regardless of label,
+    # so the berth-apiserver charts' ServiceMonitors are discovered without
+    # setting a matching selector label on each release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    # Short interval + retention: a load run is minutes long, not days.
+    scrapeInterval: 5s
+    evaluationInterval: 30s
+    retention: 2h
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi

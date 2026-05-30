@@ -14,9 +14,14 @@ Status: **Phases 1–3 landing.** Store-level baselines for `mem` and `sqlite`
 are measured (Phase 1; see [Results](#results)), the API server is
 Prometheus-instrumented on a separate `/metrics` port (Phase 2), and the
 API-level load driver with all four scenarios is built and in-process-tested
-(Phase 3). What remains is running the harness against durable, deployed
-backends (`k8s` etcd, Postgres / MariaDB) to replace the predicted tables below,
-then the operator/injection phases.
+(Phase 3). A coord-only kind + Prometheus harness
+([`test/load/fixtures/`](../../test/load/fixtures)) stands up `k8s`- and
+`sql`-backed API servers under one Prometheus, capturing latency **and** per-pod
+CPU/memory. The first deployed runs are in (see
+[Results](#2026-05-30--phase-3-first-deployed-run-k8s-vs-sql-steady)) and
+already surfaced a real bottleneck — the `k8s` backend is throttle-bound by the
+client-go default `QPS=5/Burst=10`, not resource-bound. What remains is the QPS
+fix + re-run, then the operator/injection phases.
 
 ## Target Workload
 
@@ -207,15 +212,73 @@ stdout, and — when `--metrics-addr` is set — its own
 `berth_load_request_duration_seconds{op,result}` on `/metrics` so Prometheus can
 scrape the driver mid-run.
 
+#### Deployed harness (`test/load/fixtures/`)
+
+This harness exists to answer three questions, and it captures the telemetry
+for all three — latency alone is not enough:
+
+1. **Size CPU/memory requests & plan scaling** — measure per-pod CPU and memory
+   *usage* under load and compare against the configured requests/limits.
+2. **Identify bottlenecks** — localize latency by comparing client-observed
+   latency against the server's RED metrics
+   (`berth_apiserver_request_duration_seconds`) and store-call latency
+   (`berth_lease_store_call_duration_seconds{backend}`), plus resource
+   saturation.
+3. **Baseline future releases** — commit comparable artifacts (run params +
+   latency + resource usage) so a later release can be measured against today.
+
+The driver simulates every holder and standby itself from the host, so an
+API-level run against a real store needs only the **coordination** cluster — no
+operator/runner clusters. [`test/load/fixtures/`](../../test/load/fixtures)
+brings up a single kind cluster (`berth-load`) hosting:
+
+- `berth-apiserver-k8s` — `k8s` backend on the cluster's own etcd;
+- `berth-apiserver-sql` — `sql` backend on an in-cluster throwaway Postgres;
+- a `kube-prometheus-stack` scraping both apiservers' ServiceMonitors **plus**
+  kubelet/cAdvisor and kube-state-metrics, so per-pod CPU/memory usage and the
+  configured requests/limits are both recorded (goal 1). Grafana, Alertmanager,
+  and node-exporter stay off.
+
+The driver reaches each API server over a real network path — kind
+`extraPortMappings` publish fixed NodePorts (30443/30444/30090) to
+`127.0.0.1:18443/18444/19090`. This deliberately avoids `kubectl port-forward`,
+whose single proxied connection bottlenecks a load run and confounds the
+measurement (goal 2). One Prometheus covers both backends because the `backend`
+label on `berth_lease_store_call_duration_seconds` separates the store paths; a
+`k8s`-backend run also surfaces real etcd store latency, practically covering
+the Phase 1 "k8s row".
+
+```sh
+go -C tools tool task load-up
+go -C tools tool task load-run BACKEND=k8s SCENARIO=steady LEASES=500 DURATION=60s
+go -C tools tool task load-run BACKEND=sql SCENARIO=steady LEASES=500 DURATION=60s
+go -C tools tool task load-down
+```
+
+`run.sh` writes one artifact per run to [`docs/operations/results/`](results/)
+pairing the driver's latency summary with a Prometheus resource snapshot
+(CPU avg/peak, memory peak, configured requests/limits) over the run window;
+fold the measured numbers into the [Results](#results) tables. The harness is a
+measurement rig, not a deployment reference (self-signed TLS, fixed NodePorts,
+throwaway api key, emptyDir Postgres) — see
+[`test/load/fixtures/README.md`](../../test/load/fixtures/README.md).
+
 - [x] Driver location decided: `test/load` entrypoint + `internal/load` logic
       (not a shipped `cmd/*` binary).
 - [x] All four scenarios implemented, plus an in-process end-to-end test that
       runs each against the real `api.NewMux` + mem store over `httptest` (no
       external infra) — proves the driver works; `internal/load` is at ~94%
       coverage.
-- [ ] Run against live `k8s` and `sql` backends; result tables in
-      `docs/operations/results/`. Needs a deployed, instrumented target —
-      pending alongside the Phase 1 durable-backend runs.
+- [x] Coord-only kind + Prometheus harness wiring `k8s` + `sql` API servers to
+      one Prometheus, capturing latency **and** per-pod CPU/memory
+      (`test/load/fixtures/`, `task load-up`/`load-run`/`load-down`).
+- [x] First live `k8s` + `sql` steady runs captured; see
+      [Results](#2026-05-30--phase-3-first-deployed-run-k8s-vs-sql-steady).
+      Headline finding: the `k8s` backend is throttle-bound by client-go
+      `QPS=5/Burst=10`, not resource-bound.
+- [ ] Raise/expose the `k8s` store client-go QPS/Burst, then re-run for an
+      unthrottled `k8s` curve and fold per-backend CPU-request guidance into the
+      Phase 6 recommendation.
 
 ### Phase 4 — Operator-level load on the 3-cluster kind harness
 
@@ -294,6 +357,48 @@ Read-out against the [sizing arithmetic](#sizing-arithmetic) (combined target
 Pending for a complete Phase 1: `k8s` (etcd) and the DSN-backed Postgres /
 MariaDB numbers, which carry real network and durability cost and are the ones
 the sizing recommendation will actually rest on.
+
+### 2026-05-30 — Phase 3 first deployed run (`k8s` vs `sql`, steady)
+
+Rig: the `test/load/fixtures/` harness (coord-only kind, single-replica API
+servers, etcd from the kind node, in-cluster Postgres 16), driver on the host
+over the fixed-NodePort path. `steady` scenario, ttl 30s / heartbeat 10s, 10s
+request timeout. Raw artifacts (latency + per-pod resource snapshot) under
+[`docs/operations/results/`](results/). These are kind/laptop numbers — useful
+for **shape and bottleneck**, not absolute capacity.
+
+| Run | acquire p50 | acquire p95 | acquire err | renew p50 | CPU peak (req 0.1c) | mem peak (req 128Mi) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `k8s`, 300 leases | 10,001 ms | 10,026 ms | 1184/1192 | 9.5 ms | 0.007 c | 20 MiB |
+| `k8s`, 8 leases | 585 ms | 2,399 ms | 0/32 | 601 ms | 0.004 c | 13 MiB |
+| `sql`, 300 leases | 6.3 ms | 1,655 ms | 60/1800 | 7.8 ms | 0.086 c | 38 MiB |
+
+Read against the three harness goals:
+
+- **Bottleneck (goal 2): the `k8s` backend is throttle-bound by client-go, not
+  resource-bound.** Under 300 concurrent acquires the API server pod is
+  *idle* (0.007 c, 20 MiB) yet nearly every acquire hits the 10s deadline. The
+  pod's own logs are unambiguous: `"Waited before sending request"
+  delay="10.0s" reason="client-side throttling, not priority and fairness"` on
+  the `coordination.k8s.io` Lease calls. The default client-go limiter
+  (`QPS=5, Burst=10`) caps the store, and because every heartbeat fires
+  renew+contend for *all* leases at once, the in-flight count exceeds Burst=10
+  at even ~8 leases (the 8-lease run is slow but error-free; the 300-lease run
+  times out). The unthrottled store latency is ~1–2 ms (renew min 1.3 ms).
+  **Root cause:** [`internal/k8s/client.go`](../../internal/k8s/client.go)
+  builds the clientset via `rest.InClusterConfig()` and never sets
+  `cfg.QPS`/`cfg.Burst`, so they take client-go's defaults (5 / 10).
+  **Action:** make them configurable and raise the defaults before the `k8s`
+  backend can carry the 2,000-lease target.
+- **`sql` scales far better on the same load:** acquire p50 6.3 ms vs 10 s, and
+  it degrades gracefully (p95 ~1.6 s, 3% errors) instead of collapsing — no
+  client-side throttle; a connection pool absorbs the burst.
+- **Sizing (goal 1):** neither backend is memory-bound here (≤38 MiB against a
+  128 MiB request — the request could drop). `sql` reaches **86% of its 0.1-core
+  request** at 300 leases while `k8s` stays idle, so the per-backend CPU-request
+  guidance differs: `sql` needs CPU headroom to scale; `k8s` needs QPS headroom,
+  not cores. Re-run after the QPS fix to get a `k8s` curve that isn't
+  throttle-clipped.
 
 ## Open Questions
 
