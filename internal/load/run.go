@@ -89,30 +89,29 @@ func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder
 	renewCtx, stopRenew := context.WithCancel(ctx)
 	defer stopRenew()
 
-	// Survivor half (odd indices): each lease is acquired and then renewed
-	// continuously from the moment *it* is acquired — not after the whole
-	// population phase — so no survivor sits idle long enough to expire even when
-	// population is slow on a throttled backend. A shared semaphore bounds the
-	// acquire burst (the renew loop holds no slot), matching the bounded burst of
-	// the failover half below. These hold steady write load on the backend
-	// through the expiry window and the reclaim.
-	acquireSlots := make(chan struct{}, cfg.Concurrency)
+	// Populate every lease under a single bounded acquire burst. As each survivor
+	// (odd index) is acquired it spawns a renew loop that holds it for the rest
+	// of the run — starting from the moment *that* lease is acquired, so none
+	// sits idle long enough to expire even when population is slow on a throttled
+	// backend. The failover half (even indices) is acquired and then left to
+	// expire. Routing both halves through one forEachLeaseBounded keeps the
+	// acquire burst at cfg.Concurrency (not 2x) and makes the pass a barrier: it
+	// returns only once every initial acquire has completed, so all survivors are
+	// already renewing before the expiry window opens and the reclaim is always
+	// measured against survivor load. The renew loops hold no bounded slot.
 	var survivors sync.WaitGroup
-	for i := 1; i < cfg.Leases; i += 2 {
+	forEachLeaseBounded(ctx, cfg.Leases, cfg.Concurrency, func(c context.Context, i int) {
+		res, err := recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), cfg.TTL)
+		if i%2 == 0 {
+			return // failover half: acquired, now left to expire
+		}
+		var token int32
+		if err == nil && res.Acquired {
+			token = res.FencingToken
+		}
 		survivors.Add(1)
-		go func(i int) {
+		go func() {
 			defer survivors.Done()
-			select {
-			case <-renewCtx.Done():
-				return
-			case acquireSlots <- struct{}{}:
-			}
-			res, err := recAcquire(ctx, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), cfg.TTL)
-			<-acquireSlots
-			var token int32
-			if err == nil && res.Acquired {
-				token = res.FencingToken
-			}
 			for renewCtx.Err() == nil {
 				res, err := recRenew(ctx, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), token, cfg.TTL)
 				if err == nil && res.Acquired {
@@ -120,16 +119,7 @@ func runFailover(ctx context.Context, cli LeaseClient, cfg Config, rec *Recorder
 				}
 				sleepCtx(renewCtx, cfg.Heartbeat)
 			}
-		}(i)
-	}
-
-	// Failover half (even indices): acquire under the bounded burst, then leave
-	// to expire by not renewing.
-	forEachLeaseBounded(ctx, cfg.Leases, cfg.Concurrency, func(c context.Context, i int) {
-		if i%2 != 0 {
-			return // the odd half is held by the survivor renewers above
-		}
-		_, _ = recAcquire(c, rec, cli, cfg.Namespace, leaseName(i), activeHolder(i), cfg.TTL)
+		}()
 	})
 
 	// Wait out the TTL plus a margin so the un-renewed even half is reclaimable.
