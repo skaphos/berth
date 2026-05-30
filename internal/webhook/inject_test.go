@@ -137,6 +137,40 @@ func TestInjectSignalSharesProcessNamespace(t *testing.T) {
 	}
 }
 
+func TestInjectSignalTargetPlumbsEnv(t *testing.T) {
+	pod := optInPod("prod", map[string]string{
+		AnnLeaseName:    "checkout",
+		AnnEnforce:      string(acquire.EnforceSignal),
+		AnnSignalTarget: "nginx",
+	})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+	side := findContainer(pod.Spec.InitContainers, SidecarContainerName)
+	if side == nil {
+		t.Fatal("expected the renew sidecar")
+	}
+	if got := envMap(side)[acquire.EnvSignalTarget]; got != "nginx" {
+		t.Fatalf("%s = %q, want nginx", acquire.EnvSignalTarget, got)
+	}
+}
+
+func TestInjectSignalTargetIgnoredUnderProbe(t *testing.T) {
+	// The selector is meaningless in probe mode; it must not leak into the env.
+	pod := optInPod("prod", map[string]string{
+		AnnLeaseName:    "checkout",
+		AnnEnforce:      string(acquire.EnforceProbe),
+		AnnSignalTarget: "nginx",
+	})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+	side := findContainer(pod.Spec.InitContainers, SidecarContainerName)
+	if _, ok := envMap(side)[acquire.EnvSignalTarget]; ok {
+		t.Fatalf("%s must not be set in probe mode", acquire.EnvSignalTarget)
+	}
+}
+
 func TestInjectSignalRejectsExplicitFalseShareProcessNamespace(t *testing.T) {
 	pod := optInPod("prod", map[string]string{
 		AnnLeaseName: "checkout",

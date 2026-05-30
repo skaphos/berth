@@ -275,6 +275,7 @@ type resolved struct {
 	leaseNamespace   string
 	mode             acquire.Mode
 	enforce          acquire.Enforce
+	signalTarget     string
 	ttlSeconds       int
 	heartbeatSeconds int    // 0 → let the helper derive ttl/3
 	enforceGrace     int    // 0 → helper default
@@ -294,6 +295,7 @@ func (i *PodInjector) resolve(pod *corev1.Pod, ns string) (resolved, error) {
 		leaseNamespace: orDefault(ann[AnnLeaseNamespace], ns),
 		mode:           acquire.Mode(orDefault(ann[AnnMode], string(i.cfg.DefaultMode))),
 		enforce:        acquire.Enforce(orDefault(ann[AnnEnforce], string(i.cfg.DefaultEnforce))),
+		signalTarget:   ann[AnnSignalTarget],
 		ttlSeconds:     i.cfg.DefaultTTLSeconds,
 		releaseOnDown:  ann[AnnReleaseOnShutdown],
 		holderIdentity: ann[AnnHolderIdentity],
@@ -507,6 +509,7 @@ func (i *PodInjector) buildEnv(r resolved) []corev1.EnvVar {
 		{Name: acquire.EnvPodNamespace, ValueFrom: fieldRef("metadata.namespace")},
 		{Name: acquire.EnvPodName, ValueFrom: fieldRef("metadata.name")},
 	}
+	env = appendIf(env, r.signalTarget != "" && r.enforce == acquire.EnforceSignal, acquire.EnvSignalTarget, r.signalTarget)
 	env = appendIf(env, r.heartbeatSeconds > 0, acquire.EnvHeartbeatSecs, strconv.Itoa(r.heartbeatSeconds))
 	env = appendIf(env, r.enforceGrace > 0, acquire.EnvEnforceGrace, strconv.Itoa(r.enforceGrace))
 	env = appendIf(env, r.releaseOnDown != "", acquire.EnvReleaseOnDown, r.releaseOnDown)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -47,11 +48,18 @@ type signalEnforcer struct {
 	termedAt map[int]time.Time
 }
 
-func newSignalEnforcer(grace time.Duration, log *slog.Logger) *signalEnforcer {
+func newSignalEnforcer(grace time.Duration, target string, log *slog.Logger) *signalEnforcer {
+	if target == "" {
+		log.Warn("enforce=signal has no signal-target: on lease loss every process in the "+
+			"shared PID namespace (except berth's own) is signaled, which can terminate "+
+			"co-located sidecars; set the signal-target to scope enforcement to the workload",
+			"env", EnvSignalTarget)
+	}
+	scan := osProcScanner()
 	return &signalEnforcer{
 		grace:    grace,
 		now:      time.Now,
-		find:     findMainPIDs,
+		find:     func() ([]int, error) { return scan.workloadPIDs(target) },
 		signal:   func(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) },
 		log:      log,
 		termedAt: map[int]time.Time{},
@@ -94,22 +102,83 @@ func (s *signalEnforcer) Release(context.Context) error {
 // newEnforcer builds the enforcer selected by cfg.Enforce.
 func newEnforcer(cfg *Config, state *State, log *slog.Logger) Enforcer {
 	if cfg.Enforce == EnforceSignal {
-		return newSignalEnforcer(cfg.EnforceGrace, log)
+		return newSignalEnforcer(cfg.EnforceGrace, cfg.SignalTarget, log)
 	}
 	return probeEnforcer{state: state}
 }
 
-// findMainPIDs returns candidate main-container PIDs visible in the
-// shared process namespace: everything except PID 1 (the pause/init
-// process), this process and its parent, and processes running our own
-// binary (the sidecar and the probe check). It is a heuristic; the design
-// reserves signal mode for cases where probe injection is not viable and
-// recommends probe as the default.
-func findMainPIDs() ([]int, error) {
-	self := os.Getpid()
-	parent := os.Getppid()
-	selfExe, _ := os.Readlink("/proc/self/exe")
+// procScanner reads the process table. The fields are injectable so the
+// selection logic in workloadPIDs is unit-testable without a real /proc.
+type procScanner struct {
+	self    int    // this process, always excluded
+	parent  int    // its parent (the sidecar's shell/entrypoint), excluded
+	selfExe string // our own executable; other instances are excluded
+	list    func() ([]int, error)
+	comm    func(pid int) string // /proc/<pid>/comm; "" if unreadable
+	exe     func(pid int) string // readlink /proc/<pid>/exe; "" if unreadable
+}
 
+// osProcScanner reads the live /proc filesystem.
+func osProcScanner() procScanner {
+	selfExe, _ := os.Readlink("/proc/self/exe")
+	return procScanner{
+		self:    os.Getpid(),
+		parent:  os.Getppid(),
+		selfExe: selfExe,
+		list:    listProcPIDs,
+		comm:    readProcComm,
+		exe:     readProcExe,
+	}
+}
+
+// workloadPIDs returns the PIDs to signal on lease loss. It always excludes
+// PID 1 (the pause/init process), this process and its parent, and other
+// instances of our own binary (the sidecar and the probe check). When target
+// is non-empty it returns only processes whose comm or executable basename
+// matches it — bounding the blast radius to the gated workload. When target is
+// empty it returns every remaining process: a broad heuristic that can reach
+// co-located sidecars, which is why signal mode warns when no target is set.
+func (sc procScanner) workloadPIDs(target string) ([]int, error) {
+	pids, err := sc.list()
+	if err != nil {
+		return nil, err
+	}
+	var out []int
+	for _, pid := range pids {
+		if pid <= 1 || pid == sc.self || pid == sc.parent {
+			continue
+		}
+		if exe := sc.exe(pid); exe != "" && exe == sc.selfExe {
+			continue // another instance of our own binary
+		}
+		if target != "" && !matchesTarget(target, sc.comm(pid), sc.exe(pid)) {
+			continue
+		}
+		out = append(out, pid)
+	}
+	return out, nil
+}
+
+// matchesTarget reports whether a process identified by comm and exe path is
+// the configured signal target. It matches the executable basename or comm.
+// The kernel truncates comm to 15 bytes, so a longer target is also compared
+// against its 15-byte prefix.
+func matchesTarget(target, comm, exe string) bool {
+	if comm != "" && comm == target {
+		return true
+	}
+	if exe != "" && filepath.Base(exe) == target {
+		return true
+	}
+	const commMax = 15 // TASK_COMM_LEN - 1
+	if comm != "" && len(target) > commMax && comm == target[:commMax] {
+		return true
+	}
+	return false
+}
+
+// listProcPIDs returns the numeric PID directories under /proc.
+func listProcPIDs() ([]int, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil, err
@@ -123,13 +192,27 @@ func findMainPIDs() ([]int, error) {
 		if err != nil {
 			continue // not a pid directory
 		}
-		if pid <= 1 || pid == self || pid == parent {
-			continue
-		}
-		if exe, err := os.Readlink(filepath.Join("/proc", e.Name(), "exe")); err == nil && exe == selfExe {
-			continue // another instance of our own binary
-		}
 		pids = append(pids, pid)
 	}
 	return pids, nil
+}
+
+// readProcComm returns the process command name from /proc/<pid>/comm, or ""
+// if it cannot be read (the process may have exited).
+func readProcComm(pid int) string {
+	b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// readProcExe returns the executable path behind /proc/<pid>/exe, or "" if it
+// cannot be resolved.
+func readProcExe(pid int) string {
+	exe, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	if err != nil {
+		return ""
+	}
+	return exe
 }

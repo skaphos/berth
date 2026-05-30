@@ -15,6 +15,7 @@ const (
 	EnvLeaseNamespace = "BERTH_LEASE_NAMESPACE"
 	EnvMode           = "BERTH_MODE"
 	EnvEnforce        = "BERTH_ENFORCE"
+	EnvSignalTarget   = "BERTH_SIGNAL_TARGET"
 	EnvTTLSeconds     = "BERTH_TTL_SECONDS"
 	EnvHeartbeatSecs  = "BERTH_HEARTBEAT_SECONDS"
 	EnvEnforceGrace   = "BERTH_ENFORCE_GRACE_SECONDS"
@@ -48,6 +49,7 @@ func ConfigFromEnv(get func(string) string) (*Config, error) {
 		LeaseNamespace: get(EnvLeaseNamespace),
 		Mode:           Mode(get(EnvMode)),
 		Enforce:        Enforce(get(EnvEnforce)),
+		SignalTarget:   get(EnvSignalTarget),
 		HolderIdentity: get(EnvHolderIdentity),
 		ClusterID:      get(EnvClusterID),
 		PodNamespace:   get(EnvPodNamespace),

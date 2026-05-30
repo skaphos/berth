@@ -95,6 +95,7 @@ so the webhook is only consulted for opted-in Pods.
 | `berth.skaphos.io/release-on-shutdown` | No | `true` (runtime-singleton) | Best-effort `Release` on graceful shutdown. |
 | `berth.skaphos.io/enforce` | No | `probe` | runtime-singleton only: `probe` or `signal`. See [Enforcement](#enforcement-runtime-singleton). |
 | `berth.skaphos.io/enforce-grace-seconds` | No | from `terminationGracePeriodSeconds` | `signal` only: seconds between SIGTERM and SIGKILL. |
+| `berth.skaphos.io/signal-target` | No | _(unset → broad)_ | `signal` only: scope enforcement to the workload process, matched by `comm` or executable basename (e.g. `nginx`). **Strongly recommended in multi-container Pods** — see the hazard note under [Enforcement](#enforcement-runtime-singleton). |
 
 Operator-supplied defaults for `mode`, `enforce`, and `ttl-seconds` come from the
 chart (`injection.defaults.*`); a per-Pod annotation overrides them.
@@ -134,6 +135,17 @@ Selected by `berth.skaphos.io/enforce`:
   but every container in the Pod can then see and signal every other one (weaker
   isolation), and PID-1 signal handling varies by image. Reserve it for images
   where the probe cannot run.
+
+  > **Multi-sidecar hazard.** Without `berth.skaphos.io/signal-target`, the
+  > sidecar signals **every** process in the shared PID namespace except PID 1
+  > and berth's own — so on lease loss it also `SIGTERM`/`SIGKILL`s co-located
+  > sidecars (service mesh, log shippers, metrics agents), not just the gated
+  > workload. The helper logs a warning when it starts unscoped. In any Pod with
+  > more than the one workload container, set `signal-target` to the workload's
+  > process name (`comm`, or the executable basename; the kernel truncates
+  > `comm` to 15 bytes, which the matcher accounts for) to bound the blast
+  > radius. `probe` remains the recommended default precisely because it has no
+  > such cross-container reach.
 
 Both are **best-effort within a bounded window**: there is detection + kill
 latency between lease loss and the container stopping. The **fencing token**

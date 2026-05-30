@@ -16,6 +16,7 @@ func TestConfigFromEnvFull(t *testing.T) {
 		EnvLeaseNamespace: "prod",
 		EnvMode:           string(ModeRuntimeSingleton),
 		EnvEnforce:        string(EnforceSignal),
+		EnvSignalTarget:   "nginx",
 		EnvTTLSeconds:     "30",
 		EnvHeartbeatSecs:  "7",
 		EnvEnforceGrace:   "5",
@@ -42,6 +43,9 @@ func TestConfigFromEnvFull(t *testing.T) {
 	}
 	if cfg.Mode != ModeRuntimeSingleton || cfg.Enforce != EnforceSignal {
 		t.Errorf("mode/enforce = %q/%q", cfg.Mode, cfg.Enforce)
+	}
+	if cfg.SignalTarget != "nginx" {
+		t.Errorf("signal target = %q, want nginx", cfg.SignalTarget)
 	}
 	if cfg.TTL != 30*time.Second || cfg.HeartbeatInterval != 7*time.Second || cfg.EnforceGrace != 5*time.Second {
 		t.Errorf("durations = %s/%s/%s", cfg.TTL, cfg.HeartbeatInterval, cfg.EnforceGrace)
