@@ -58,6 +58,13 @@ var (
 // Store is the persistence interface for lease records. Implementations must
 // guarantee linearizable execution of Get, Put, and Delete per [Key].
 type Store interface {
+	// Ping reports backend reachability with a constant-cost probe (no full
+	// scan): a nil error means the backend answered. It exists so a readiness
+	// check can verify the store without the unbounded cost of List, keeping
+	// the unauthenticated /readyz route from amplifying into an expensive
+	// backend query. Implementations must respect ctx cancellation.
+	Ping(ctx context.Context) error
+
 	// Get returns the record for key. Returns [ErrNotFound] if absent.
 	Get(ctx context.Context, key Key) (*Record, error)
 

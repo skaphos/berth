@@ -21,6 +21,13 @@ type meteredStore struct {
 	inner   lease.Store
 }
 
+func (s *meteredStore) Ping(ctx context.Context) error {
+	start := time.Now()
+	err := s.inner.Ping(ctx)
+	s.observe("ping", start, err)
+	return err
+}
+
 func (s *meteredStore) Get(ctx context.Context, key lease.Key) (*lease.Record, error) {
 	start := time.Now()
 	rec, err := s.inner.Get(ctx, key)

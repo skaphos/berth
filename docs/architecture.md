@@ -51,13 +51,21 @@ The API server exposes three lease lifecycle endpoints:
 | `POST` | `/v1alpha1/namespaces/{namespace}/leases/{name}/release` | Release a held lease after validating holder and fencing token. |
 
 Both health routes are unauthenticated. `/healthz` is an always-200 liveness
-check. `/readyz` is readiness: it probes the lease store (a lightweight `List`)
-and returns `503` when the store is unreachable, so a store outage drains the
-pod from Service endpoints instead of surfacing as `500`s on lease calls. The
-chart's readiness probe targets `/readyz`; liveness stays on `/healthz`. The
-operator's own `/readyz` is gated on reachability of the central API server
-(`pkg/client` `Ping` against `/healthz`), so an operator that cannot reach the
-API reports not-ready.
+check. `/readyz` is readiness: it probes the lease store via a constant-cost
+`Store.Ping` (a DB ping / single-item k8s List, never a full scan) and returns
+`503` when the store is unreachable, so a store outage drains the pod from
+Service endpoints instead of surfacing as `500`s on lease calls. Because the
+route is unauthenticated, the probe is fronted by a short-TTL, single-flight,
+timeout-bounded gate so a request storm collapses into at most one backend
+probe per second and cannot be amplified into a backend-query DoS. The chart's
+readiness probe targets `/readyz`; liveness stays on `/healthz`. The operator's
+own `/readyz` is gated on reachability of the central API server (`pkg/client`
+`Ping` against `/healthz`), so an operator that cannot reach the API reports
+not-ready.
+
+Both health routes are unauthenticated by design (kubelet probes carry no
+credentials); restrict them to the kubelet/ingress path with a NetworkPolicy
+in production.
 
 Lease endpoints are authenticated when the API server is configured with
 `--auth-mode=static-keys` or `--auth-mode=oidc`.

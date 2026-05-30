@@ -18,6 +18,12 @@ func NewMemStore() *MemStore {
 	return &MemStore{records: make(map[Key]Record)}
 }
 
+// Ping implements [Store]. The in-memory store is always reachable; it only
+// honors ctx cancellation.
+func (s *MemStore) Ping(ctx context.Context) error {
+	return ctx.Err()
+}
+
 // Get implements [Store].
 func (s *MemStore) Get(ctx context.Context, key Key) (*Record, error) {
 	if err := ctx.Err(); err != nil {

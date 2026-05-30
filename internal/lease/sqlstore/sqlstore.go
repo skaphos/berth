@@ -83,6 +83,15 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// Ping implements lease.Store. It verifies a live database connection without
+// touching the leases table, so a readiness probe stays constant-cost.
+func (s *Store) Ping(ctx context.Context) error {
+	if err := s.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("sql store: ping: %w", err)
+	}
+	return nil
+}
+
 // Get implements lease.Store.
 func (s *Store) Get(ctx context.Context, key lease.Key) (*lease.Record, error) {
 	tx, err := s.db.BeginTx(ctx, s.dialect.readTx)

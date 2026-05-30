@@ -16,6 +16,13 @@ import (
 func RunStoreConformance(t *testing.T, newStore func(testing.TB) lease.Store) {
 	t.Helper()
 
+	t.Run("PingReportsReachable", func(t *testing.T) {
+		store := newStore(t)
+		if err := store.Ping(context.Background()); err != nil {
+			t.Fatalf("ping on a healthy store: %v", err)
+		}
+	})
+
 	t.Run("GetNotFound", func(t *testing.T) {
 		store := newStore(t)
 		if _, err := store.Get(context.Background(), lease.Key{Namespace: "x", Name: "y"}); !errors.Is(err, lease.ErrNotFound) {
