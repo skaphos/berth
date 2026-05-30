@@ -113,6 +113,9 @@ func TestMemStoreContextCancellationIsHonored(t *testing.T) {
 	if err := s.Delete(ctx, Key{Namespace: "ns", Name: "a"}, 1); err == nil {
 		t.Fatal("Delete must surface context cancellation")
 	}
+	if err := s.Ping(ctx); err == nil {
+		t.Fatal("Ping must surface context cancellation")
+	}
 }
 
 // TestConcurrentAcquireExactlyOneWinner exercises the race that motivates

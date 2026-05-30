@@ -3,14 +3,18 @@ package lease
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 const testNamespace = "berth-system"
@@ -258,3 +262,65 @@ func TestK8sStoreSurvivesAlreadyExistsRace(t *testing.T) {
 
 // Compile-time assertion that K8sLeaseStore satisfies Store.
 var _ Store = (*K8sLeaseStore)(nil)
+
+// TestK8sStorePing covers the Ping implementation added to support
+// readiness probes (SKA-450). It verifies success, error propagation from
+// the underlying List, and context cancellation. The reactor-based error
+// test also exercises the code path that performs a bounded List (Limit:1).
+func TestK8sStorePing(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reports reachable", func(t *testing.T) {
+		t.Parallel()
+
+		store, _ := newK8sStore(t)
+		if err := store.Ping(context.Background()); err != nil {
+			t.Fatalf("ping healthy store: %v", err)
+		}
+	})
+
+	t.Run("propagates list errors", func(t *testing.T) {
+		t.Parallel()
+
+		client := fake.NewSimpleClientset()
+		client.PrependReactor("list", "leases", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, fmt.Errorf("simulated apiserver unavailable")
+		})
+		store, err := NewK8sLeaseStore(client, testNamespace)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = store.Ping(context.Background())
+		if err == nil {
+			t.Fatal("expected error from Ping")
+		}
+		if !strings.Contains(err.Error(), "k8s lease store: ping") {
+			t.Fatalf("err = %v, want wrapped 'k8s lease store: ping' prefix", err)
+		}
+		if !strings.Contains(err.Error(), "simulated apiserver unavailable") {
+			t.Fatalf("err = %v, want to contain the injected List error", err)
+		}
+	})
+
+	t.Run("propagates context cancellation (simulated via reactor)", func(t *testing.T) {
+		t.Parallel()
+
+		client := fake.NewSimpleClientset()
+		client.PrependReactor("list", "leases", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, context.Canceled
+		})
+		store, err := NewK8sLeaseStore(client, testNamespace)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = store.Ping(context.Background())
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want wrapped context.Canceled from Ping", err)
+		}
+		if !strings.Contains(err.Error(), "k8s lease store: ping") {
+			t.Fatalf("err = %v, want wrapped with ping prefix", err)
+		}
+	})
+}

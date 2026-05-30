@@ -153,6 +153,9 @@ func RunStoreConformance(t *testing.T, newStore func(testing.TB) lease.Store) {
 		if err := store.Delete(ctx, lease.Key{Namespace: "ns", Name: "a"}, 1); err == nil {
 			t.Fatal("Delete must surface context cancellation")
 		}
+		if err := store.Ping(ctx); err == nil {
+			t.Fatal("Ping must surface context cancellation")
+		}
 	})
 
 	t.Run("ConcurrentAcquireExactlyOneWinner", func(t *testing.T) {
