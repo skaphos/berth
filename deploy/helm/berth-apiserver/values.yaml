@@ -186,7 +186,13 @@ securityContext:
     drop:
       - ALL
 
-# -- Liveness / readiness probes hit /healthz on the TLS listener.
+# -- Probes on the TLS listener. Liveness hits the always-200 /healthz route;
+# readiness hits /readyz, which probes store reachability and fails (503)
+# during a backend outage so the pod is drained rather than routed 500s. Both
+# routes are unauthenticated by design (kubelet probes carry no credentials);
+# /readyz is fronted by a short-TTL, single-flight, timeout-bounded gate so it
+# cannot be amplified into a backend-query DoS. Restrict these routes to the
+# kubelet path with a NetworkPolicy in production. See SKA-450.
 livenessProbe:
   httpGet:
     path: /healthz
@@ -196,7 +202,7 @@ livenessProbe:
   periodSeconds: 10
 readinessProbe:
   httpGet:
-    path: /healthz
+    path: /readyz
     port: https
     scheme: HTTPS
   initialDelaySeconds: 2

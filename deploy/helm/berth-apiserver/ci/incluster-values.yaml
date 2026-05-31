@@ -21,3 +21,11 @@ auth:
   staticKeys:
     secretName: berth-api-keys
     secretKey: api-keys
+
+# Use a stable, pre-provisioned ServiceAccount (created + granted coordination
+# Lease RBAC in the workflow before ct install). This ensures that the first
+# readiness probes (which now perform a real store Ping per SKA-450) succeed
+# immediately rather than racing with Helm resource creation + RBAC propagation.
+serviceAccount:
+  create: false
+  name: berth-apiserver-ci

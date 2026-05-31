@@ -16,6 +16,13 @@ import (
 func RunStoreConformance(t *testing.T, newStore func(testing.TB) lease.Store) {
 	t.Helper()
 
+	t.Run("PingReportsReachable", func(t *testing.T) {
+		store := newStore(t)
+		if err := store.Ping(context.Background()); err != nil {
+			t.Fatalf("ping on a healthy store: %v", err)
+		}
+	})
+
 	t.Run("GetNotFound", func(t *testing.T) {
 		store := newStore(t)
 		if _, err := store.Get(context.Background(), lease.Key{Namespace: "x", Name: "y"}); !errors.Is(err, lease.ErrNotFound) {
@@ -145,6 +152,9 @@ func RunStoreConformance(t *testing.T, newStore func(testing.TB) lease.Store) {
 		}
 		if err := store.Delete(ctx, lease.Key{Namespace: "ns", Name: "a"}, 1); err == nil {
 			t.Fatal("Delete must surface context cancellation")
+		}
+		if err := store.Ping(ctx); err == nil {
+			t.Fatal("Ping must surface context cancellation")
 		}
 	})
 

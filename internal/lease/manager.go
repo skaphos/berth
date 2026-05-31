@@ -31,6 +31,15 @@ func (m *Manager) WithClock(fn func() time.Time) *Manager {
 	return &Manager{store: m.store, now: fn}
 }
 
+// Ready reports whether the backing store is reachable via the store's
+// constant-cost [Store.Ping]. It returns the store's error unmodified so a
+// readiness probe can fail (503) and drain the pod during a store outage,
+// distinct from an always-200 liveness check. Ping (not List) keeps the
+// unauthenticated /readyz route from amplifying into a full backend scan.
+func (m *Manager) Ready(ctx context.Context) error {
+	return m.store.Ping(ctx)
+}
+
 // AcquireResult reports the outcome of an [Manager.Acquire] or
 // [Manager.Renew] call.
 type AcquireResult struct {

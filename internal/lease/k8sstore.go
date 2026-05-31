@@ -55,6 +55,17 @@ func NewK8sLeaseStore(client kubernetes.Interface, namespace string) (*K8sLeaseS
 	return &K8sLeaseStore{client: client, namespace: namespace}, nil
 }
 
+// Ping implements [Store]. It issues a single-item List to confirm the
+// coordination apiserver is reachable without paying for a full lease
+// enumeration (Limit: 1 is constant cost regardless of lease count).
+func (s *K8sLeaseStore) Ping(ctx context.Context) error {
+	_, err := s.client.CoordinationV1().Leases(s.namespace).List(ctx, metav1.ListOptions{Limit: 1})
+	if err != nil {
+		return fmt.Errorf("k8s lease store: ping: %w", err)
+	}
+	return nil
+}
+
 // Get implements [Store].
 func (s *K8sLeaseStore) Get(ctx context.Context, key Key) (*Record, error) {
 	l, err := s.client.CoordinationV1().Leases(s.namespace).Get(ctx, k8sLeaseName(key), metav1.GetOptions{})

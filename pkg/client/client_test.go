@@ -49,13 +49,11 @@ func TestWithHTTPClientNilLeavesDefaultClient(t *testing.T) {
 func TestPingRequiresBaseURL(t *testing.T) {
 	t.Parallel()
 
+	// Ping short-circuits before issuing any request when no base URL is
+	// configured. Reachability behaviour against a live server is covered by
+	// the tests in ping_test.go.
 	empty := &Client{}
 	if err := empty.Ping(context.Background()); err == nil {
 		t.Fatal("expected error for empty baseURL")
-	}
-
-	client := New("https://example.com")
-	if err := client.Ping(context.Background()); err != nil {
-		t.Fatalf("Ping() error = %v", err)
 	}
 }
