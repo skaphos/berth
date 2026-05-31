@@ -111,6 +111,47 @@ jobs:
           kubectl create secret generic berth-api-key --from-literal=api-key=test
           kubectl create configmap berth-ca-bundle --from-file=ca.crt=/tmp/tls.crt
           kubectl create secret generic berth-oidc-client --from-literal=client-secret=test
+
+          # Pre-create a stable SA + Role/RoleBinding granting it coordination
+          # Lease access. Used by ci/incluster-values.yaml (serviceAccount.name
+          # + create: false). This guarantees the apiserver's /readyz probe
+          # (Store.Ping via the in-cluster client) succeeds on first attempt,
+          # satisfying the post-SKA-450 expectation that readiness implies
+          # usable backend. The chart will still render its own (randomly
+          # named) Role+Binding for its generated fullname; the extra grant
+          # on our stable SA is harmless.
+          sed 's/^          //' <<'RBAC_EOF' | kubectl apply -f -
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: berth-apiserver-ci
+            namespace: default
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          metadata:
+            name: berth-apiserver-ci-coordination
+            namespace: berth-coordination
+          rules:
+            - apiGroups: ["coordination.k8s.io"]
+              resources: ["leases"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: RoleBinding
+          metadata:
+            name: berth-apiserver-ci-coordination
+            namespace: berth-coordination
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: Role
+            name: berth-apiserver-ci-coordination
+          subjects:
+            - kind: ServiceAccount
+              name: berth-apiserver-ci
+              namespace: default
+          RBAC_EOF
+
           printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: berth-ca\nspec:\n  selfSigned: {}\n' | kubectl apply -f -
 
       - name: Run ct install
