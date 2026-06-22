@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Verify Signed-off-by on PR commits
@@ -46,7 +46,7 @@ jobs:
     name: REUSE
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -64,7 +64,7 @@ jobs:
     name: Verify Generated
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -75,7 +75,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -86,7 +86,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -110,7 +110,7 @@ jobs:
       BERTH_TEST_POSTGRES_DSN: ${{ secrets.BERTH_TEST_POSTGRES_DSN || vars.BERTH_TEST_POSTGRES_DSN }}
       BERTH_TEST_MYSQL_DSN: ${{ secrets.BERTH_TEST_MYSQL_DSN || vars.BERTH_TEST_MYSQL_DSN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Detect relevant changes
         id: changes
         uses: dorny/paths-filter@v3
@@ -150,7 +150,7 @@ jobs:
     name: Static Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -175,7 +175,7 @@ jobs:
         (needs.dco.result == 'success' || needs.dco.result == 'skipped')
       }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
