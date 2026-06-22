@@ -85,6 +85,7 @@ func (e *TTLEnforcer) collect(ctx context.Context) {
 	}
 
 	now := e.now()
+	deleted := 0
 	for i := range records {
 		r := records[i]
 		if now.Before(r.ExpiresAt().Add(e.grace)) {
@@ -92,7 +93,10 @@ func (e *TTLEnforcer) collect(ctx context.Context) {
 		}
 		switch err := e.store.Delete(ctx, r.Key, r.FencingToken); {
 		case err == nil:
-			e.log.InfoContext(ctx, "ttl gc: deleted expired lease",
+			deleted++
+			// Per-record detail at Debug so a large first sweep doesn't burst
+			// Info logs; the summary below reports the count at Info.
+			e.log.DebugContext(ctx, "ttl gc: deleted expired lease",
 				"namespace", r.Key.Namespace, "name", r.Key.Name,
 				"holder", r.Holder, "expired_at", r.ExpiresAt())
 		case errors.Is(err, ErrConflict), errors.Is(err, ErrNotFound):
@@ -106,5 +110,8 @@ func (e *TTLEnforcer) collect(ctx context.Context) {
 			e.log.WarnContext(ctx, "ttl gc: delete failed",
 				"namespace", r.Key.Namespace, "name", r.Key.Name, "error", err)
 		}
+	}
+	if deleted > 0 {
+		e.log.InfoContext(ctx, "ttl gc: swept expired leases", "deleted", deleted, "scanned", len(records))
 	}
 }
