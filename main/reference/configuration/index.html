@@ -16,6 +16,8 @@
         <link rel="prev" href="../api/">
       
       
+        <link rel="next" href="../../operations/scalability/">
+      
       
       <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.22">
@@ -508,6 +510,79 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Operations
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Scalability
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -649,6 +724,11 @@ manifests explicitly map them into container arguments or Secrets.</p>
 <td><code>--listen-addr</code></td>
 <td><code>:8443</code></td>
 <td>HTTPS listen address.</td>
+</tr>
+<tr>
+<td><code>--metrics-addr</code></td>
+<td><code>:8080</code></td>
+<td>Plain-HTTP address for the unauthenticated Prometheus <code>/metrics</code> endpoint, served on a separate port off the TLS/auth path (mirrors the operator). Empty disables it. Restrict the port to the monitoring stack with a NetworkPolicy.</td>
 </tr>
 <tr>
 <td><code>--tls-cert-file</code></td>
@@ -975,6 +1055,26 @@ a repository variable or secret.</p>
 <td><code>berth-apiserver</code></td>
 <td><code>auth.oidc.*</code></td>
 <td>OIDC issuer, audience, JWKS override, claims, and tenant mapping.</td>
+</tr>
+<tr>
+<td><code>berth-apiserver</code></td>
+<td><code>metrics.enabled</code>, <code>metrics.port</code></td>
+<td>Toggle the <code>/metrics</code> endpoint and its port (rendered into <code>--metrics-addr</code>).</td>
+</tr>
+<tr>
+<td><code>berth-apiserver</code></td>
+<td><code>metrics.service.enabled</code></td>
+<td>Add the <code>metrics</code> port to the Service so a ServiceMonitor can target it.</td>
+</tr>
+<tr>
+<td><code>berth-apiserver</code></td>
+<td><code>metrics.serviceMonitor.*</code></td>
+<td>Prometheus Operator <code>ServiceMonitor</code> (requires the <code>monitoring.coreos.com</code> CRDs): <code>enabled</code>, <code>interval</code>, <code>scrapeTimeout</code>, <code>additionalLabels</code>, relabelings.</td>
+</tr>
+<tr>
+<td><code>berth-apiserver</code></td>
+<td><code>metrics.podAnnotations.enabled</code></td>
+<td>Alternative to a ServiceMonitor: render <code>prometheus.io/*</code> scrape annotations on the pod.</td>
 </tr>
 <tr>
 <td><code>berth-operator</code></td>

@@ -634,6 +634,79 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Operations
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Scalability
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -1051,6 +1124,12 @@ so the webhook is only consulted for opted-in Pods.</p>
 <td>from <code>terminationGracePeriodSeconds</code></td>
 <td><code>signal</code> only: seconds between SIGTERM and SIGKILL.</td>
 </tr>
+<tr>
+<td><code>berth.skaphos.io/signal-target</code></td>
+<td>No</td>
+<td><em>(unset → broad)</em></td>
+<td><code>signal</code> only: scope enforcement to the workload process, matched by <code>comm</code> or executable basename (e.g. <code>nginx</code>). <strong>Strongly recommended in multi-container Pods</strong> — see the hazard note under <a href="#enforcement-runtime-singleton">Enforcement</a>.</td>
+</tr>
 </tbody>
 </table>
 <p>Operator-supplied defaults for <code>mode</code>, <code>enforce</code>, and <code>ttl-seconds</code> come from the
@@ -1084,6 +1163,18 @@ becomes a controlled crashloop, not an unguarded restart.</p>
   isolation), and PID-1 signal handling varies by image. Reserve it for images
   where the probe cannot run.</li>
 </ul>
+<blockquote>
+<p><strong>Multi-sidecar hazard.</strong> Without <code>berth.skaphos.io/signal-target</code>, the
+sidecar signals <strong>every</strong> process in the shared PID namespace except PID 1
+and berth's own — so on lease loss it also <code>SIGTERM</code>/<code>SIGKILL</code>s co-located
+sidecars (service mesh, log shippers, metrics agents), not just the gated
+workload. The helper logs a warning when it starts unscoped. In any Pod with
+more than the one workload container, set <code>signal-target</code> to the workload's
+process name (<code>comm</code>, or the executable basename; the kernel truncates
+<code>comm</code> to 15 bytes, which the matcher accounts for) to bound the blast
+radius. <code>probe</code> remains the recommended default precisely because it has no
+such cross-container reach.</p>
+</blockquote>
 <p>Both are <strong>best-effort within a bounded window</strong>: there is detection + kill
 latency between lease loss and the container stopping. The <strong>fencing token</strong>
 remains the real boundary for any downstream resource that must reject a stale

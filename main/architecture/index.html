@@ -331,6 +331,30 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Lease API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Observability
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authorization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authorization
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -544,6 +568,79 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Operations
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Scalability
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -603,6 +700,30 @@
       Lease API
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Lease API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Observability
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authorization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authorization
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -733,7 +854,7 @@ it holds that lease.</p>
 <tr>
 <td>API server</td>
 <td><code>cmd/apiserver</code>, <code>internal/api</code>, <code>internal/lease</code></td>
-<td>Serves <code>/healthz</code> and <code>/v1alpha1</code> lease endpoints over TLS.</td>
+<td>Serves <code>/healthz</code>, <code>/readyz</code>, and <code>/v1alpha1</code> lease endpoints over TLS.</td>
 </tr>
 <tr>
 <td>Operator</td>
@@ -795,9 +916,65 @@ it holds that lease.</p>
 </tr>
 </tbody>
 </table>
-<p><code>/healthz</code> is always unauthenticated. Lease endpoints are authenticated when
-the API server is configured with <code>--auth-mode=static-keys</code> or
-<code>--auth-mode=oidc</code>.</p>
+<p>Both health routes are unauthenticated. <code>/healthz</code> is an always-200 liveness
+check. <code>/readyz</code> is readiness: it probes the lease store via a constant-cost
+<code>Store.Ping</code> (a DB ping / single-item k8s List, never a full scan) and returns
+<code>503</code> when the store is unreachable, so a store outage drains the pod from
+Service endpoints instead of surfacing as <code>500</code>s on lease calls. Because the
+route is unauthenticated, the probe is fronted by a short-TTL, single-flight,
+timeout-bounded gate so a request storm collapses into at most one backend
+probe per second and cannot be amplified into a backend-query DoS. The chart's
+readiness probe targets <code>/readyz</code>; liveness stays on <code>/healthz</code>. The operator's
+own <code>/readyz</code> is gated on reachability of the central API server (<code>pkg/client</code>
+<code>Ping</code> against <code>/healthz</code>), so an operator that cannot reach the API reports
+not-ready.</p>
+<p>Both health routes are unauthenticated by design (kubelet probes carry no
+credentials); restrict them to the kubelet/ingress path with a NetworkPolicy
+in production.</p>
+<p>Lease endpoints are authenticated when the API server is configured with
+<code>--auth-mode=static-keys</code> or <code>--auth-mode=oidc</code>.</p>
+<h3 id="observability">Observability</h3>
+<p>Every request is access-logged once and instrumented for Prometheus. The
+logging middleware (the outermost wrapper) emits method, path, route, status,
+latency, a correlation id, and — for authenticated callers — the holder and
+tenant; it never logs the bearer token, and assigns/propagates the correlation
+id via the <code>X-Request-Id</code> response header (honoring an inbound W3C
+<code>traceparent</code> trace id when present). Alongside the RED metrics, a
+<code>berth_apiserver_lease_outcomes_total{outcome}</code> counter records each request's
+semantic result (<code>acquired</code>, <code>held-by-other</code>, <code>renewed</code>, <code>released</code>,
+<code>conflict</code>, <code>unauthorized</code>, <code>error</code>) — the contention and auth-failure signal
+that HTTP status alone hides.</p>
+<p>An unexpected backend failure returns a deliberately generic
+<code>{"error":"internal error","requestId":"&lt;id&gt;"}</code> envelope: the wrapped store
+error — which names the backend kind (SQL vs Kubernetes) and adjacent topology —
+is recorded only in the server-side access-log line (at error level, under the
+same correlation id), never on the wire. Operators cross-reference the two via
+the <code>requestId</code>. Client-actionable <code>4xx</code> validation messages are returned
+verbatim.</p>
+<p><code>/metrics</code> is served on a separate unauthenticated
+port (<code>--metrics-addr</code>); see
+<a href="../operations/scalability/#phase-2-api-server-prometheus-instrumentation">Scalability: Phase 2</a>.</p>
+<h3 id="authorization">Authorization</h3>
+<p>Authentication establishes <em>who</em> the caller is; authorization decides <em>what</em>
+they may touch. Every authenticated lease request is additionally checked
+against the caller's resolved tenant (the static key id, or the OIDC tenant
+claim):</p>
+<ul>
+<li><strong>Namespace</strong> — the default policy is permissive: any authenticated caller may
+  operate on any namespace. The cross-cluster failover model deliberately has
+  distinct clusters (distinct tenants) contend for the same <code>namespace/name</code>, so
+  a namespace gate would break legitimate contention. Stricter, opt-in policies
+  (e.g. a tenant→namespace allow-list) can be layered on without changing the
+  wire contract.</li>
+<li><strong>Holder</strong> — the request <code>holder</code> must be <em>owned</em> by the caller's tenant: it
+  must equal the tenant or be scoped under <code>"&lt;tenant&gt;/"</code>. This is the
+  cross-tenant guard — a caller cannot acquire, renew, or release a lease as a
+  holder that belongs to another tenant (notably, it cannot impersonate another
+  holder after that holder's lease expires). A holder outside the caller's tenant
+  returns <code>403</code>.</li>
+</ul>
+<p>Under <code>--auth-mode=none</code> no identity is established and both checks are skipped;
+this is a development-only mode and the API server warns loudly at startup.</p>
 <h2 id="lease-model">Lease Model</h2>
 <p>A lease is identified by namespace and name. Its record tracks:</p>
 <ul>

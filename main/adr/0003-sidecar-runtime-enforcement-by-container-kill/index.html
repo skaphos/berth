@@ -399,6 +399,79 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Operations
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Scalability
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -634,6 +707,13 @@ holder.</p>
   reacquire). <code>probe</code> cannot be validated at admission because the webhook
   cannot introspect image contents, so a probe that can never pass will
   crashloop the container.</li>
+<li><strong>Update (SKA-449)</strong>: <code>signal</code> enforcement is scoped by the optional
+  <code>berth.skaphos.io/signal-target</code> annotation (env <code>BERTH_SIGNAL_TARGET</code>),
+  matched against process <code>comm</code>/executable basename. When set, only the
+  workload process is signaled; co-located sidecars are spared. When unset the
+  sidecar keeps the original broad behavior — signaling every non-excluded
+  process — but logs a warning, and the docs flag the multi-sidecar hazard.
+  <code>probe</code> stays the default.</li>
 <li><strong>Neutral</strong>: <code>enforce-grace-seconds</code> tunes the SIGTERM→SIGKILL delay for
   <code>signal</code>; a static check binary on the shared volume keeps <code>probe</code> viable for
   distroless/scratch images.</li>
