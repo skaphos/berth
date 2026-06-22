@@ -35,6 +35,18 @@ type ClientConfig struct {
 // package defaults) so the lease store is never silently capped at client-go's
 // stock QPS=5/Burst=10.
 func NewClientset(kubeconfig string, cc ClientConfig) (*kubernetes.Clientset, error) {
+	cfg, err := buildConfig(kubeconfig, cc)
+	if err != nil {
+		return nil, err
+	}
+	return kubernetes.NewForConfig(cfg)
+}
+
+// buildConfig loads the REST config (in-cluster or from kubeconfig) and applies
+// the client-go rate limiter from cc, falling back to the raised package
+// defaults when a field is non-positive. Split out from [NewClientset] so the
+// rate-limit resolution is unit-testable without a live API server.
+func buildConfig(kubeconfig string, cc ClientConfig) (*rest.Config, error) {
 	var (
 		cfg *rest.Config
 		err error
@@ -58,5 +70,5 @@ func NewClientset(kubeconfig string, cc ClientConfig) (*kubernetes.Clientset, er
 		cfg.Burst = cc.Burst
 	}
 
-	return kubernetes.NewForConfig(cfg)
+	return cfg, nil
 }

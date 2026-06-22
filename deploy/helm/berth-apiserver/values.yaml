@@ -73,8 +73,9 @@ coordination:
   # client-go rate limits for the coordination-cluster client. These raise
   # client-go's stock limiter (QPS 5 / Burst 10), which otherwise throttles
   # lease heartbeats far below the backend's capacity (see SKA-457). Size up
-  # for large lease counts; an empty value falls back to the apiserver's own
-  # raised defaults.
+  # for large lease counts. Setting a field to 0 omits its flag, so the
+  # apiserver falls back to its own raised default (k8s.DefaultQPS /
+  # k8s.DefaultBurst).
   client:
     qps: 100
     burst: 200

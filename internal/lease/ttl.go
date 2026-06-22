@@ -76,7 +76,11 @@ func (e *TTLEnforcer) Run(ctx context.Context) error {
 func (e *TTLEnforcer) collect(ctx context.Context) {
 	records, err := e.store.List(ctx)
 	if err != nil {
-		e.log.WarnContext(ctx, "ttl gc: list failed", "error", err)
+		// A failure because the context is done means we're shutting down (or
+		// hit the sweep deadline); that is expected, not worth a warning.
+		if ctx.Err() == nil {
+			e.log.WarnContext(ctx, "ttl gc: list failed", "error", err)
+		}
 		return
 	}
 
@@ -94,6 +98,11 @@ func (e *TTLEnforcer) collect(ctx context.Context) {
 		case errors.Is(err, ErrConflict), errors.Is(err, ErrNotFound):
 			// Raced a concurrent reacquire or delete; leave the live state alone.
 		default:
+			// Once the context is done, remaining deletes will fail the same
+			// way; stop quietly rather than logging a warning per record.
+			if ctx.Err() != nil {
+				return
+			}
 			e.log.WarnContext(ctx, "ttl gc: delete failed",
 				"namespace", r.Key.Namespace, "name", r.Key.Name, "error", err)
 		}
