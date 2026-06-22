@@ -44,6 +44,39 @@ func TestNewServerDefaultsAndOptions(t *testing.T) {
 	if defaultServer.httpServer.Handler == nil {
 		t.Fatal("default handler is nil")
 	}
+
+	// Default request timeouts must be set so the listener is not exposed to
+	// slow-body / idle-keepalive resource exhaustion (SKA-452).
+	hs := defaultServer.httpServer
+	if hs.ReadHeaderTimeout != defaultReadHeaderTimeout ||
+		hs.ReadTimeout != defaultReadTimeout ||
+		hs.WriteTimeout != defaultWriteTimeout ||
+		hs.IdleTimeout != defaultIdleTimeout {
+		t.Fatalf("default timeouts = readHeader %v / read %v / write %v / idle %v; want %v / %v / %v / %v",
+			hs.ReadHeaderTimeout, hs.ReadTimeout, hs.WriteTimeout, hs.IdleTimeout,
+			defaultReadHeaderTimeout, defaultReadTimeout, defaultWriteTimeout, defaultIdleTimeout)
+	}
+}
+
+func TestWithTimeoutsOverridesDefaults(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(WithTimeouts(time.Second, 2*time.Second, 3*time.Second, 4*time.Second))
+	hs := server.httpServer
+	if hs.ReadHeaderTimeout != time.Second || hs.ReadTimeout != 2*time.Second ||
+		hs.WriteTimeout != 3*time.Second || hs.IdleTimeout != 4*time.Second {
+		t.Fatalf("timeouts not applied: %v / %v / %v / %v",
+			hs.ReadHeaderTimeout, hs.ReadTimeout, hs.WriteTimeout, hs.IdleTimeout)
+	}
+
+	// A non-positive value leaves the corresponding default in place.
+	partial := NewServer(WithTimeouts(0, 0, 0, 99*time.Second))
+	if partial.httpServer.ReadTimeout != defaultReadTimeout {
+		t.Fatalf("zero read timeout overrode default: %v", partial.httpServer.ReadTimeout)
+	}
+	if partial.httpServer.IdleTimeout != 99*time.Second {
+		t.Fatalf("idle timeout not applied: %v", partial.httpServer.IdleTimeout)
+	}
 }
 
 func TestServerStartRejectsNilContext(t *testing.T) {

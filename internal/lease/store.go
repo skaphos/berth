@@ -31,8 +31,16 @@ type Record struct {
 	// include its fencing token on every state-changing operation; an
 	// operation tagged with a stale token is rejected by the [Store].
 	//
-	// The width is int32 to match coordination.k8s.io/v1.Lease's
-	// spec.leaseTransitions field, which is the planned production backend.
+	// The width is deliberately int32, a domain decision rather than a
+	// backend artifact. A 31-bit positive range allows ~2.1e9 holder
+	// transitions per key — decades of churn at any realistic failover rate,
+	// so the ceiling is unreachable in practice — while matching
+	// coordination.k8s.io/v1.Lease's spec.leaseTransitions field so the k8s
+	// [Store] backend persists the token without narrowing. [Manager] treats
+	// math.MaxInt32 as a hard ceiling and refuses to wrap (wrapping would
+	// reuse a token and break fencing safety) rather than overflow into a
+	// negative or duplicate value; the sql and mem backends inherit the same
+	// width and invariant.
 	FencingToken int32
 }
 

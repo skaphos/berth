@@ -35,6 +35,8 @@ type storeConfig struct {
 	backend                string
 	coordinationKubeconfig string
 	coordinationNamespace  string
+	coordinationQPS        float64
+	coordinationBurst      int
 	sqlDriver              string
 	sqlDSN                 string
 	sqlDSNFile             string
@@ -126,7 +128,10 @@ func buildStore(ctx context.Context, backend string, cfg storeConfig) (lease.Sto
 		slog.Warn("running with in-memory lease store; state will not survive restart, do not use in production")
 		return lease.NewMemStore(), nil
 	case storeBackendK8s:
-		clientset, err := k8s.NewClientset(cfg.coordinationKubeconfig)
+		clientset, err := k8s.NewClientset(cfg.coordinationKubeconfig, k8s.ClientConfig{
+			QPS:   float32(cfg.coordinationQPS),
+			Burst: cfg.coordinationBurst,
+		})
 		if err != nil {
 			return nil, err
 		}

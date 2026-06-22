@@ -10,11 +10,28 @@ import (
 
 const defaultShutdownTimeout = 5 * time.Second
 
+// Default request timeouts on the API server's TLS listener. Lease RPCs are
+// small, fast JSON exchanges, so these bounds are generous enough never to
+// truncate a legitimate call yet close slow-body (slowloris) and idle
+// keep-alive resource leaks. Without ReadTimeout/WriteTimeout a client that
+// dribbles a request body, or never reads the response, pins a connection
+// indefinitely; without IdleTimeout, idle keep-alives accumulate unbounded.
+const (
+	defaultReadHeaderTimeout = 5 * time.Second
+	defaultReadTimeout       = 15 * time.Second
+	defaultWriteTimeout      = 15 * time.Second
+	defaultIdleTimeout       = 120 * time.Second
+)
+
 type serverConfig struct {
-	address     string
-	handler     http.Handler
-	tlsCertFile string
-	tlsKeyFile  string
+	address           string
+	handler           http.Handler
+	tlsCertFile       string
+	tlsKeyFile        string
+	readHeaderTimeout time.Duration
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	idleTimeout       time.Duration
 }
 
 // Option configures a Server.
@@ -49,11 +66,35 @@ func WithTLSFiles(certFile, keyFile string) Option {
 	}
 }
 
+// WithTimeouts overrides the default HTTP server request timeouts. A
+// non-positive value for any argument leaves the corresponding default in
+// place, so callers can tune a single bound without restating the rest.
+func WithTimeouts(readHeader, read, write, idle time.Duration) Option {
+	return func(cfg *serverConfig) {
+		if readHeader > 0 {
+			cfg.readHeaderTimeout = readHeader
+		}
+		if read > 0 {
+			cfg.readTimeout = read
+		}
+		if write > 0 {
+			cfg.writeTimeout = write
+		}
+		if idle > 0 {
+			cfg.idleTimeout = idle
+		}
+	}
+}
+
 // NewServer constructs a Server with the supplied options.
 func NewServer(opts ...Option) *Server {
 	cfg := serverConfig{
-		address: ":8443",
-		handler: NewMux(nil, nil, nil),
+		address:           ":8443",
+		handler:           NewMux(nil, nil, nil),
+		readHeaderTimeout: defaultReadHeaderTimeout,
+		readTimeout:       defaultReadTimeout,
+		writeTimeout:      defaultWriteTimeout,
+		idleTimeout:       defaultIdleTimeout,
 	}
 
 	for _, opt := range opts {
@@ -64,7 +105,10 @@ func NewServer(opts ...Option) *Server {
 		httpServer: &http.Server{
 			Addr:              cfg.address,
 			Handler:           cfg.handler,
-			ReadHeaderTimeout: 5 * time.Second,
+			ReadHeaderTimeout: cfg.readHeaderTimeout,
+			ReadTimeout:       cfg.readTimeout,
+			WriteTimeout:      cfg.writeTimeout,
+			IdleTimeout:       cfg.idleTimeout,
 		},
 		tlsCertFile: cfg.tlsCertFile,
 		tlsKeyFile:  cfg.tlsKeyFile,

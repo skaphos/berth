@@ -55,6 +55,13 @@
             "secretName": {"type": "string"},
             "secretKey":  {"type": "string"}
           }
+        },
+        "client": {
+          "type": "object",
+          "properties": {
+            "qps":   {"type": "number", "minimum": 0},
+            "burst": {"type": "integer", "minimum": 0}
+          }
         }
       }
     },

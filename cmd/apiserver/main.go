@@ -15,6 +15,7 @@ import (
 
 	"github.com/skaphos/berth/internal/api"
 	"github.com/skaphos/berth/internal/auth"
+	"github.com/skaphos/berth/internal/k8s"
 	"github.com/skaphos/berth/internal/lease"
 	"github.com/skaphos/berth/internal/metrics"
 	"github.com/skaphos/berth/internal/tenant"
@@ -47,6 +48,8 @@ func run() int {
 		oidcJWKSURL       string
 		oidcUsernameClaim string
 		oidcTenantClaim   string
+		gcInterval        time.Duration
+		gcGrace           time.Duration
 	)
 	oidcRequiredClaims := map[string]string{}
 
@@ -67,6 +70,13 @@ func run() int {
 	flag.StringVar(&storeCfg.coordinationNamespace, "coordination-namespace", "",
 		"namespace in the coordination cluster where Berth Lease objects are stored. "+
 			"Required when --store-backend=k8s.")
+	flag.Float64Var(&storeCfg.coordinationQPS, "k8s-qps", float64(k8s.DefaultQPS),
+		"client-go steady-state QPS for the coordination-cluster client. Raises client-go's "+
+			"default (5), which otherwise throttles lease heartbeats well below the backend's "+
+			"capacity. Only consulted with --store-backend=k8s.")
+	flag.IntVar(&storeCfg.coordinationBurst, "k8s-burst", k8s.DefaultBurst,
+		"client-go burst budget for the coordination-cluster client (raised from client-go's "+
+			"default of 10). Only consulted with --store-backend=k8s.")
 	flag.StringVar(&storeCfg.sqlDriver, "sql-driver", "",
 		"SQL driver: 'postgres', 'mysql', or 'sqlite'. Required when --store-backend=sql.")
 	flag.StringVar(&storeCfg.sqlDSN, "sql-dsn", "",
@@ -86,6 +96,13 @@ func run() int {
 	flag.StringVar(&apiKeysFile, "api-keys-file", "",
 		"path to a file of '<key-id>:<sha256-hex>' entries; required when --auth-mode=static-keys. "+
 			"SIGHUP reloads the file in place.")
+	flag.DurationVar(&gcInterval, "gc-interval", 30*time.Second,
+		"interval between background sweeps that delete expired lease records from the store. "+
+			"Expiry is always enforced lazily on reacquire; this sweep reclaims rows for keys that "+
+			"are never reacquired. Set to 0 to disable the sweep.")
+	flag.DurationVar(&gcGrace, "gc-grace", 5*time.Minute,
+		"minimum age past expiry before the GC sweep deletes a lease record. Guards against "+
+			"deleting a row a holder is about to reacquire and absorbs minor clock skew.")
 	flag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "",
 		"OIDC issuer URL (e.g. https://your-org.okta.com/oauth2/default, https://pingfed.example.com); "+
 			"required when --auth-mode=oidc")
@@ -109,6 +126,12 @@ func run() int {
 			return nil
 		})
 	flag.Parse()
+
+	if storeCfg.sqlDSN != "" {
+		slog.Warn("--sql-dsn passes the database DSN, including any embedded credentials, on the " +
+			"command line, where it is visible in process listings (ps, /proc/<pid>/cmdline). " +
+			"Prefer --sql-dsn-file in production.")
+	}
 
 	backend, err := resolveStoreBackend(storeCfg)
 	if err != nil {
@@ -137,6 +160,22 @@ func run() int {
 		store = met.WrapStore(backend, store)
 	}
 	mgr := lease.NewManager(store)
+
+	// Background GC of expired lease records. Lazy expiry on reacquire already
+	// keeps live keys correct; this reclaims rows for keys that are never
+	// reacquired so durable backends don't grow unbounded. Every replica runs
+	// its own loop — the CAS-guarded Delete makes concurrent sweeps safe.
+	if gcInterval > 0 {
+		enforcer := lease.NewTTLEnforcer(store, gcInterval, gcGrace)
+		go func() {
+			if err := enforcer.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				slog.Error("ttl gc exited", "error", err)
+			}
+		}()
+		slog.Info("ttl gc enabled", "interval", gcInterval, "grace", gcGrace)
+	} else {
+		slog.Info("ttl gc disabled (--gc-interval=0); expired rows are reclaimed lazily on reacquire only")
+	}
 
 	authn, err := buildAuthenticator(authMode, apiKeysFile, oidcConfig{
 		issuerURL:      oidcIssuerURL,
