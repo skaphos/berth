@@ -79,6 +79,11 @@ func run() int {
 		"do not refresh (or retry on failure) more often than this")
 	flag.Parse()
 
+	if clientSecret != "" {
+		slog.Warn("--oidc-client-secret passes the client secret on the command line, where it is " +
+			"visible in process listings (ps, /proc/<pid>/cmdline). Prefer --oidc-client-secret-file in production.")
+	}
+
 	if err := validateArgs(clientID, outputPath, issuerURL, tokenURLOverride, clientSecret, clientSecretFile); err != nil {
 		slog.Error("invalid configuration", "error", err)
 		return 2

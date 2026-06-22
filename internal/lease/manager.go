@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -100,6 +101,15 @@ func (m *Manager) Acquire(ctx context.Context, key Key, holder string, ttl time.
 			token = cur.FencingToken
 			acquiredAt = cur.AcquiredAt
 		case cur.Expired(now):
+			// Reclaiming an expired lease bumps the fencing token. int32 is a
+			// deliberate domain bound (see [Record.FencingToken]); refuse to
+			// wrap at the ceiling rather than reuse a token, which would let a
+			// stale holder's writes pass the fencing check.
+			if cur.FencingToken == math.MaxInt32 {
+				return AcquireResult{}, fmt.Errorf(
+					"acquire: fencing token for %s/%s exhausted at int32 ceiling (%d); lease cannot be safely reacquired",
+					key.Namespace, key.Name, math.MaxInt32)
+			}
 			expected = cur.FencingToken
 			token = cur.FencingToken + 1
 			acquiredAt = now

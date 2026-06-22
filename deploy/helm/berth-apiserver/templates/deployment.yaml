@@ -76,6 +76,12 @@ spec:
               {{- if and .Values.coordination.kubeconfig.secretName (not .Values.coordination.inCluster) }}
             - --coordination-kubeconfig=/etc/berth/coordination/{{ .Values.coordination.kubeconfig.secretKey }}
               {{- end }}
+              {{- with .Values.coordination.client.qps }}
+            - --k8s-qps={{ . }}
+              {{- end }}
+              {{- with .Values.coordination.client.burst }}
+            - --k8s-burst={{ . }}
+              {{- end }}
             {{- end }}
             {{- if eq .Values.store.backend "sql" }}
             - --sql-driver={{ .Values.store.sql.driver }}

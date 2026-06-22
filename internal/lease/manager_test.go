@@ -3,6 +3,8 @@ package lease
 import (
 	"context"
 	"errors"
+	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -23,6 +25,43 @@ func (c *fakeClock) Now() time.Time { return c.now }
 
 func (c *fakeClock) advance(d time.Duration) {
 	c.now = c.now.Add(d)
+}
+
+func TestAcquireRejectsAtFencingTokenCeiling(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	mgr, store, clock := newTestManager(t, base)
+	key := Key{Namespace: "ns", Name: "maxed"}
+
+	// Seed an expired record already at the int32 ceiling. Reclaiming it would
+	// have to bump the token, which must fail rather than wrap.
+	if err := store.Put(context.Background(), 0, &Record{
+		Key:          key,
+		Holder:       "old",
+		TTL:          time.Minute,
+		AcquiredAt:   base,
+		RenewedAt:    base,
+		FencingToken: math.MaxInt32,
+	}); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+	clock.advance(2 * time.Minute) // lease is now expired
+
+	if _, err := mgr.Acquire(context.Background(), key, "new", 30*time.Second); err == nil {
+		t.Fatal("expected error reclaiming a lease at the int32 fencing-token ceiling")
+	} else if !strings.Contains(err.Error(), "ceiling") {
+		t.Fatalf("error = %v, want it to mention the int32 ceiling", err)
+	}
+
+	// The original record must be untouched — no wrap to a negative/reused token.
+	cur, err := store.Get(context.Background(), key)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if cur.FencingToken != math.MaxInt32 || cur.Holder != "old" {
+		t.Fatalf("record mutated: token=%d holder=%q", cur.FencingToken, cur.Holder)
+	}
 }
 
 func TestNewManagerPreservesStore(t *testing.T) {

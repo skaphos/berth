@@ -102,7 +102,13 @@ jobs:
           kubectl create secret generic berth-api-keys \
             --from-file=api-keys=/tmp/api-keys
           CLUSTER_NAME=$(kind get clusters | head -1)
-          kind get kubeconfig --name "$CLUSTER_NAME" > /tmp/coord-kubeconfig
+          # --internal yields the in-cluster API address
+          # (<cluster>-control-plane:6443), which the external-kubeconfig
+          # apiserver pod can reach. The default kubeconfig points at the
+          # host-side 127.0.0.1:<port>, unreachable from inside a pod, so its
+          # /readyz (Store.Ping) never succeeds now that readiness gates on
+          # backend reachability (SKA-450) and ct install times out.
+          kind get kubeconfig --name "$CLUSTER_NAME" --internal > /tmp/coord-kubeconfig
           kubectl create secret generic berth-coordination-kubeconfig \
             --from-file=kubeconfig=/tmp/coord-kubeconfig
           kubectl create namespace berth-coordination

@@ -130,6 +130,11 @@ func run() int {
 		ctrl.Log.Info("WARNING: --berth-insecure-skip-tls-verify is set; the Berth API server certificate will not be verified")
 	}
 
+	if apiKey != "" {
+		ctrl.Log.Info("WARNING: --berth-api-key passes the API token on the command line, where it is " +
+			"visible in process listings (ps, /proc/<pid>/cmdline); prefer --berth-api-key-file in production")
+	}
+
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(berthv1alpha1.AddToScheme(scheme))
