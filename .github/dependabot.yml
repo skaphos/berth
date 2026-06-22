@@ -1,0 +1,59 @@
+# Dependabot configuration.
+#
+# Dependabot adds a DCO `Signed-off-by: dependabot[bot]` trailer to its commits
+# by default, so its PRs already pass this repo's DCO check
+# (.github/workflows/ci.yaml, the `dco` job) with no extra wiring.
+version: 2
+updates:
+  # Go modules — application module at the repo root.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build(deps)
+      prefix-development: build(deps-dev)
+    groups:
+      go-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Go modules — the `tools` module (Task, code generators, linters).
+  - package-ecosystem: gomod
+    directory: /tools
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build(deps)
+      prefix-development: build(deps-dev)
+    groups:
+      tools-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions used by the workflows under .github/workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Container base images for the apiserver, operator, broker, and acquire images.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build(deps)
