@@ -1,0 +1,46 @@
+{
+  "scenario": "steady",
+  "backend": "k8s",
+  "leases": 8,
+  "pairs": 8,
+  "ttlMs": 30000,
+  "elapsedMs": 32812.643566,
+  "ops": {
+    "acquire": {
+      "count": 32,
+      "errors": 0,
+      "minMs": 2.32667,
+      "maxMs": 2399.944427,
+      "meanMs": 831.918506,
+      "p50Ms": 585.485365,
+      "p95Ms": 2398.761127,
+      "p99Ms": 2399.944427,
+      "p999Ms": 2399.944427
+    },
+    "renew": {
+      "count": 24,
+      "errors": 0,
+      "minMs": 8.785046,
+      "maxMs": 4800.74497,
+      "meanMs": 1765.291119,
+      "p50Ms": 601.055584,
+      "p95Ms": 4603.359604,
+      "p99Ms": 4800.74497,
+      "p999Ms": 4800.74497
+    }
+  },
+  "resources": {
+    "window": {
+      "startTs": 1780159132,
+      "endTs": 1780159161,
+      "seconds": 29
+    },
+    "cpuCoresAvg": 0.003263924003146406,
+    "cpuCoresPeak": 0.003896622313203682,
+    "memBytesPeak": 13889536,
+    "cpuRequestCores": 0.1,
+    "cpuLimitCores": 1,
+    "memRequestBytes": 134217728,
+    "memLimitBytes": 268435456
+  }
+}
