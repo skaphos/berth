@@ -94,7 +94,7 @@ verbatim.
 
 `/metrics` is served on a separate unauthenticated
 port (`--metrics-addr`); see
-[Scalability: Phase 2](operations/scalability.md#phase-2--api-server-prometheus-instrumentation).
+[Scalability: Phase 2](operations/scalability.md#phase-2-api-server-prometheus-instrumentation).
 
 ### Authorization
 

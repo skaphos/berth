@@ -15,10 +15,10 @@ are measured (Phase 1; see [Results](#results)), the API server is
 Prometheus-instrumented on a separate `/metrics` port (Phase 2), and the
 API-level load driver with all four scenarios is built and in-process-tested
 (Phase 3). A coord-only kind + Prometheus harness
-([`test/load/fixtures/`](../../test/load/fixtures)) stands up `k8s`- and
+([`test/load/fixtures/`](https://github.com/skaphos/berth/tree/main/test/load/fixtures)) stands up `k8s`- and
 `sql`-backed API servers under one Prometheus, capturing latency **and** per-pod
 CPU/memory. The first deployed runs are in (see
-[Results](#2026-05-30--phase-3-first-deployed-run-k8s-vs-sql-steady)) and
+[Results](#phase-3-first-deployed-run-k8s-vs-sql-steady)) and
 already surfaced a real bottleneck — the `k8s` backend is throttle-bound by the
 client-go default `QPS=5/Burst=10`, not resource-bound. What remains is the QPS
 fix + re-run, then the operator/injection phases.
@@ -103,7 +103,7 @@ build on earlier ones.
 ### Phase 1 — Store-level benchmarks via `storetest`
 
 Adds `RunStoreBenchmarks(b, newStore)` to
-[`internal/lease/storetest`](../../internal/lease/storetest/benchmarks.go),
+[`internal/lease/storetest`](https://github.com/skaphos/berth/blob/main/internal/lease/storetest/benchmarks.go),
 mirroring the existing `RunStoreConformance` and reusing the **same** store
 factory (`*testing.B` satisfies `testing.TB`). Each store's test file calls it,
 so one workload runs on every backend. This produces the **raw backend
@@ -141,7 +141,7 @@ recipe in `Taskfile.yml`.
 - [x] `task bench` (mem + sqlite, no infra) and `task bench-integration`
       (Postgres / MariaDB) recipes.
 
-### Phase 2 — API-server Prometheus instrumentation
+### Phase 2 — API-server Prometheus instrumentation { #phase-2-api-server-prometheus-instrumentation }
 
 The API server previously exposed no metrics endpoint (only the operator did,
 via controller-runtime on `:8080`). Phase 2 adds `promhttp` with the standard
@@ -192,9 +192,9 @@ exposes no lease data — only RED and store-call series.
 ### Phase 3 — API-level load driver (`test/load/`)
 
 A Go program that drives the API server through `pkg/client`. The thin
-entrypoint lives at [`test/load`](../../test/load) (run with `go run
+entrypoint lives at [`test/load`](https://github.com/skaphos/berth/tree/main/test/load) (run with `go run
 ./test/load`); the scenario logic and latency math live in
-[`internal/load`](../../internal/load) so they are unit-testable. It is a
+[`internal/load`](https://github.com/skaphos/berth/tree/main/internal/load) so they are unit-testable. It is a
 test/dev tool, deliberately **not** a shipped binary (no `task build`, no image,
 not released). Knobs:
 
@@ -254,7 +254,7 @@ for all three — latency alone is not enough:
 
 The driver simulates every holder and standby itself from the host, so an
 API-level run against a real store needs only the **coordination** cluster — no
-operator/runner clusters. [`test/load/fixtures/`](../../test/load/fixtures)
+operator/runner clusters. [`test/load/fixtures/`](https://github.com/skaphos/berth/tree/main/test/load/fixtures)
 brings up a single kind cluster (`berth-load`) hosting:
 
 - `berth-apiserver-k8s` — `k8s` backend on the cluster's own etcd;
@@ -286,7 +286,7 @@ pairing the driver's latency summary with a Prometheus resource snapshot
 fold the measured numbers into the [Results](#results) tables. The harness is a
 measurement rig, not a deployment reference (self-signed TLS, fixed NodePorts,
 throwaway api key, emptyDir Postgres) — see
-[`test/load/fixtures/README.md`](../../test/load/fixtures/README.md).
+[`test/load/fixtures/README.md`](https://github.com/skaphos/berth/blob/main/test/load/fixtures/README.md).
 
 - [x] Driver location decided: `test/load` entrypoint + `internal/load` logic
       (not a shipped `cmd/*` binary).
@@ -298,7 +298,7 @@ throwaway api key, emptyDir Postgres) — see
       one Prometheus, capturing latency **and** per-pod CPU/memory
       (`test/load/fixtures/`, `task load-up`/`load-run`/`load-down`).
 - [x] First live `k8s` + `sql` steady runs captured; see
-      [Results](#2026-05-30--phase-3-first-deployed-run-k8s-vs-sql-steady).
+      [Results](#phase-3-first-deployed-run-k8s-vs-sql-steady).
       Headline finding: the `k8s` backend is throttle-bound by client-go
       `QPS=5/Burst=10`, not resource-bound.
 - [ ] Raise/expose the `k8s` store client-go QPS/Burst, then re-run for an
@@ -307,7 +307,7 @@ throwaway api key, emptyDir Postgres) — see
 
 ### Phase 4 — Operator-level load on the 3-cluster kind harness
 
-Extends [`test/e2e/fixtures/up.sh`](../../test/e2e/fixtures/up.sh) with a
+Extends [`test/e2e/fixtures/up.sh`](https://github.com/skaphos/berth/blob/main/test/e2e/fixtures/up.sh) with a
 `load` mode that creates N `BerthLease` CRs across `east` and `west`. Measures:
 
 - controller-runtime workqueue depth (already exported on operator `:8080`)
@@ -383,7 +383,7 @@ Pending for a complete Phase 1: `k8s` (etcd) and the DSN-backed Postgres /
 MariaDB numbers, which carry real network and durability cost and are the ones
 the sizing recommendation will actually rest on.
 
-### 2026-05-30 — Phase 3 first deployed run (`k8s` vs `sql`, steady)
+### 2026-05-30 — Phase 3 first deployed run (`k8s` vs `sql`, steady) { #phase-3-first-deployed-run-k8s-vs-sql-steady }
 
 Rig: the `test/load/fixtures/` harness (coord-only kind, single-replica API
 servers, etcd from the kind node, in-cluster Postgres 16), driver on the host
@@ -410,7 +410,7 @@ Read against the three harness goals:
   renew+contend for *all* leases at once, the in-flight count exceeds Burst=10
   at even ~8 leases (the 8-lease run is slow but error-free; the 300-lease run
   times out). The unthrottled store latency is ~1–2 ms (renew min 1.3 ms).
-  **Root cause:** [`internal/k8s/client.go`](../../internal/k8s/client.go)
+  **Root cause:** [`internal/k8s/client.go`](https://github.com/skaphos/berth/blob/main/internal/k8s/client.go)
   builds the clientset via `rest.InClusterConfig()` and never sets
   `cfg.QPS`/`cfg.Burst`, so they take client-go's defaults (5 / 10).
   **Action:** make them configurable and raise the defaults before the `k8s`
