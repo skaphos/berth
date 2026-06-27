@@ -8,4 +8,4 @@ kind: Cluster
 name: berth-e2e-east
 nodes:
   - role: control-plane
-    image: kindest/node:v1.33.1
+    image: kindest/node:v1.33.1@sha256:050072256b9a903bd914c0b2866828150cb229cea0efe5892e2b644d5dd3b34f
