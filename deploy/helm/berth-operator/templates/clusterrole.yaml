@@ -15,7 +15,7 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]
-  {{- if .Values.rbac.leaderElection }}
+  {{- if or .Values.rbac.leaderElection .Values.leaderElection.enabled }}
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

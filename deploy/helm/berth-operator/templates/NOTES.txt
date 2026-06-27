@@ -30,6 +30,29 @@ TLS:
   API server's certificate is not being verified. Development only.
 {{- end }}
 
+High availability:
+{{- if .Values.leaderElection.enabled }}
+  ENABLED (replicaCount={{ .Values.replicaCount }}). Exactly one replica
+  reconciles at a time via the leader Lease
+  {{ .Values.leaderElection.id | default (printf "%s-leader" (include "berth-operator.fullname" .)) }}.
+{{- else }}
+  Disabled (single active replica). Set leaderElection.enabled=true (and
+  replicaCount > 1) for in-cluster HA.
+{{- end }}
+
+Metrics:
+{{- if .Values.metrics.secure }}
+  Authenticated HTTPS on {{ .Values.metrics.bindAddress }} (TokenReview + SAR).
+  Scrapers need the {{ include "berth-operator.fullname" . }}-metrics-reader
+  ClusterRole bound to their ServiceAccount. The serving cert is self-signed
+  (localhost/127.0.0.1 SANs), so scrape with insecureSkipVerify or supply a
+  cert-manager cert for strict verification.
+{{- else }}
+  Plain HTTP on {{ .Values.metrics.bindAddress }} (unauthenticated). Restrict
+  the port to your monitoring stack with a NetworkPolicy, or set
+  metrics.secure=true for an authenticated endpoint.
+{{- end }}
+
 Injection webhook:
 {{- if .Values.injection.enabled }}
   ENABLED. Pods labeled `berth.skaphos.io/inject: acquire` get an injected

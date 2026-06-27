@@ -13,6 +13,9 @@ spec:
       port: {{ trimPrefix ":" .Values.metrics.bindAddress | int }}
       targetPort: metrics
       protocol: TCP
+      {{- if .Values.metrics.secure }}
+      appProtocol: https
+      {{- end }}
   selector:
     {{- include "berth-operator.selectorLabels" . | nindent 4 }}
 {{- end }}

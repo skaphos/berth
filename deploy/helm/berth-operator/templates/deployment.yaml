@@ -33,7 +33,15 @@ spec:
             - --berth-api-server={{ .Values.berth.apiServer }}
             - --cluster-id={{ .Values.clusterID }}
             - --metrics-bind-address={{ .Values.metrics.bindAddress }}
+            - --metrics-secure={{ .Values.metrics.secure }}
             - --health-probe-bind-address={{ .Values.healthProbe.bindAddress }}
+            {{- if .Values.leaderElection.enabled }}
+            - --leader-elect
+            - --leader-election-id={{ .Values.leaderElection.id | default (printf "%s-leader" (include "berth-operator.fullname" .)) }}
+            - --leader-election-lease-duration={{ .Values.leaderElection.leaseDuration }}
+            - --leader-election-renew-deadline={{ .Values.leaderElection.renewDeadline }}
+            - --leader-election-retry-period={{ .Values.leaderElection.retryPeriod }}
+            {{- end }}
             {{- if .Values.berth.apiKey.secretName }}
             - --berth-api-key=$(BERTH_API_KEY)
             {{- else if or .Values.sidecarBroker.enabled .Values.berth.tokenFile.path }}

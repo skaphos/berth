@@ -258,7 +258,11 @@ downstream systems.
 
 ## Known Limitations
 
-- The operator currently runs one replica and does not use leader election.
+- The operator runs a single active replica by default. Leader election is
+  opt-in (`leaderElection.enabled` / `--leader-elect`) for in-cluster HA; with
+  more than one replica it is required so exactly one replica reconciles at a
+  time. Even under a shared `--cluster-id` holder it prevents duplicate central
+  API load and racing `BerthLease` status writes.
 - Manual edits to a managed target workload are re-converged on the next
   heartbeat reconcile (bounded by the heartbeat interval, ~10 s at defaults),
   not via a workload watch — an intentional trade-off for the per-cluster scale

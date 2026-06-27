@@ -12,10 +12,21 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# -- Controller replica count. The operator does not use leader election
-# today, so leave this at 1. Multi-replica leader election can ship
-# later as an additive change.
+# -- Controller replica count. Running more than one replica requires
+# leaderElection.enabled=true (enforced by the chart), otherwise every replica
+# would reconcile in parallel — doubling central Berth API load and racing on
+# BerthLease status writes.
 replicaCount: 1
+
+# -- Leader election. Opt-in; required when replicaCount > 1. With it enabled
+# exactly one replica reconciles at a time (in-cluster HA) via a
+# coordination.k8s.io/Lease; enabling it also grants the leases RBAC.
+leaderElection:
+  enabled: false
+  id: ""            # defaults to "<fullname>-leader" when empty
+  leaseDuration: 15s
+  renewDeadline: 10s
+  retryPeriod: 2s
 
 # -- Cluster-distinct identity used as the lease holder for every Acquire
 # call. REQUIRED for the cross-cluster singleton pattern — each cluster
@@ -208,19 +219,48 @@ rbac:
     - apiGroups: ["batch"]
       resources: ["cronjobs"]
       verbs: ["get", "list", "watch", "patch", "update"]
-  # Leader-election lease lookup (forward-looking; harmless to include now
-  # so a future leader-election change is non-breaking).
+  # Grant the coordination.k8s.io/leases RBAC for leader election. Auto-satisfied
+  # when leaderElection.enabled=true (the ClusterRole ORs the two); this flag is
+  # a manual override for advanced cases.
   leaderElection: false
 
-# -- Observability bind addresses (passed to the controller-runtime manager).
+# -- Observability and the metrics endpoint (passed to the controller-runtime
+# manager).
 metrics:
   bindAddress: ":8080"
+  # -- Serve /metrics over HTTPS, authenticated via Kubernetes TokenReview and
+  # authorized via SubjectAccessReview. Off by default: the endpoint stays plain
+  # HTTP on a separate port, to be restricted with a NetworkPolicy (matching the
+  # API server). When true, scrapers need the metrics-reader RBAC below.
+  secure: false
+  # Grant the operator ServiceAccount the system:auth-delegator ClusterRole
+  # (TokenReview/SubjectAccessReview) that the authenticated endpoint needs.
+  # Only rendered when secure=true.
+  auth:
+    create: true
+  # Render a metrics-reader ClusterRole (nonResourceURLs /metrics get) and,
+  # when a scraper ServiceAccount is named, bind it. Only rendered when
+  # secure=true.
+  reader:
+    create: true
+    scraper:
+      serviceAccount:
+        name: ""
+        namespace: ""
   serviceMonitor:
     enabled: false
     namespace: ""        # defaults to release namespace
     interval: 30s
     scrapeTimeout: 10s
     labels: {}
+    # When metrics.secure=true the ServiceMonitor scrapes over HTTPS with the
+    # Prometheus SA bearer token. insecureSkipVerify is required because the
+    # controller-runtime self-signed cert only carries localhost/127.0.0.1
+    # SANs; for strict verification supply a cert-manager cert and set a
+    # tlsConfig with caFile + serverName instead.
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tlsConfig:
+      insecureSkipVerify: true
 
 healthProbe:
   bindAddress: ":8081"

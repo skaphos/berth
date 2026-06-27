@@ -1,0 +1,15 @@
+image:
+  repository: berth-operator
+  tag: ci
+  pullPolicy: IfNotPresent
+clusterID: cluster-east
+replicaCount: 2
+leaderElection:
+  enabled: true
+berth:
+  apiServer: https://berth.example.com:8443
+  apiKey:
+    secretName: berth-api-key
+    secretKey: api-key
+  tls:
+    caBundleConfigMap: berth-ca-bundle

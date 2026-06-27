@@ -8,6 +8,10 @@
 {{- fail "clusterID is required for the cross-cluster singleton pattern. Set it to a value distinct from every other cluster running berth-operator (e.g. clusterID: cluster-east)." -}}
 {{- end -}}
 
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.leaderElection.enabled) -}}
+{{- fail "replicaCount > 1 requires leaderElection.enabled=true — without leader election multiple replicas would double the central Berth API load and race on BerthLease status writes. Set leaderElection.enabled: true or keep replicaCount: 1." -}}
+{{- end -}}
+
 {{- /* Token sources are mutually exclusive. apiKey + tokenFile + sidecarBroker
        all do the same job from the operator's point of view (one provides the
        bearer token), but at most one should be configured. */ -}}
