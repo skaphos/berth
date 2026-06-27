@@ -39,11 +39,11 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]
-  # Uncomment to mirror Helm `rbac.leaderElection: true` (off by default;
-  # replicaCount is 1, so leader election is not required):
-  # - apiGroups: ["coordination.k8s.io"]
-  #   resources: ["leases"]
-  #   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Leader election (Helm `leaderElection.enabled: true`, off by default) needs
+  # get/list/watch/create/update/patch/delete on coordination.k8s.io/leases, but
+  # only in the operator's OWN namespace — grant it via a namespaced Role +
+  # RoleBinding, NOT here in the cluster-wide ClusterRole. (The Helm chart renders
+  # this as templates/leader-election-rbac.yaml.)
   # Uncomment for the authenticated metrics endpoint (Helm `metrics.secure: true`).
   # The operator SA also needs the built-in `system:auth-delegator` ClusterRole;
   # the Helm chart binds it directly instead of inlining these rules:

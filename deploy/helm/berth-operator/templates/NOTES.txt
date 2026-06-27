@@ -73,8 +73,10 @@ Injection webhook:
 CRDs:
 {{- if .Values.installCRDs }}
   Installed by this chart on first install. Helm does NOT manage CRD
-  upgrades; for breaking schema changes, apply the new CRD with
-  kubectl before running `helm upgrade --skip-crds`.
+  upgrades; for ANY schema change — including additive fields like
+  status.observedGeneration (the apiserver prunes unknown status fields until
+  the CRD is updated) — apply the new CRD with kubectl before running
+  `helm upgrade --skip-crds`.
 {{- else }}
   Not managed by this chart. Apply config/crd/berthlease.yaml from the
   Berth repo out-of-band before installing this chart.

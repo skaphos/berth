@@ -235,7 +235,9 @@ metrics:
   secure: false
   # Grant the operator ServiceAccount the system:auth-delegator ClusterRole
   # (TokenReview/SubjectAccessReview) that the authenticated endpoint needs.
-  # Only rendered when secure=true.
+  # Only rendered when secure=true AND rbac.create=true — if you manage RBAC
+  # externally (rbac.create=false), bind system:auth-delegator yourself or
+  # scrapes will fail authn.
   auth:
     create: true
   # Render a metrics-reader ClusterRole (nonResourceURLs /metrics get) and,

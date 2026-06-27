@@ -184,7 +184,6 @@
             "interval":        {"type": "string"},
             "scrapeTimeout":   {"type": "string"},
             "labels":          {"type": "object"},
-            "scheme":          {"type": "string", "enum": ["http", "https"]},
             "bearerTokenFile": {"type": "string"},
             "tlsConfig":       {"type": "object"}
           }

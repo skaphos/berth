@@ -156,6 +156,42 @@ func TestApplyActionSuspendAbsentConvergesToSingleWrite(t *testing.T) {
 	}
 }
 
+// TestApplyActionScaleAbsentConvergesToSingleWrite covers the Scale !found
+// branch: a target with no explicit spec.replicas (e.g. an HPA-managed
+// Deployment) scaled to 0 gets exactly one write to set the explicit value,
+// then no further writes. Without the !found term, scale-to-0 would silently
+// no-op because cur defaults to 0 == desired.
+func TestApplyActionScaleAbsentConvergesToSingleWrite(t *testing.T) {
+	t.Parallel()
+	scheme := newScheme(t)
+	var n int
+	// Replicas nil → spec.replicas omitted → NestedInt64 returns found=false.
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "worker"}}
+	c := newCountingClient(t, scheme, &n, dep)
+	act := &berthv1alpha1.LeaseAction{Scale: &berthv1alpha1.ScaleAction{Replicas: 0}}
+
+	if err := applyAction(context.Background(), c, "ns", deploymentTarget(), act); err != nil {
+		t.Fatalf("first applyAction: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("first apply Update count = %d, want 1 (set explicit replicas=0)", n)
+	}
+	got := &appsv1.Deployment{}
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "ns", Name: "worker"}, got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Spec.Replicas == nil || *got.Spec.Replicas != 0 {
+		t.Fatalf("replicas = %v, want explicit 0", got.Spec.Replicas)
+	}
+	n = 0
+	if err := applyAction(context.Background(), c, "ns", deploymentTarget(), act); err != nil {
+		t.Fatalf("second applyAction: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("steady-state apply Update count = %d, want 0", n)
+	}
+}
+
 // TestReconcileHeldSkipsTargetUpdateWhenAlreadyScaled guards the per-heartbeat
 // reconcile path: a held lease whose target already matches the acquire action
 // must not write the target on every heartbeat.

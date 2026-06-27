@@ -193,7 +193,8 @@ gated Deployment back up by hand — is therefore re-converged on the next
 reconcile, within the heartbeat window (about 10 s at the default
 `ttlSeconds: 30` / `heartbeatIntervalSeconds: 10`). The re-apply is idempotent:
 when the target already matches the desired action the reconciler skips the
-write, so steady-state convergence costs one cached read and no update.
+write, so steady-state convergence costs one live read (a single GET to the API
+server — the operator runs no informer over targets) and no write.
 
 The operator deliberately does **not** watch target workloads. It registers
 only `For(&BerthLease{})` and relies on the periodic re-assert above rather than
