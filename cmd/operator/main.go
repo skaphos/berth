@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"net/http"
 	"os"
@@ -35,102 +36,22 @@ func main() {
 }
 
 func run() int {
-	var (
-		metricsAddr        string
-		probeAddr          string
-		apiServerURL       string
-		apiKey             string
-		apiKeyFile         string
-		clusterID          string
-		caBundleFile       string
-		enableWebhook      bool
-		injHelperImage     string
-		injControlPlaneNS  string
-		injAPIKeyFile      string
-		injAPIKeySecret    string
-		injAPIKeySecretKey string
-		injCABundleFile    string
-		injCABundleCM      string
-		injCABundleKey     string
-		injStateDir        string
-		injDefaultMode     string
-		injDefaultEnforce  string
-		injDefaultTTLSecs  int
-		serverName         string
-		insecureSkipVerify bool
-	)
-
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "address for the metrics endpoint")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "address for the health probe endpoint")
-	flag.StringVar(&apiServerURL, "berth-api-server", "", "Berth API server base URL (required)")
-	flag.StringVar(&apiKey, "berth-api-key", "",
-		"static Berth API bearer token. Mutually exclusive with --berth-api-key-file.")
-	flag.StringVar(&apiKeyFile, "berth-api-key-file", "",
-		"path to a file containing the Berth API bearer token. Re-read on each request "+
-			"(cached briefly), so an external token broker (typically an OIDC sidecar) can "+
-			"refresh it without restarting the operator. Mutually exclusive with --berth-api-key.")
-	flag.StringVar(&clusterID, "cluster-id", "",
-		"cluster-distinct identity used as the holder for every Acquire call, overriding "+
-			"spec.HolderIdentity on the BerthLease. Required for the cross-cluster singleton "+
-			"pattern; leave empty to fall back to spec.HolderIdentity.")
-	flag.StringVar(&caBundleFile, "berth-ca-bundle-file", "",
-		"path to a PEM file with extra CA certificates trusted when verifying the Berth API "+
-			"server TLS certificate. The bundle is appended to the system trust store, so "+
-			"private and public CAs can coexist.")
-	flag.StringVar(&serverName, "berth-server-name", "",
-		"override the SNI / TLS certificate name used when connecting to the Berth API server. "+
-			"Defaults to the host in --berth-api-server.")
-	flag.BoolVar(&insecureSkipVerify, "berth-insecure-skip-tls-verify", false,
-		"disable Berth API server TLS certificate verification. Development only — never "+
-			"set this in production.")
-	flag.BoolVar(&enableWebhook, "enable-injection-webhook", false,
-		"serve the berth-acquire pod-injection mutating webhook from this operator.")
-	flag.StringVar(&injHelperImage, "injection-helper-image", "",
-		"berth-acquire image injected into opted-in pods. Required when --enable-injection-webhook is set.")
-	flag.StringVar(&injControlPlaneNS, "injection-control-plane-namespaces", "berth-system",
-		"comma-separated namespaces the webhook never mutates (the Berth control plane).")
-	flag.StringVar(&injAPIKeyFile, "injection-helper-api-key-file", "",
-		"path the injected helper reads its bearer token from inside the workload pod. "+
-			"Set together with --injection-helper-api-key-secret.")
-	flag.StringVar(&injAPIKeySecret, "injection-helper-api-key-secret", "",
-		"name of a Secret in the workload namespace holding the helper's bearer token; "+
-			"the webhook mounts it at --injection-helper-api-key-file.")
-	flag.StringVar(&injAPIKeySecretKey, "injection-helper-api-key-secret-key", "token",
-		"data key within --injection-helper-api-key-secret containing the token.")
-	flag.StringVar(&injCABundleFile, "injection-helper-ca-bundle-file", "",
-		"path the injected helper reads its API server CA bundle from inside the workload pod. "+
-			"Set together with --injection-helper-ca-bundle-configmap.")
-	flag.StringVar(&injCABundleCM, "injection-helper-ca-bundle-configmap", "",
-		"name of a ConfigMap in the workload namespace holding the CA bundle; "+
-			"the webhook mounts it at --injection-helper-ca-bundle-file.")
-	flag.StringVar(&injCABundleKey, "injection-helper-ca-bundle-key", "ca.crt",
-		"data key within --injection-helper-ca-bundle-configmap containing the CA bundle.")
-	flag.StringVar(&injStateDir, "injection-state-dir", acquire.DefaultStateDir,
-		"shared volume mount path the injected init container and sidecar use.")
-	flag.StringVar(&injDefaultMode, "injection-default-mode", string(acquire.ModeRuntimeSingleton),
-		"default berth.skaphos.io/mode for pods that omit the annotation.")
-	flag.StringVar(&injDefaultEnforce, "injection-default-enforce", string(acquire.EnforceProbe),
-		"default berth.skaphos.io/enforce for pods that omit the annotation.")
-	flag.IntVar(&injDefaultTTLSecs, "injection-default-ttl-seconds", 30,
-		"default berth.skaphos.io/ttl-seconds for pods that omit the annotation.")
-	flag.Parse()
-
-	if apiServerURL == "" {
-		ctrl.Log.Error(nil, "--berth-api-server is required")
-		return 1
-	}
-	if apiKey != "" && apiKeyFile != "" {
-		ctrl.Log.Error(nil, "--berth-api-key and --berth-api-key-file are mutually exclusive")
-		return 1
-	}
-
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	if insecureSkipVerify {
+	// flag.CommandLine carries controller-runtime's --kubeconfig (registered
+	// in its init), so parsing it here keeps that flag working; ctrl.GetConfigOrDie
+	// reads the parsed value below.
+	cfg, err := parseConfig(flag.CommandLine, os.Args[1:])
+	if err != nil {
+		ctrl.Log.Error(err, "invalid operator configuration")
+		return 1
+	}
+
+	if cfg.insecureSkipVerify {
 		ctrl.Log.Info("WARNING: --berth-insecure-skip-tls-verify is set; the Berth API server certificate will not be verified")
 	}
 
-	if apiKey != "" {
+	if cfg.apiKey != "" {
 		ctrl.Log.Info("WARNING: --berth-api-key passes the API token on the command line, where it is " +
 			"visible in process listings (ps, /proc/<pid>/cmdline); prefer --berth-api-key-file in production")
 	}
@@ -141,8 +62,8 @@ func run() int {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
-		HealthProbeBindAddress: probeAddr,
+		Metrics:                metricsserver.Options{BindAddress: cfg.metricsAddr},
+		HealthProbeBindAddress: cfg.probeAddr,
 	})
 	if err != nil {
 		ctrl.Log.Error(err, "unable to create manager")
@@ -151,64 +72,43 @@ func run() int {
 
 	clientOpts := []client.Option{}
 	switch {
-	case apiKeyFile != "":
-		ts, err := clientauth.NewFileTokenSource(apiKeyFile, tokenFileCacheTTL)
+	case cfg.apiKeyFile != "":
+		ts, err := clientauth.NewFileTokenSource(cfg.apiKeyFile, tokenFileCacheTTL)
 		if err != nil {
 			ctrl.Log.Error(err, "load Berth API key file")
 			return 1
 		}
 		clientOpts = append(clientOpts, client.WithAPIKeyFunc(ts.Get))
-	case apiKey != "":
-		clientOpts = append(clientOpts, client.WithAPIKey(apiKey))
+	case cfg.apiKey != "":
+		clientOpts = append(clientOpts, client.WithAPIKey(cfg.apiKey))
 	}
 
-	tlsCfg, err := clientauth.LoadTLSConfig(caBundleFile, serverName, insecureSkipVerify)
+	tlsCfg, err := clientauth.LoadTLSConfig(cfg.caBundleFile, cfg.serverName, cfg.insecureSkipVerify)
 	if err != nil {
 		ctrl.Log.Error(err, "load Berth API server TLS config")
 		return 1
 	}
 	clientOpts = append(clientOpts, client.WithTLSConfig(tlsCfg))
 
-	leaseClient := client.New(apiServerURL, clientOpts...)
+	leaseClient := client.New(cfg.apiServerURL, clientOpts...)
 
 	reconciler := &operator.BerthLeaseReconciler{
 		Client:          mgr.GetClient(),
 		Log:             ctrl.Log.WithName("controllers").WithName("BerthLease"),
 		LeaseClient:     leaseClient,
-		ClusterIdentity: clusterID,
+		ClusterIdentity: cfg.clusterID,
 	}
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		ctrl.Log.Error(err, "unable to create controller", "controller", "BerthLease")
 		return 1
 	}
 
-	if enableWebhook {
-		injCfg := webhook.InjectorConfig{
-			HelperImage: injHelperImage,
-			APIServer:   apiServerURL,
-			// Auth/CA file paths and the in-workload-namespace sources the
-			// webhook mounts at them. These are the injected helper's own
-			// paths, distinct from the operator's --berth-ca-bundle-file.
-			APIKeyFile:             injAPIKeyFile,
-			APIKeySecretName:       injAPIKeySecret,
-			APIKeySecretKey:        injAPIKeySecretKey,
-			CABundleFile:           injCABundleFile,
-			CABundleConfigMapName:  injCABundleCM,
-			CABundleKey:            injCABundleKey,
-			ServerName:             serverName,
-			ClusterID:              clusterID,
-			InsecureSkipVerify:     insecureSkipVerify,
-			ControlPlaneNamespaces: splitCSV(injControlPlaneNS),
-			DefaultTTLSeconds:      injDefaultTTLSecs,
-			DefaultMode:            acquire.Mode(injDefaultMode),
-			DefaultEnforce:         acquire.Enforce(injDefaultEnforce),
-			StateDir:               injStateDir,
-		}
-		if err := webhook.SetupWithManager(mgr, injCfg); err != nil {
+	if cfg.enableWebhook {
+		if err := webhook.SetupWithManager(mgr, cfg.injectorConfig); err != nil {
 			ctrl.Log.Error(err, "unable to set up injection webhook")
 			return 1
 		}
-		ctrl.Log.Info("berth-acquire injection webhook enabled", "helperImage", injHelperImage)
+		ctrl.Log.Info("berth-acquire injection webhook enabled", "helperImage", cfg.injectorConfig.HelperImage)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -235,6 +135,158 @@ func run() int {
 	}
 
 	return 0
+}
+
+// operatorConfig is the parsed, validated result of the operator's CLI flags.
+// Splitting it out of run() lets tests exercise flag validation and
+// InjectorConfig assembly without standing up a controller manager (which
+// requires a live cluster).
+type operatorConfig struct {
+	metricsAddr        string
+	probeAddr          string
+	apiServerURL       string
+	apiKey             string
+	apiKeyFile         string
+	clusterID          string
+	caBundleFile       string
+	serverName         string
+	insecureSkipVerify bool
+	enableWebhook      bool
+
+	// injectorConfig is assembled from the injection-* flags and consumed
+	// only when enableWebhook is set.
+	injectorConfig webhook.InjectorConfig
+}
+
+// parseConfig registers the operator's flags on fs, parses args, and validates
+// them into an operatorConfig. Production passes flag.CommandLine (so
+// controller-runtime's --kubeconfig, registered there, is still parsed) with
+// os.Args[1:]; tests pass an isolated FlagSet and explicit args. It mutates no
+// global state beyond the flags it registers on fs.
+func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
+	var (
+		metricsAddr        string
+		probeAddr          string
+		apiServerURL       string
+		apiKey             string
+		apiKeyFile         string
+		clusterID          string
+		caBundleFile       string
+		enableWebhook      bool
+		injHelperImage     string
+		injControlPlaneNS  string
+		injAPIKeyFile      string
+		injAPIKeySecret    string
+		injAPIKeySecretKey string
+		injCABundleFile    string
+		injCABundleCM      string
+		injCABundleKey     string
+		injStateDir        string
+		injDefaultMode     string
+		injDefaultEnforce  string
+		injDefaultTTLSecs  int
+		serverName         string
+		insecureSkipVerify bool
+	)
+
+	fs.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "address for the metrics endpoint")
+	fs.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "address for the health probe endpoint")
+	fs.StringVar(&apiServerURL, "berth-api-server", "", "Berth API server base URL (required)")
+	fs.StringVar(&apiKey, "berth-api-key", "",
+		"static Berth API bearer token. Mutually exclusive with --berth-api-key-file.")
+	fs.StringVar(&apiKeyFile, "berth-api-key-file", "",
+		"path to a file containing the Berth API bearer token. Re-read on each request "+
+			"(cached briefly), so an external token broker (typically an OIDC sidecar) can "+
+			"refresh it without restarting the operator. Mutually exclusive with --berth-api-key.")
+	fs.StringVar(&clusterID, "cluster-id", "",
+		"cluster-distinct identity used as the holder for every Acquire call, overriding "+
+			"spec.HolderIdentity on the BerthLease. Required for the cross-cluster singleton "+
+			"pattern; leave empty to fall back to spec.HolderIdentity.")
+	fs.StringVar(&caBundleFile, "berth-ca-bundle-file", "",
+		"path to a PEM file with extra CA certificates trusted when verifying the Berth API "+
+			"server TLS certificate. The bundle is appended to the system trust store, so "+
+			"private and public CAs can coexist.")
+	fs.StringVar(&serverName, "berth-server-name", "",
+		"override the SNI / TLS certificate name used when connecting to the Berth API server. "+
+			"Defaults to the host in --berth-api-server.")
+	fs.BoolVar(&insecureSkipVerify, "berth-insecure-skip-tls-verify", false,
+		"disable Berth API server TLS certificate verification. Development only — never "+
+			"set this in production.")
+	fs.BoolVar(&enableWebhook, "enable-injection-webhook", false,
+		"serve the berth-acquire pod-injection mutating webhook from this operator.")
+	fs.StringVar(&injHelperImage, "injection-helper-image", "",
+		"berth-acquire image injected into opted-in pods. Required when --enable-injection-webhook is set.")
+	fs.StringVar(&injControlPlaneNS, "injection-control-plane-namespaces", "berth-system",
+		"comma-separated namespaces the webhook never mutates (the Berth control plane).")
+	fs.StringVar(&injAPIKeyFile, "injection-helper-api-key-file", "",
+		"path the injected helper reads its bearer token from inside the workload pod. "+
+			"Set together with --injection-helper-api-key-secret.")
+	fs.StringVar(&injAPIKeySecret, "injection-helper-api-key-secret", "",
+		"name of a Secret in the workload namespace holding the helper's bearer token; "+
+			"the webhook mounts it at --injection-helper-api-key-file.")
+	fs.StringVar(&injAPIKeySecretKey, "injection-helper-api-key-secret-key", "token",
+		"data key within --injection-helper-api-key-secret containing the token.")
+	fs.StringVar(&injCABundleFile, "injection-helper-ca-bundle-file", "",
+		"path the injected helper reads its API server CA bundle from inside the workload pod. "+
+			"Set together with --injection-helper-ca-bundle-configmap.")
+	fs.StringVar(&injCABundleCM, "injection-helper-ca-bundle-configmap", "",
+		"name of a ConfigMap in the workload namespace holding the CA bundle; "+
+			"the webhook mounts it at --injection-helper-ca-bundle-file.")
+	fs.StringVar(&injCABundleKey, "injection-helper-ca-bundle-key", "ca.crt",
+		"data key within --injection-helper-ca-bundle-configmap containing the CA bundle.")
+	fs.StringVar(&injStateDir, "injection-state-dir", acquire.DefaultStateDir,
+		"shared volume mount path the injected init container and sidecar use.")
+	fs.StringVar(&injDefaultMode, "injection-default-mode", string(acquire.ModeRuntimeSingleton),
+		"default berth.skaphos.io/mode for pods that omit the annotation.")
+	fs.StringVar(&injDefaultEnforce, "injection-default-enforce", string(acquire.EnforceProbe),
+		"default berth.skaphos.io/enforce for pods that omit the annotation.")
+	fs.IntVar(&injDefaultTTLSecs, "injection-default-ttl-seconds", 30,
+		"default berth.skaphos.io/ttl-seconds for pods that omit the annotation.")
+
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+
+	if apiServerURL == "" {
+		return nil, errors.New("--berth-api-server is required")
+	}
+	if apiKey != "" && apiKeyFile != "" {
+		return nil, errors.New("--berth-api-key and --berth-api-key-file are mutually exclusive")
+	}
+
+	return &operatorConfig{
+		metricsAddr:        metricsAddr,
+		probeAddr:          probeAddr,
+		apiServerURL:       apiServerURL,
+		apiKey:             apiKey,
+		apiKeyFile:         apiKeyFile,
+		clusterID:          clusterID,
+		caBundleFile:       caBundleFile,
+		serverName:         serverName,
+		insecureSkipVerify: insecureSkipVerify,
+		enableWebhook:      enableWebhook,
+		injectorConfig: webhook.InjectorConfig{
+			HelperImage: injHelperImage,
+			APIServer:   apiServerURL,
+			// Auth/CA file paths and the in-workload-namespace sources the
+			// webhook mounts at them. These are the injected helper's own
+			// paths, distinct from the operator's --berth-ca-bundle-file.
+			APIKeyFile:             injAPIKeyFile,
+			APIKeySecretName:       injAPIKeySecret,
+			APIKeySecretKey:        injAPIKeySecretKey,
+			CABundleFile:           injCABundleFile,
+			CABundleConfigMapName:  injCABundleCM,
+			CABundleKey:            injCABundleKey,
+			ServerName:             serverName,
+			ClusterID:              clusterID,
+			InsecureSkipVerify:     insecureSkipVerify,
+			ControlPlaneNamespaces: splitCSV(injControlPlaneNS),
+			DefaultTTLSeconds:      injDefaultTTLSecs,
+			DefaultMode:            acquire.Mode(injDefaultMode),
+			DefaultEnforce:         acquire.Enforce(injDefaultEnforce),
+			StateDir:               injStateDir,
+		},
+	}, nil
 }
 
 // splitCSV splits a comma-separated flag value into trimmed, non-empty
