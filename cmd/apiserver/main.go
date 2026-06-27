@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -28,6 +29,9 @@ const (
 	exitCodeConfigError = 1
 
 	oidcDiscoveryTimeout = 30 * time.Second
+
+	logFormatJSON = "json"
+	logFormatText = "text"
 )
 
 func main() {
@@ -50,9 +54,15 @@ func run() int {
 		oidcTenantClaim   string
 		gcInterval        time.Duration
 		gcGrace           time.Duration
+		logLevel          string
+		logFormat         string
 	)
 	oidcRequiredClaims := map[string]string{}
 
+	flag.StringVar(&logLevel, "log-level", "info",
+		"log verbosity: 'debug', 'info', 'warn', or 'error'.")
+	flag.StringVar(&logFormat, "log-format", logFormatJSON,
+		"log output format: 'json' (machine-parseable, the default) or 'text' (human-readable).")
 	flag.StringVar(&listenAddr, "listen-addr", ":8443", "address to listen on")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"address for the unauthenticated Prometheus metrics endpoint (/metrics); empty disables it. "+
@@ -126,6 +136,14 @@ func run() int {
 			return nil
 		})
 	flag.Parse()
+
+	// Install the configured logger before any other log call so every line
+	// downstream — including the request-logging middleware, which reads
+	// slog.Default() — uses the chosen format and level.
+	if err := setupLogging(os.Stderr, logFormat, logLevel); err != nil {
+		slog.Error("configure logging", "error", err)
+		return exitCodeConfigError
+	}
 
 	if storeCfg.sqlDSN != "" {
 		slog.Warn("--sql-dsn passes the database DSN, including any embedded credentials, on the " +
@@ -217,6 +235,54 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+// setupLogging installs a slog default logger writing to w in the given
+// format ("json" or "text") at the given level ("debug", "info", "warn",
+// or "error"). Calling it once at startup means every subsequent slog call —
+// including api.LoggingMiddleware, which reads slog.Default() — shares one
+// structured handler. Returns an error for an unknown format or level.
+func setupLogging(w io.Writer, format, level string) error {
+	lvl, err := parseLogLevel(level)
+	if err != nil {
+		return err
+	}
+	handler, err := newLogHandler(w, format, lvl)
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(slog.New(handler))
+	return nil
+}
+
+// parseLogLevel maps a --log-level value to a slog.Level.
+func parseLogLevel(level string) (slog.Level, error) {
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug, nil
+	case "info":
+		return slog.LevelInfo, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return 0, fmt.Errorf("--log-level must be one of debug, info, warn (or warning), error; got %q", level)
+	}
+}
+
+// newLogHandler builds a slog.Handler for the given --log-format value at the
+// resolved level.
+func newLogHandler(w io.Writer, format string, level slog.Level) (slog.Handler, error) {
+	opts := &slog.HandlerOptions{Level: level}
+	switch strings.ToLower(format) {
+	case logFormatJSON:
+		return slog.NewJSONHandler(w, opts), nil
+	case logFormatText:
+		return slog.NewTextHandler(w, opts), nil
+	default:
+		return nil, fmt.Errorf("--log-format must be %q or %q; got %q", logFormatJSON, logFormatText, format)
+	}
 }
 
 // serveMetrics runs the unauthenticated Prometheus endpoint until ctx is
