@@ -1,9 +1,22 @@
 name: Release
 
 # Triggered by a tag matching v* (pushed by release-tag.yml after a
-# release-please PR merges). Builds and pushes the three Berth
-# container images and the two Helm charts to GHCR, then publishes a
-# GitHub release with auto-generated notes.
+# release-please PR merges). Builds and pushes the three Berth container
+# images and the two Helm charts to GHCR, then publishes a GitHub release
+# with auto-generated notes.
+#
+# Supply-chain hardening (all keyless — no long-lived signing keys):
+#   * Images carry a BuildKit SBOM + provenance attestation (sbom/provenance: true).
+#   * Images are signed with cosign keyless (Sigstore Fulcio + Rekor, GitHub OIDC).
+#   * Images and release artifacts get a SLSA build-provenance attestation via
+#     actions/attest-build-provenance.
+#   * A source SPDX SBOM is generated and attached to the GitHub release.
+#   * A checksums file over the released artifacts is signed with cosign sign-blob.
+# Verify an image with:
+#   cosign verify \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     --certificate-identity-regexp '^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v' \
+#     ghcr.io/skaphos/berth-apiserver@sha256:<digest>
 
 on:
   push:
@@ -26,25 +39,28 @@ jobs:
     name: Build + publish images and charts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
         with:
           go-version-file: go.mod
 
       - name: Set up Helm
-        uses: azure/setup-helm@v5
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -65,10 +81,14 @@ jobs:
             echo "apiserver_img=${APISERVER_IMG}"
             echo "operator_img=${OPERATOR_IMG}"
             echo "broker_img=${BROKER_IMG}"
+            echo "apiserver_repo=${REGISTRY}/${IMAGE_NAMESPACE}/berth-apiserver"
+            echo "operator_repo=${REGISTRY}/${IMAGE_NAMESPACE}/berth-operator"
+            echo "broker_repo=${REGISTRY}/${IMAGE_NAMESPACE}/berth-oidc-broker"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build + push apiserver image (multi-arch)
-        uses: docker/build-push-action@v7
+        id: build_apiserver
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: .
           file: Dockerfile.apiserver
@@ -79,7 +99,8 @@ jobs:
           sbom: true
 
       - name: Build + push operator image (multi-arch)
-        uses: docker/build-push-action@v7
+        id: build_operator
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: .
           file: Dockerfile.operator
@@ -90,7 +111,8 @@ jobs:
           sbom: true
 
       - name: Build + push oidc-broker image (multi-arch)
-        uses: docker/build-push-action@v7
+        id: build_broker
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: .
           file: Dockerfile.broker
@@ -100,7 +122,43 @@ jobs:
           provenance: true
           sbom: true
 
+      - name: Sign images (cosign keyless, GitHub OIDC)
+        env:
+          COSIGN_YES: "true"
+          APISERVER_REF: ${{ steps.vars.outputs.apiserver_repo }}@${{ steps.build_apiserver.outputs.digest }}
+          OPERATOR_REF: ${{ steps.vars.outputs.operator_repo }}@${{ steps.build_operator.outputs.digest }}
+          BROKER_REF: ${{ steps.vars.outputs.broker_repo }}@${{ steps.build_broker.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Sign by immutable digest (never by tag); --recursive also signs the
+          # per-arch child manifests behind the multi-arch index.
+          cosign sign --recursive "${APISERVER_REF}"
+          cosign sign --recursive "${OPERATOR_REF}"
+          cosign sign --recursive "${BROKER_REF}"
+
+      - name: Attest build provenance (apiserver image)
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        with:
+          subject-name: ${{ steps.vars.outputs.apiserver_repo }}
+          subject-digest: ${{ steps.build_apiserver.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (operator image)
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        with:
+          subject-name: ${{ steps.vars.outputs.operator_repo }}
+          subject-digest: ${{ steps.build_operator.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (oidc-broker image)
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        with:
+          subject-name: ${{ steps.vars.outputs.broker_repo }}
+          subject-digest: ${{ steps.build_broker.outputs.digest }}
+          push-to-registry: true
+
       - name: Package + push Helm charts as OCI artifacts
+        id: charts
         env:
           VERSION: ${{ steps.vars.outputs.version }}
         run: |
@@ -115,15 +173,73 @@ jobs:
           helm package deploy/helm/berth-operator \
             --version "${VERSION}" --app-version "${VERSION}" \
             --destination dist/charts
-          helm push "dist/charts/berth-apiserver-${VERSION}.tgz" \
-            "oci://${REGISTRY}/${CHART_NAMESPACE}"
-          helm push "dist/charts/berth-operator-${VERSION}.tgz" \
-            "oci://${REGISTRY}/${CHART_NAMESPACE}"
+          # helm push prints "Digest: sha256:..." on stderr; capture it so the
+          # charts can be cosign-signed by their immutable digest.
+          api_out=$(helm push "dist/charts/berth-apiserver-${VERSION}.tgz" \
+            "oci://${REGISTRY}/${CHART_NAMESPACE}" 2>&1); echo "${api_out}"
+          op_out=$(helm push "dist/charts/berth-operator-${VERSION}.tgz" \
+            "oci://${REGISTRY}/${CHART_NAMESPACE}" 2>&1); echo "${op_out}"
+          api_digest=$(printf '%s\n' "${api_out}" | awk '/Digest:/{print $2; exit}')
+          op_digest=$(printf '%s\n' "${op_out}" | awk '/Digest:/{print $2; exit}')
+          if [ -z "${api_digest}" ] || [ -z "${op_digest}" ]; then
+            echo "Failed to parse chart digest from helm push output" >&2
+            exit 1
+          fi
+          {
+            echo "apiserver_chart_ref=${REGISTRY}/${CHART_NAMESPACE}/berth-apiserver@${api_digest}"
+            echo "operator_chart_ref=${REGISTRY}/${CHART_NAMESPACE}/berth-operator@${op_digest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sign Helm chart artifacts (cosign keyless)
+        env:
+          COSIGN_YES: "true"
+          API_REF: ${{ steps.charts.outputs.apiserver_chart_ref }}
+          OP_REF: ${{ steps.charts.outputs.operator_chart_ref }}
+        run: |
+          set -euo pipefail
+          cosign sign "${API_REF}"
+          cosign sign "${OP_REF}"
+
+      - name: Generate source SBOM (SPDX)
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/charts/berth-${{ steps.vars.outputs.version }}.spdx.json
+          upload-artifact: false
+
+      - name: Checksums + sign (cosign keyless sign-blob)
+        env:
+          COSIGN_YES: "true"
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd dist/charts
+          sha256sum \
+            "berth-apiserver-${VERSION}.tgz" \
+            "berth-operator-${VERSION}.tgz" \
+            "berth-${VERSION}.spdx.json" > checksums.txt
+          cosign sign-blob \
+            --output-signature checksums.txt.sig \
+            --output-certificate checksums.txt.pem \
+            checksums.txt
+
+      - name: Attest build provenance (release artifacts)
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        with:
+          subject-path: |
+            dist/charts/berth-apiserver-${{ steps.vars.outputs.version }}.tgz
+            dist/charts/berth-operator-${{ steps.vars.outputs.version }}.tgz
+            dist/charts/berth-${{ steps.vars.outputs.version }}.spdx.json
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
         with:
           files: |
             dist/charts/berth-apiserver-${{ steps.vars.outputs.version }}.tgz
             dist/charts/berth-operator-${{ steps.vars.outputs.version }}.tgz
+            dist/charts/berth-${{ steps.vars.outputs.version }}.spdx.json
+            dist/charts/checksums.txt
+            dist/charts/checksums.txt.sig
+            dist/charts/checksums.txt.pem
           generate_release_notes: true

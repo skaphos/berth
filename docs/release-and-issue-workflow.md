@@ -31,6 +31,49 @@ Releases are produced by release-please:
    `Released` (skipping any that are `Canceled`/`Duplicate`), and leaves a
    "Released in `vX.Y.Z`" comment.
 
+## Release artifact integrity (signing, SBOM, provenance)
+
+`release.yml` hardens every published artifact with **keyless** Sigstore signing
+(GitHub Actions OIDC → Fulcio short-lived certs, logged to Rekor). There are no
+long-lived signing keys to manage.
+
+Each released artifact carries:
+
+- **Container images** (`berth-apiserver`, `berth-operator`, `berth-oidc-broker`):
+  a BuildKit SBOM + provenance attestation (from `sbom: true` / `provenance:
+  true`), a **cosign** signature over the image digest, and a SLSA
+  build-provenance attestation pushed to GHCR via `actions/attest-build-provenance`.
+- **Helm charts** (OCI artifacts in `ghcr.io/skaphos/charts`): a cosign signature
+  over the pushed chart digest.
+- **GitHub release assets**: an SPDX source SBOM (`berth-<version>.spdx.json`), a
+  `checksums.txt` over the assets signed with `cosign sign-blob`
+  (`checksums.txt.sig` + `checksums.txt.pem`), and a build-provenance attestation
+  over the chart tarballs and SBOM.
+
+### Verifying an image
+
+```sh
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v' \
+  ghcr.io/skaphos/berth-apiserver@sha256:<digest>
+
+# SLSA build provenance:
+gh attestation verify oci://ghcr.io/skaphos/berth-apiserver@sha256:<digest> --repo skaphos/berth
+
+Pin the issuer, the identity (repo + workflow + tag ref), and verify by digest —
+omitting any of these makes the check meaningless.
+
+### Verifying release blobs
+
+```sh
+cosign verify-blob \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate checksums.txt.pem --signature checksums.txt.sig checksums.txt
+sha256sum -c checksums.txt
+```
+
 ## Why `Released` is driven by the release, not the release PR
 
 The release PR is an aggregated changelog: it re-surfaces every commit subject
