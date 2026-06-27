@@ -731,6 +731,16 @@ manifests explicitly map them into container arguments or Secrets.</p>
 <td>Plain-HTTP address for the unauthenticated Prometheus <code>/metrics</code> endpoint, served on a separate port off the TLS/auth path (mirrors the operator). Empty disables it. Restrict the port to the monitoring stack with a NetworkPolicy.</td>
 </tr>
 <tr>
+<td><code>--log-level</code></td>
+<td><code>info</code></td>
+<td>Log verbosity: <code>debug</code>, <code>info</code>, <code>warn</code>, or <code>error</code>.</td>
+</tr>
+<tr>
+<td><code>--log-format</code></td>
+<td><code>json</code></td>
+<td>Log output format: <code>json</code> (machine-parseable, the default) or <code>text</code> (human-readable).</td>
+</tr>
+<tr>
 <td><code>--tls-cert-file</code></td>
 <td>empty</td>
 <td>TLS certificate file. Required.</td>
