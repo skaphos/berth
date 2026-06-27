@@ -343,6 +343,11 @@ func (r resolved) validate() error {
 	default:
 		return fmt.Errorf("invalid %s %q", AnnEnforce, r.enforce)
 	}
+	if r.mode == acquire.ModeRuntimeSingleton && r.enforce == acquire.EnforceSignal && r.signalTarget == "" {
+		return fmt.Errorf("%s is required when %s=%s: an empty target signals every process in the shared "+
+			"PID namespace, which can terminate co-located sidecars; set it to the workload's process name "+
+			"(comm or executable basename)", AnnSignalTarget, AnnEnforce, acquire.EnforceSignal)
+	}
 	if r.ttlSeconds <= 0 {
 		return fmt.Errorf("%s must be positive", AnnTTLSeconds)
 	}

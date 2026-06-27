@@ -64,6 +64,9 @@ func TestValidate(t *testing.T) {
 		{"negative grace", func(c *Config) { c.EnforceGrace = -time.Second }, true},
 		{"no api server", func(c *Config) { c.APIServer = "" }, true},
 		{"key and key file", func(c *Config) { c.APIKey = "k"; c.APIKeyFile = "/f" }, true},
+		{"signal without target", func(c *Config) { c.Enforce = EnforceSignal }, true},
+		{"signal with target", func(c *Config) { c.Enforce = EnforceSignal; c.SignalTarget = "nginx" }, false},
+		{"startup-gate signal without target ok", func(c *Config) { c.Mode = ModeStartupGate; c.Enforce = EnforceSignal }, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
