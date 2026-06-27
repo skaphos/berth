@@ -254,13 +254,18 @@ metrics:
     scrapeTimeout: 10s
     labels: {}
     # When metrics.secure=true the ServiceMonitor scrapes over HTTPS with the
-    # Prometheus SA bearer token. insecureSkipVerify is required because the
-    # controller-runtime self-signed cert only carries localhost/127.0.0.1
-    # SANs; for strict verification supply a cert-manager cert and set a
-    # tlsConfig with caFile + serverName instead.
+    # Prometheus SA bearer token. tlsConfig defaults to empty — server-cert
+    # verification stays ON, which fails CLOSED against controller-runtime's
+    # self-signed serving cert (SANs localhost/127.0.0.1 only), so the bearer
+    # token is never sent over an unverified connection by default. To scrape
+    # secure metrics, choose one explicitly:
+    #   - supply a cert-manager serving cert (CertDir) and set
+    #     tlsConfig: { caFile: <ca>, serverName: <svc>.<ns>.svc }   (recommended), or
+    #   - opt into no server verification with
+    #     tlsConfig: { insecureSkipVerify: true }   (the token then rides an
+    #     unverified TLS connection — only acceptable on a trusted scrape path).
     bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-    tlsConfig:
-      insecureSkipVerify: true
+    tlsConfig: {}
 
 healthProbe:
   bindAddress: ":8081"
