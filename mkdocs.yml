@@ -27,6 +27,8 @@ markdown_extensions:
 
 nav:
   - Home: README.md
+  - Getting Started: getting-started.md
+  - Concepts: concepts.md
   - Architecture: architecture.md
   - Workload Gating (Injection): workload-gating-injection.md
   - Code Map: code-map.md
