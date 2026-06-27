@@ -6,12 +6,14 @@ image:
   pullPolicy: IfNotPresent
 clusterID: cluster-east
 berth:
-  apiServer: https://berth.example.com:8443
+  apiServer: https://berth-apiserver.default.svc:8443
   apiKey:
     secretName: berth-api-key
     secretKey: api-key
   tls:
     caBundleConfigMap: berth-ca-bundle
+    # CI-only: the in-cluster fixture apiserver's test cert has no SAN.
+    insecureSkipVerify: true
 injection:
   enabled: true
   helper:

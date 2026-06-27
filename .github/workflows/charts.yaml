@@ -160,5 +160,67 @@ jobs:
 
           printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: berth-ca\nspec:\n  selfSigned: {}\n' | kubectl apply -f -
 
+      - name: Deploy Berth apiserver fixture
+        # The berth-operator chart's /readyz pings the central Berth API
+        # (SKA-450), so the operator pod only becomes Ready when that API is
+        # reachable. ct installs the operator chart in isolation (the apiserver
+        # chart is a separate release), so stand up a minimal in-cluster Berth
+        # apiserver (mem backend, no auth, test TLS) the operator ci values
+        # point at via berth-apiserver.default.svc. Without this, ct install
+        # times out waiting for the operator Deployment to go Available.
+        run: |
+          set -euo pipefail
+          kubectl apply -f - <<'APISERVER_EOF'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: berth-apiserver
+            namespace: default
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: berth-apiserver-fixture
+            template:
+              metadata:
+                labels:
+                  app: berth-apiserver-fixture
+              spec:
+                containers:
+                  - name: apiserver
+                    image: berth-apiserver:ci
+                    imagePullPolicy: IfNotPresent
+                    args:
+                      - --listen-addr=:8443
+                      - --store-backend=mem
+                      - --auth-mode=none
+                      - --metrics-addr=
+                      - --tls-cert-file=/tls/tls.crt
+                      - --tls-key-file=/tls/tls.key
+                    ports:
+                      - containerPort: 8443
+                    volumeMounts:
+                      - name: tls
+                        mountPath: /tls
+                        readOnly: true
+                volumes:
+                  - name: tls
+                    secret:
+                      secretName: berth-apiserver-test-tls
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: berth-apiserver
+            namespace: default
+          spec:
+            selector:
+              app: berth-apiserver-fixture
+            ports:
+              - port: 8443
+                targetPort: 8443
+          APISERVER_EOF
+          kubectl -n default rollout status deploy/berth-apiserver --timeout=120s
+
       - name: Run ct install
         run: ct install --config .github/ct.yaml
