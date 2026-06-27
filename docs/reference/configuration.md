@@ -22,6 +22,8 @@ For deployed components, the practical precedence is:
 | --- | --- | --- |
 | `--listen-addr` | `:8443` | HTTPS listen address. |
 | `--metrics-addr` | `:8080` | Plain-HTTP address for the unauthenticated Prometheus `/metrics` endpoint, served on a separate port off the TLS/auth path (mirrors the operator). Empty disables it. Restrict the port to the monitoring stack with a NetworkPolicy. |
+| `--log-level` | `info` | Log verbosity: `debug`, `info`, `warn`, or `error`. |
+| `--log-format` | `json` | Log output format: `json` (machine-parseable, the default) or `text` (human-readable). |
 | `--tls-cert-file` | empty | TLS certificate file. Required. |
 | `--tls-key-file` | empty | TLS private key file. Required. |
 | `--store-backend` | empty | `mem`, `k8s`, or `sql`. Empty uses the deprecated coordination-namespace heuristic. |
