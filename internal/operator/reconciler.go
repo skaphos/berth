@@ -201,6 +201,14 @@ func (r *BerthLeaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.LeaseClient == nil {
 		return errors.New("BerthLeaseReconciler.LeaseClient is required")
 	}
+	// The controller watches only BerthLease objects. It deliberately does
+	// not watch the referenced target workloads (Deployment / StatefulSet /
+	// ReplicaSet / CronJob): a cluster-wide workload informer would cache far
+	// more than the managed targets and add API-server load that conflicts
+	// with the per-cluster lease scale target. Manual drift on a target is
+	// instead re-converged by the periodic heartbeat reconcile, bounded by the
+	// heartbeat interval. See docs/architecture.md "Target Convergence and
+	// Watch Strategy".
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&berthv1alpha1.BerthLease{}).
 		Complete(r)

@@ -181,6 +181,49 @@ The operator watches namespaced `BerthLease` resources.
 
 Each action may set at most one of `suspend` or `scale`.
 
+## Target Convergence and Watch Strategy
+
+The operator reconciles a `BerthLease` on a level-triggered cadence: a held
+lease re-reconciles every `heartbeatIntervalSeconds`, and a standby
+re-reconciles every `min(heartbeatIntervalSeconds, ttlSeconds/3)`. On each
+reconcile it re-reads the `spec.target` workload and re-applies the
+state-appropriate action (`acquireAction` while held, `releaseAction` while
+waiting). A manual edit to a managed target — for example, someone scaling a
+gated Deployment back up by hand — is therefore re-converged on the next
+reconcile, within the heartbeat window (about 10 s at the default
+`ttlSeconds: 30` / `heartbeatIntervalSeconds: 10`). The re-apply is idempotent:
+when the target already matches the desired action the reconciler skips the
+write, so steady-state convergence costs one cached read and no update.
+
+The operator deliberately does **not** watch target workloads. It registers
+only `For(&BerthLease{})` and relies on the periodic re-assert above rather than
+mapping Deployment / StatefulSet / ReplicaSet / CronJob events back to their
+owning `BerthLease`. This is an intentional trade-off, not an omission:
+
+- **A cluster-wide workload watch defeats the scale target.** The sizing target
+  is up to 2,000 leases per tenant cluster (see
+  [Scalability](operations/scalability.md)). A broad informer would cache
+  *every* Deployment, StatefulSet, ReplicaSet, and CronJob in the cluster — not
+  just the ones a `BerthLease` references — and ReplicaSets in particular
+  accumulate with every rollout, so the cache grows with total cluster workload
+  rather than with Berth's own footprint. The initial LIST and ongoing WATCH
+  also add load to the API path the `k8s` backend is already throttle-bound on
+  (client-go `QPS=5/Burst=10`).
+- **The watch cannot be cheaply scoped.** Targets are arbitrary user-owned
+  workloads with no Berth-applied label or field, so a `cache.ByObject`
+  selector cannot narrow the informer without the operator first stamping a
+  marker on every user workload — a write beyond the declared action.
+- **The benefit is small.** A watch would cut drift-correction latency from
+  one heartbeat (about 10 s) to sub-second. For a coordination primitive whose
+  failover RTO is already bounded by the lease TTL (tens of seconds), that
+  margin does not justify the cache and API-server cost.
+
+If a future deployment genuinely needs sub-second correction in a small or
+single-tenant cluster, the supported extension would be an **opt-in** flag (for
+example `--watch-targets`) that registers a scoped `Watches` source plus a field
+index on `BerthLease` by target reference — never an always-on cluster-wide
+watch. It is a deliberate non-default.
+
 ## Injected Workload Gating
 
 For workloads whose image cannot be changed, the operator can run a mutating
@@ -216,6 +259,10 @@ downstream systems.
 ## Known Limitations
 
 - The operator currently runs one replica and does not use leader election.
+- Manual edits to a managed target workload are re-converged on the next
+  heartbeat reconcile (bounded by the heartbeat interval, ~10 s at defaults),
+  not via a workload watch — an intentional trade-off for the per-cluster scale
+  target; see [Target Convergence and Watch Strategy](#target-convergence-and-watch-strategy).
 - `at-least-once` is part of the CRD surface, but the current central manager
   implements exclusive holder behavior.
 - The management console package exists as a placeholder.
