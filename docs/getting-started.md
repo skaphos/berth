@@ -191,8 +191,8 @@ other stays at **0**:
 
 ```bash
 watch -n1 '
-  echo "east: $(kubectl --context kind-berth-e2e-east -n berth-system get deploy demo-app -o jsonpath="{.spec.replicas}")"
-  echo "west: $(kubectl --context kind-berth-e2e-west -n berth-system get deploy demo-app -o jsonpath="{.spec.replicas}")"
+  echo "east: $(kubectl --context kind-berth-e2e-east -n berth-system get deploy demo-app -o jsonpath='{.spec.replicas}')"
+  echo "west: $(kubectl --context kind-berth-e2e-west -n berth-system get deploy demo-app -o jsonpath='{.spec.replicas}')"
 '
 ```
 
