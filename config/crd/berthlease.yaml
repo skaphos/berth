@@ -252,6 +252,14 @@ spec:
                 description: LeaseState is the current state of the lease (e.g. "held",
                   "released", "expired").
                 type: string
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the most recent .metadata.generation observed by
+                  the operator. It is set on every status write so clients can tell
+                  whether status reflects the current spec.
+                format: int64
+                minimum: 0
+                type: integer
               tenant:
                 description: Tenant is the resolved tenant identifier for the current
                   holder.

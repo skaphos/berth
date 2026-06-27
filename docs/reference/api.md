@@ -114,6 +114,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `observedGeneration` _integer_ | ObservedGeneration is the most recent .metadata.generation observed by<br />the operator. It is set on every status write so clients can tell<br />whether status reflects the current spec. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `leaseState` _string_ | LeaseState is the current state of the lease (e.g. "held", "released", "expired"). |  |  |
 | `currentHolder` _string_ | CurrentHolder is the identity of the entity currently holding the lease. |  |  |
 | `tenant` _string_ | Tenant is the resolved tenant identifier for the current holder. |  |  |
