@@ -56,11 +56,10 @@ Each released artifact carries:
 cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v' \
-  ghcr.io/skaphos/berth-apiserver:vX.Y.Z
+  ghcr.io/skaphos/berth-apiserver@sha256:<digest>
 
 # SLSA build provenance:
-gh attestation verify oci://ghcr.io/skaphos/berth-apiserver:vX.Y.Z --repo skaphos/berth
-```
+gh attestation verify oci://ghcr.io/skaphos/berth-apiserver@sha256:<digest> --repo skaphos/berth
 
 Pin the issuer, the identity (repo + workflow + tag ref), and verify by digest —
 omitting any of these makes the check meaningless.

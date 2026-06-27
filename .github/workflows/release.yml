@@ -179,8 +179,12 @@ jobs:
             "oci://${REGISTRY}/${CHART_NAMESPACE}" 2>&1); echo "${api_out}"
           op_out=$(helm push "dist/charts/berth-operator-${VERSION}.tgz" \
             "oci://${REGISTRY}/${CHART_NAMESPACE}" 2>&1); echo "${op_out}"
-          api_digest=$(printf '%s\n' "${api_out}" | awk '/Digest:/{print $2}')
-          op_digest=$(printf '%s\n' "${op_out}" | awk '/Digest:/{print $2}')
+          api_digest=$(printf '%s\n' "${api_out}" | awk '/Digest:/{print $2; exit}')
+          op_digest=$(printf '%s\n' "${op_out}" | awk '/Digest:/{print $2; exit}')
+          if [ -z "${api_digest}" ] || [ -z "${op_digest}" ]; then
+            echo "Failed to parse chart digest from helm push output" >&2
+            exit 1
+          fi
           {
             echo "apiserver_chart_ref=${REGISTRY}/${CHART_NAMESPACE}/berth-apiserver@${api_digest}"
             echo "operator_chart_ref=${REGISTRY}/${CHART_NAMESPACE}/berth-operator@${op_digest}"
