@@ -15,8 +15,11 @@
       
       
       
+        
+      
+      
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.22">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -24,7 +27,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.84d31ad4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
       
 
@@ -47,7 +50,6 @@
     
       
 
-    
     
     
   </head>
@@ -227,9 +229,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Home
+  
+
     
   </span>
+  
   
 
       </a>
@@ -249,9 +256,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Architecture
+  
+
     
   </span>
+  
   
 
       </a>
@@ -271,9 +283,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Workload Gating (Injection)
+  
+
     
   </span>
+  
   
 
       </a>
@@ -293,9 +310,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Code Map
+  
+
     
   </span>
+  
   
 
       </a>
@@ -331,9 +353,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Reference
+  
+
     
   </span>
+  
   
 
             <span class="md-nav__icon md-icon"></span>
@@ -342,7 +369,11 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
-            Reference
+            
+  
+    Reference
+  
+
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -358,9 +389,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     API
+  
+
     
   </span>
+  
   
 
       </a>
@@ -381,9 +417,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Configuration
+  
+
     
   </span>
+  
   
 
       </a>
@@ -427,9 +468,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Operations
+  
+
     
   </span>
+  
   
 
             <span class="md-nav__icon md-icon"></span>
@@ -438,7 +484,11 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
-            Operations
+            
+  
+    Operations
+  
+
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -454,9 +504,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Scalability
+  
+
     
   </span>
+  
   
 
       </a>
@@ -501,7 +556,9 @@
         <li class="md-nav__item">
   <a href="#issue-lifecycle" class="md-nav__link">
     <span class="md-ellipsis">
-      Issue lifecycle
+      
+        Issue lifecycle
+      
     </span>
   </a>
   
@@ -510,16 +567,48 @@
         <li class="md-nav__item">
   <a href="#how-releases-are-cut" class="md-nav__link">
     <span class="md-ellipsis">
-      How releases are cut
+      
+        How releases are cut
+      
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
+  <a href="#release-artifact-integrity-signing-sbom-provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release artifact integrity (signing, SBOM, provenance)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Release artifact integrity (signing, SBOM, provenance)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verifying-an-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying an image
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-released-is-driven-by-the-release-not-the-release-pr" class="md-nav__link">
     <span class="md-ellipsis">
-      Why Released is driven by the release, not the release PR
+      
+        Why Released is driven by the release, not the release PR
+      
     </span>
   </a>
   
@@ -528,7 +617,9 @@
         <li class="md-nav__item">
   <a href="#conventions-that-keep-this-clean" class="md-nav__link">
     <span class="md-ellipsis">
-      Conventions that keep this clean
+      
+        Conventions that keep this clean
+      
     </span>
   </a>
   
@@ -537,7 +628,9 @@
         <li class="md-nav__item">
   <a href="#required-linear-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Required Linear configuration
+      
+        Required Linear configuration
+      
     </span>
   </a>
   
@@ -546,7 +639,9 @@
         <li class="md-nav__item">
   <a href="#required-github-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Required GitHub configuration
+      
+        Required GitHub configuration
+      
     </span>
   </a>
   
@@ -562,6 +657,7 @@
           
           
             <div class="md-content" data-md-component="content">
+              
               <article class="md-content__inner md-typeset">
                 
                   
@@ -627,6 +723,44 @@ from <em>shipped in a release</em>:</p>
    <code>Released</code> (skipping any that are <code>Canceled</code>/<code>Duplicate</code>), and leaves a
    "Released in <code>vX.Y.Z</code>" comment.</li>
 </ol>
+<h2 id="release-artifact-integrity-signing-sbom-provenance">Release artifact integrity (signing, SBOM, provenance)</h2>
+<p><code>release.yml</code> hardens every published artifact with <strong>keyless</strong> Sigstore signing
+(GitHub Actions OIDC → Fulcio short-lived certs, logged to Rekor). There are no
+long-lived signing keys to manage.</p>
+<p>Each released artifact carries:</p>
+<ul>
+<li><strong>Container images</strong> (<code>berth-apiserver</code>, <code>berth-operator</code>, <code>berth-oidc-broker</code>):
+  a BuildKit SBOM + provenance attestation (from <code>sbom: true</code> / <code>provenance:
+  true</code>), a <strong>cosign</strong> signature over the image digest, and a SLSA
+  build-provenance attestation pushed to GHCR via <code>actions/attest-build-provenance</code>.</li>
+<li><strong>Helm charts</strong> (OCI artifacts in <code>ghcr.io/skaphos/charts</code>): a cosign signature
+  over the pushed chart digest.</li>
+<li><strong>GitHub release assets</strong>: an SPDX source SBOM (<code>berth-&lt;version&gt;.spdx.json</code>), a
+  <code>checksums.txt</code> over the assets signed with <code>cosign sign-blob</code>
+  (<code>checksums.txt.sig</code> + <code>checksums.txt.pem</code>), and a build-provenance attestation
+  over the chart tarballs and SBOM.</li>
+</ul>
+<h3 id="verifying-an-image">Verifying an image</h3>
+<div class="highlight"><pre><span></span><code>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>ghcr.io/skaphos/berth-apiserver@sha256:&lt;digest&gt;
+
+<span class="c1"># SLSA build provenance:</span>
+gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/skaphos/berth-apiserver@sha256:&lt;digest&gt;<span class="w"> </span>--repo<span class="w"> </span>skaphos/berth
+
+Pin<span class="w"> </span>the<span class="w"> </span>issuer,<span class="w"> </span>the<span class="w"> </span>identity<span class="w"> </span><span class="o">(</span>repo<span class="w"> </span>+<span class="w"> </span>workflow<span class="w"> </span>+<span class="w"> </span>tag<span class="w"> </span>ref<span class="o">)</span>,<span class="w"> </span>and<span class="w"> </span>verify<span class="w"> </span>by<span class="w"> </span>digest<span class="w"> </span>—
+omitting<span class="w"> </span>any<span class="w"> </span>of<span class="w"> </span>these<span class="w"> </span>makes<span class="w"> </span>the<span class="w"> </span>check<span class="w"> </span>meaningless.
+
+<span class="c1">### Verifying release blobs</span>
+
+<span class="sb">```</span>sh
+cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate<span class="w"> </span>checksums.txt.pem<span class="w"> </span>--signature<span class="w"> </span>checksums.txt.sig<span class="w"> </span>checksums.txt
+sha256sum<span class="w"> </span>-c<span class="w"> </span>checksums.txt
+</code></pre></div>
 <h2 id="why-released-is-driven-by-the-release-not-the-release-pr">Why <code>Released</code> is driven by the release, not the release PR</h2>
 <p>The release PR is an aggregated changelog: it re-surfaces every commit subject
 since the last release, including any <code>closes SKA-NNN</code> keyword. Linear's GitHub
@@ -727,10 +861,11 @@ status name changes.</p>
     
     
       
-      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

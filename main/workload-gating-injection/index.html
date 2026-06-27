@@ -19,8 +19,11 @@
         <link rel="next" href="../code-map/">
       
       
+        
+      
+      
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.22">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -28,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.84d31ad4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
       
 
@@ -51,7 +54,6 @@
     
       
 
-    
     
     
   </head>
@@ -231,9 +233,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Home
+  
+
     
   </span>
+  
   
 
       </a>
@@ -253,9 +260,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Architecture
+  
+
     
   </span>
+  
   
 
       </a>
@@ -284,9 +296,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Workload Gating (Injection)
+  
+
     
   </span>
+  
   
 
           <span class="md-nav__icon md-icon"></span>
@@ -297,9 +314,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Workload Gating (Injection)
+  
+
     
   </span>
+  
   
 
       </a>
@@ -322,7 +344,9 @@
         <li class="md-nav__item">
   <a href="#when-to-use-which-path" class="md-nav__link">
     <span class="md-ellipsis">
-      When to use which path
+      
+        When to use which path
+      
     </span>
   </a>
   
@@ -331,7 +355,9 @@
         <li class="md-nav__item">
   <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
-      Prerequisites
+      
+        Prerequisites
+      
     </span>
   </a>
   
@@ -340,7 +366,9 @@
         <li class="md-nav__item">
   <a href="#opt-in-contract" class="md-nav__link">
     <span class="md-ellipsis">
-      Opt-in contract
+      
+        Opt-in contract
+      
     </span>
   </a>
   
@@ -350,7 +378,9 @@
           <li class="md-nav__item">
   <a href="#label-selection" class="md-nav__link">
     <span class="md-ellipsis">
-      Label (selection)
+      
+        Label (selection)
+      
     </span>
   </a>
   
@@ -359,7 +389,9 @@
           <li class="md-nav__item">
   <a href="#annotations-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Annotations (configuration)
+      
+        Annotations (configuration)
+      
     </span>
   </a>
   
@@ -373,7 +405,9 @@
         <li class="md-nav__item">
   <a href="#modes" class="md-nav__link">
     <span class="md-ellipsis">
-      Modes
+      
+        Modes
+      
     </span>
   </a>
   
@@ -383,7 +417,9 @@
           <li class="md-nav__item">
   <a href="#startup-gate" class="md-nav__link">
     <span class="md-ellipsis">
-      startup-gate
+      
+        startup-gate
+      
     </span>
   </a>
   
@@ -392,7 +428,9 @@
           <li class="md-nav__item">
   <a href="#runtime-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      runtime-singleton
+      
+        runtime-singleton
+      
     </span>
   </a>
   
@@ -406,7 +444,9 @@
         <li class="md-nav__item">
   <a href="#enforcement-runtime-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      Enforcement (runtime-singleton)
+      
+        Enforcement (runtime-singleton)
+      
     </span>
   </a>
   
@@ -415,7 +455,9 @@
         <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
-      Examples
+      
+        Examples
+      
     </span>
   </a>
   
@@ -425,7 +467,9 @@
           <li class="md-nav__item">
   <a href="#deployment-runtime-singleton-legacy-cross-cluster-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      Deployment — runtime singleton (legacy cross-cluster singleton)
+      
+        Deployment — runtime singleton (legacy cross-cluster singleton)
+      
     </span>
   </a>
   
@@ -434,7 +478,9 @@
           <li class="md-nav__item">
   <a href="#statefulset-runtime-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      StatefulSet — runtime singleton
+      
+        StatefulSet — runtime singleton
+      
     </span>
   </a>
   
@@ -443,7 +489,9 @@
           <li class="md-nav__item">
   <a href="#job-startup-gate-recommended-for-run-to-completion" class="md-nav__link">
     <span class="md-ellipsis">
-      Job — startup gate (recommended for run-to-completion)
+      
+        Job — startup gate (recommended for run-to-completion)
+      
     </span>
   </a>
   
@@ -452,7 +500,9 @@
           <li class="md-nav__item">
   <a href="#cronjob-mind-the-deeper-label-path" class="md-nav__link">
     <span class="md-ellipsis">
-      CronJob — mind the deeper label path
+      
+        CronJob — mind the deeper label path
+      
     </span>
   </a>
   
@@ -461,7 +511,9 @@
           <li class="md-nav__item">
   <a href="#what-the-webhook-injects" class="md-nav__link">
     <span class="md-ellipsis">
-      What the webhook injects
+      
+        What the webhook injects
+      
     </span>
   </a>
   
@@ -475,7 +527,9 @@
         <li class="md-nav__item">
   <a href="#authenticating-injected-pods" class="md-nav__link">
     <span class="md-ellipsis">
-      Authenticating injected Pods
+      
+        Authenticating injected Pods
+      
     </span>
   </a>
   
@@ -484,7 +538,9 @@
         <li class="md-nav__item">
   <a href="#operational-caveats" class="md-nav__link">
     <span class="md-ellipsis">
-      Operational caveats
+      
+        Operational caveats
+      
     </span>
   </a>
   
@@ -493,7 +549,9 @@
         <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
-      Troubleshooting
+      
+        Troubleshooting
+      
     </span>
   </a>
   
@@ -502,7 +560,9 @@
         <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
-      See also
+      
+        See also
+      
     </span>
   </a>
   
@@ -528,9 +588,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Code Map
+  
+
     
   </span>
+  
   
 
       </a>
@@ -566,9 +631,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Reference
+  
+
     
   </span>
+  
   
 
             <span class="md-nav__icon md-icon"></span>
@@ -577,7 +647,11 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
-            Reference
+            
+  
+    Reference
+  
+
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -593,9 +667,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     API
+  
+
     
   </span>
+  
   
 
       </a>
@@ -616,9 +695,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Configuration
+  
+
     
   </span>
+  
   
 
       </a>
@@ -662,9 +746,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Operations
+  
+
     
   </span>
+  
   
 
             <span class="md-nav__icon md-icon"></span>
@@ -673,7 +762,11 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
-            Operations
+            
+  
+    Operations
+  
+
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -689,9 +782,14 @@
   
   
   <span class="md-ellipsis">
+    
+  
     Scalability
+  
+
     
   </span>
+  
   
 
       </a>
@@ -736,7 +834,9 @@
         <li class="md-nav__item">
   <a href="#when-to-use-which-path" class="md-nav__link">
     <span class="md-ellipsis">
-      When to use which path
+      
+        When to use which path
+      
     </span>
   </a>
   
@@ -745,7 +845,9 @@
         <li class="md-nav__item">
   <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
-      Prerequisites
+      
+        Prerequisites
+      
     </span>
   </a>
   
@@ -754,7 +856,9 @@
         <li class="md-nav__item">
   <a href="#opt-in-contract" class="md-nav__link">
     <span class="md-ellipsis">
-      Opt-in contract
+      
+        Opt-in contract
+      
     </span>
   </a>
   
@@ -764,7 +868,9 @@
           <li class="md-nav__item">
   <a href="#label-selection" class="md-nav__link">
     <span class="md-ellipsis">
-      Label (selection)
+      
+        Label (selection)
+      
     </span>
   </a>
   
@@ -773,7 +879,9 @@
           <li class="md-nav__item">
   <a href="#annotations-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Annotations (configuration)
+      
+        Annotations (configuration)
+      
     </span>
   </a>
   
@@ -787,7 +895,9 @@
         <li class="md-nav__item">
   <a href="#modes" class="md-nav__link">
     <span class="md-ellipsis">
-      Modes
+      
+        Modes
+      
     </span>
   </a>
   
@@ -797,7 +907,9 @@
           <li class="md-nav__item">
   <a href="#startup-gate" class="md-nav__link">
     <span class="md-ellipsis">
-      startup-gate
+      
+        startup-gate
+      
     </span>
   </a>
   
@@ -806,7 +918,9 @@
           <li class="md-nav__item">
   <a href="#runtime-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      runtime-singleton
+      
+        runtime-singleton
+      
     </span>
   </a>
   
@@ -820,7 +934,9 @@
         <li class="md-nav__item">
   <a href="#enforcement-runtime-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      Enforcement (runtime-singleton)
+      
+        Enforcement (runtime-singleton)
+      
     </span>
   </a>
   
@@ -829,7 +945,9 @@
         <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
-      Examples
+      
+        Examples
+      
     </span>
   </a>
   
@@ -839,7 +957,9 @@
           <li class="md-nav__item">
   <a href="#deployment-runtime-singleton-legacy-cross-cluster-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      Deployment — runtime singleton (legacy cross-cluster singleton)
+      
+        Deployment — runtime singleton (legacy cross-cluster singleton)
+      
     </span>
   </a>
   
@@ -848,7 +968,9 @@
           <li class="md-nav__item">
   <a href="#statefulset-runtime-singleton" class="md-nav__link">
     <span class="md-ellipsis">
-      StatefulSet — runtime singleton
+      
+        StatefulSet — runtime singleton
+      
     </span>
   </a>
   
@@ -857,7 +979,9 @@
           <li class="md-nav__item">
   <a href="#job-startup-gate-recommended-for-run-to-completion" class="md-nav__link">
     <span class="md-ellipsis">
-      Job — startup gate (recommended for run-to-completion)
+      
+        Job — startup gate (recommended for run-to-completion)
+      
     </span>
   </a>
   
@@ -866,7 +990,9 @@
           <li class="md-nav__item">
   <a href="#cronjob-mind-the-deeper-label-path" class="md-nav__link">
     <span class="md-ellipsis">
-      CronJob — mind the deeper label path
+      
+        CronJob — mind the deeper label path
+      
     </span>
   </a>
   
@@ -875,7 +1001,9 @@
           <li class="md-nav__item">
   <a href="#what-the-webhook-injects" class="md-nav__link">
     <span class="md-ellipsis">
-      What the webhook injects
+      
+        What the webhook injects
+      
     </span>
   </a>
   
@@ -889,7 +1017,9 @@
         <li class="md-nav__item">
   <a href="#authenticating-injected-pods" class="md-nav__link">
     <span class="md-ellipsis">
-      Authenticating injected Pods
+      
+        Authenticating injected Pods
+      
     </span>
   </a>
   
@@ -898,7 +1028,9 @@
         <li class="md-nav__item">
   <a href="#operational-caveats" class="md-nav__link">
     <span class="md-ellipsis">
-      Operational caveats
+      
+        Operational caveats
+      
     </span>
   </a>
   
@@ -907,7 +1039,9 @@
         <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
-      Troubleshooting
+      
+        Troubleshooting
+      
     </span>
   </a>
   
@@ -916,7 +1050,9 @@
         <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
-      See also
+      
+        See also
+      
     </span>
   </a>
   
@@ -932,6 +1068,7 @@
           
           
             <div class="md-content" data-md-component="content">
+              
               <article class="md-content__inner md-typeset">
                 
                   
@@ -1422,10 +1559,11 @@ and custom-CA auth for injected pods are tracked in SKA-444.</p>
     
     
       
-      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>
