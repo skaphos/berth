@@ -1,3 +1,12 @@
+# NON-AUTHORITATIVE reference manifest — DO NOT deploy from this file.
+#
+# The Helm chart is the deployment authority: deploy/helm/berth-operator
+# renders the operator's RBAC from templates/clusterrole.yaml driven by
+# values.yaml `rbac.*`. Nothing consumes this file (no kustomization, no CI),
+# and it is NOT covered by the `verify-generated` drift gate. There are no
+# +kubebuilder:rbac markers in the repo, so the rules below are hand-maintained
+# and must be kept in sync with `values.yaml` `rbac.*` by hand. It exists as a
+# single readable summary of the permissions the operator needs.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -11,10 +20,30 @@ metadata:
 rules:
   - apiGroups: ["berth.skaphos.io"]
     resources: ["berthleases"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["berth.skaphos.io"]
     resources: ["berthleases/status"]
-    verbs: ["get"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["berth.skaphos.io"]
+    resources: ["berthleases/finalizers"]
+    verbs: ["update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "replicasets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale", "statefulsets/scale", "replicasets/scale"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Uncomment to mirror Helm `rbac.leaderElection: true` (off by default;
+  # replicaCount is 1, so leader election is not required):
+  # - apiGroups: ["coordination.k8s.io"]
+  #   resources: ["leases"]
+  #   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
