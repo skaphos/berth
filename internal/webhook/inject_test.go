@@ -188,10 +188,12 @@ func TestInjectSignalRejectsExplicitFalseShareProcessNamespace(t *testing.T) {
 }
 
 func TestInjectSignalRequiresTarget(t *testing.T) {
-	// runtime-singleton (default mode) + enforce=signal with no target must be
-	// rejected at admission so an unscoped signal enforcer never reaches a pod.
+	// runtime-singleton + enforce=signal with no target must be rejected at
+	// admission so an unscoped signal enforcer never reaches a pod. Mode is set
+	// explicitly so the test holds independent of the injector's default mode.
 	pod := optInPod("prod", map[string]string{
 		AnnLeaseName: "checkout",
+		AnnMode:      string(acquire.ModeRuntimeSingleton),
 		AnnEnforce:   string(acquire.EnforceSignal),
 	})
 	err := testInjector().Default(context.Background(), pod)

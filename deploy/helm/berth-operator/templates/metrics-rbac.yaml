@@ -18,7 +18,7 @@ subjects:
     name: {{ include "berth-operator.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 {{- end }}
-{{- if .Values.metrics.reader.create }}
+{{- if and .Values.rbac.create .Values.metrics.reader.create }}
 ---
 # Allows a scraper to GET the /metrics endpoint. Bind it to your Prometheus
 # ServiceAccount (see metrics.reader.scraper).

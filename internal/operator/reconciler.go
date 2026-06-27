@@ -103,7 +103,11 @@ func (r *BerthLeaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		log.Error(err, "invalid BerthLease spec")
 		setCondition(&lease.Status, ConditionAcquired, metav1.ConditionFalse, "InvalidSpec", err.Error(), lease.Generation)
 		if err := r.Status().Update(ctx, &lease); err != nil {
-			log.Error(err, "update status after invalid spec")
+			// Requeue (with backoff) so a transient or conflicting status write
+			// retries; otherwise the InvalidSpec condition and observedGeneration
+			// could stay unpersisted until the spec changes again. The spec
+			// itself is still terminal — a successful write returns no requeue.
+			return ctrl.Result{}, fmt.Errorf("update status after invalid spec: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}

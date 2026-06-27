@@ -12,6 +12,18 @@
 {{- fail "replicaCount > 1 requires leaderElection.enabled=true — without leader election multiple replicas would double the central Berth API load and race on BerthLease status writes. Set leaderElection.enabled: true or keep replicaCount: 1." -}}
 {{- end -}}
 
+{{- /* metrics.bindAddress="0" (or empty) disables the metrics listener. That is
+       incompatible with a ServiceMonitor (its Service port would render as 0 and
+       fail install) or with secure metrics (nothing to authenticate). */ -}}
+{{- $metricsPort := .Values.metrics.bindAddress | toString | trimPrefix ":" -}}
+{{- $metricsOff := or (eq $metricsPort "0") (eq $metricsPort "") -}}
+{{- if and $metricsOff .Values.metrics.serviceMonitor.enabled -}}
+{{- fail "metrics.serviceMonitor.enabled=true but metrics.bindAddress disables the metrics listener (port 0/empty). Set a real metrics.bindAddress (e.g. :8080) or disable the ServiceMonitor." -}}
+{{- end -}}
+{{- if and $metricsOff .Values.metrics.secure -}}
+{{- fail "metrics.secure=true but metrics.bindAddress disables the metrics listener (port 0/empty). Set a real metrics.bindAddress (e.g. :8080) or set metrics.secure: false." -}}
+{{- end -}}
+
 {{- /* Token sources are mutually exclusive. apiKey + tokenFile + sidecarBroker
        all do the same job from the operator's point of view (one provides the
        bearer token), but at most one should be configured. */ -}}

@@ -199,7 +199,9 @@ rbac:
   berthLeaseVerbs:
     - apiGroups: ["berth.skaphos.io"]
       resources: ["berthleases"]
-      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      # The operator reconciles existing BerthLeases (get/list/watch) and updates
+      # them for finalizers/status; it never creates or deletes them.
+      verbs: ["get", "list", "watch", "update", "patch"]
     - apiGroups: ["berth.skaphos.io"]
       resources: ["berthleases/status"]
       verbs: ["get", "update", "patch"]

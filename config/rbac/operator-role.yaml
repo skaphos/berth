@@ -20,7 +20,9 @@ metadata:
 rules:
   - apiGroups: ["berth.skaphos.io"]
     resources: ["berthleases"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    # The operator reconciles existing BerthLeases and updates them for
+    # finalizers/status; it never creates or deletes them.
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["berth.skaphos.io"]
     resources: ["berthleases/status"]
     verbs: ["get", "update", "patch"]
@@ -40,10 +42,11 @@ rules:
     resources: ["events"]
     verbs: ["create", "patch"]
   # Leader election (Helm `leaderElection.enabled: true`, off by default) needs
-  # get/list/watch/create/update/patch/delete on coordination.k8s.io/leases, but
-  # only in the operator's OWN namespace — grant it via a namespaced Role +
-  # RoleBinding, NOT here in the cluster-wide ClusterRole. (The Helm chart renders
-  # this as templates/leader-election-rbac.yaml.)
+  # create on coordination.k8s.io/leases plus get/update/patch/delete scoped to
+  # the single election Lease (resourceNames), only in the operator's OWN
+  # namespace — grant it via a namespaced Role + RoleBinding, NOT here in the
+  # cluster-wide ClusterRole. (The Helm chart renders this as
+  # templates/leader-election-rbac.yaml.)
   # Uncomment for the authenticated metrics endpoint (Helm `metrics.secure: true`).
   # The operator SA also needs the built-in `system:auth-delegator` ClusterRole;
   # the Helm chart binds it directly instead of inlining these rules:

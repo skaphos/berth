@@ -1,7 +1,11 @@
 {{- if and .Values.rbac.create (or .Values.rbac.leaderElection .Values.leaderElection.enabled) }}
+{{- $leaseName := .Values.leaderElection.id | default (printf "%s-leader" (include "berth-operator.fullname" .)) }}
 # Leader election renews a single coordination.k8s.io/Lease in the operator's
 # own namespace (controller-runtime defaults the election namespace to the pod
 # namespace), so the grant is a namespaced Role — not a cluster-wide ClusterRole.
+# The mutating verbs are further scoped to that one Lease via resourceNames;
+# only create stays unscoped, since resourceNames cannot gate a create (the
+# object does not exist yet).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -12,7 +16,11 @@ metadata:
 rules:
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: ["{{ $leaseName }}"]
+    verbs: ["get", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

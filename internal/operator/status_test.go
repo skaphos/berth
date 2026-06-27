@@ -28,7 +28,11 @@ func TestSetConditionStampsObservedGeneration(t *testing.T) {
 	if c.ObservedGeneration != 5 {
 		t.Fatalf("ObservedGeneration = %d, want 5", c.ObservedGeneration)
 	}
-	first := c.LastTransitionTime
+	// Pin a known past transition time so the assertions below do not depend on
+	// the wall clock advancing between two time.Now() calls (which can collide
+	// at low clock resolution).
+	past := metav1.NewTime(time.Now().Add(-time.Hour))
+	c.LastTransitionTime = past
 
 	// Same status, newer generation: ObservedGeneration advances, transition
 	// time does not (status unchanged).
@@ -37,14 +41,14 @@ func TestSetConditionStampsObservedGeneration(t *testing.T) {
 	if c.ObservedGeneration != 6 {
 		t.Fatalf("ObservedGeneration = %d, want 6", c.ObservedGeneration)
 	}
-	if !c.LastTransitionTime.Equal(&first) {
+	if !c.LastTransitionTime.Equal(&past) {
 		t.Error("LastTransitionTime changed without a status change")
 	}
 
-	// Status flip bumps the transition time.
+	// Status flip bumps the transition time off the pinned past value.
 	setCondition(status, ConditionAcquired, metav1.ConditionFalse, "HeldByOther", "lost", 7)
 	c = findCondition(status.Conditions, ConditionAcquired)
-	if c.LastTransitionTime.Equal(&first) {
+	if c.LastTransitionTime.Equal(&past) {
 		t.Error("LastTransitionTime should change on a status flip")
 	}
 }
