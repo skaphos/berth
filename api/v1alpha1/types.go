@@ -76,6 +76,13 @@ type ScaleAction struct {
 
 // BerthLeaseStatus reports the observed state of a Berth lease.
 type BerthLeaseStatus struct {
+	// ObservedGeneration is the most recent .metadata.generation observed by
+	// the operator. It is set on every status write so clients can tell
+	// whether status reflects the current spec.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// LeaseState is the current state of the lease (e.g. "held", "released", "expired").
 	LeaseState string `json:"leaseState,omitempty"`
 

@@ -12,10 +12,21 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# -- Controller replica count. The operator does not use leader election
-# today, so leave this at 1. Multi-replica leader election can ship
-# later as an additive change.
+# -- Controller replica count. Running more than one replica requires
+# leaderElection.enabled=true (enforced by the chart), otherwise every replica
+# would reconcile in parallel — doubling central Berth API load and racing on
+# BerthLease status writes.
 replicaCount: 1
+
+# -- Leader election. Opt-in; required when replicaCount > 1. With it enabled
+# exactly one replica reconciles at a time (in-cluster HA) via a
+# coordination.k8s.io/Lease; enabling it also grants the leases RBAC.
+leaderElection:
+  enabled: false
+  id: ""            # defaults to "<fullname>-leader" when empty
+  leaseDuration: 15s
+  renewDeadline: 10s
+  retryPeriod: 2s
 
 # -- Cluster-distinct identity used as the lease holder for every Acquire
 # call. REQUIRED for the cross-cluster singleton pattern — each cluster
@@ -188,7 +199,9 @@ rbac:
   berthLeaseVerbs:
     - apiGroups: ["berth.skaphos.io"]
       resources: ["berthleases"]
-      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      # The operator reconciles existing BerthLeases (get/list/watch) and updates
+      # them for finalizers/status; it never creates or deletes them.
+      verbs: ["get", "list", "watch", "update", "patch"]
     - apiGroups: ["berth.skaphos.io"]
       resources: ["berthleases/status"]
       verbs: ["get", "update", "patch"]
@@ -208,19 +221,55 @@ rbac:
     - apiGroups: ["batch"]
       resources: ["cronjobs"]
       verbs: ["get", "list", "watch", "patch", "update"]
-  # Leader-election lease lookup (forward-looking; harmless to include now
-  # so a future leader-election change is non-breaking).
+  # Grant the coordination.k8s.io/leases RBAC for leader election. Auto-satisfied
+  # when leaderElection.enabled=true (the ClusterRole ORs the two); this flag is
+  # a manual override for advanced cases.
   leaderElection: false
 
-# -- Observability bind addresses (passed to the controller-runtime manager).
+# -- Observability and the metrics endpoint (passed to the controller-runtime
+# manager).
 metrics:
   bindAddress: ":8080"
+  # -- Serve /metrics over HTTPS, authenticated via Kubernetes TokenReview and
+  # authorized via SubjectAccessReview. Off by default: the endpoint stays plain
+  # HTTP on a separate port, to be restricted with a NetworkPolicy (matching the
+  # API server). When true, scrapers need the metrics-reader RBAC below.
+  secure: false
+  # Grant the operator ServiceAccount the system:auth-delegator ClusterRole
+  # (TokenReview/SubjectAccessReview) that the authenticated endpoint needs.
+  # Only rendered when secure=true AND rbac.create=true — if you manage RBAC
+  # externally (rbac.create=false), bind system:auth-delegator yourself or
+  # scrapes will fail authn.
+  auth:
+    create: true
+  # Render a metrics-reader ClusterRole (nonResourceURLs /metrics get) and,
+  # when a scraper ServiceAccount is named, bind it. Only rendered when
+  # secure=true.
+  reader:
+    create: true
+    scraper:
+      serviceAccount:
+        name: ""
+        namespace: ""
   serviceMonitor:
     enabled: false
     namespace: ""        # defaults to release namespace
     interval: 30s
     scrapeTimeout: 10s
     labels: {}
+    # When metrics.secure=true the ServiceMonitor scrapes over HTTPS with the
+    # Prometheus SA bearer token. tlsConfig defaults to empty — server-cert
+    # verification stays ON, which fails CLOSED against controller-runtime's
+    # self-signed serving cert (SANs localhost/127.0.0.1 only), so the bearer
+    # token is never sent over an unverified connection by default. To scrape
+    # secure metrics, choose one explicitly:
+    #   - supply a cert-manager serving cert (CertDir) and set
+    #     tlsConfig: { caFile: <ca>, serverName: <svc>.<ns>.svc }   (recommended), or
+    #   - opt into no server verification with
+    #     tlsConfig: { insecureSkipVerify: true }   (the token then rides an
+    #     unverified TLS connection — only acceptable on a trusted scrape path).
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tlsConfig: {}
 
 healthProbe:
   bindAddress: ":8081"

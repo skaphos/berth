@@ -17,6 +17,11 @@ import (
 // it according to action, and writes it back. Returns nil when action is nil
 // (no-op) or when the target is gone — both are treated as success because
 // neither prevents the lease lifecycle from progressing.
+//
+// The write is itself a no-op when the target already matches the action: the
+// current spec.replicas/spec.suspend are read and the Update is skipped unless
+// at least one differs. This keeps held-state heartbeats from re-writing an
+// unchanged target on every reconcile.
 func applyAction(ctx context.Context, c client.Client, ns string, ref *berthv1alpha1.TargetRef, action *berthv1alpha1.LeaseAction) error {
 	if ref == nil || action == nil {
 		return nil
@@ -36,21 +41,44 @@ func applyAction(ctx context.Context, c client.Client, ns string, ref *berthv1al
 		return fmt.Errorf("get target %s: %w", key, err)
 	}
 
-	mutated := false
+	mutated := false // action selected a field to manage
+	changed := false // obj differs from the live target — an Update is required
 	if action.Suspend != nil {
-		if err := unstructured.SetNestedField(obj.Object, *action.Suspend, "spec", "suspend"); err != nil {
-			return fmt.Errorf("set spec.suspend: %w", err)
-		}
 		mutated = true
+		cur, found, err := unstructured.NestedBool(obj.Object, "spec", "suspend")
+		if err != nil {
+			return fmt.Errorf("read spec.suspend on %s: %w", key, err)
+		}
+		if !found || cur != *action.Suspend {
+			if err := unstructured.SetNestedField(obj.Object, *action.Suspend, "spec", "suspend"); err != nil {
+				return fmt.Errorf("set spec.suspend: %w", err)
+			}
+			changed = true
+		}
 	}
 	if action.Scale != nil {
-		if err := unstructured.SetNestedField(obj.Object, int64(action.Scale.Replicas), "spec", "replicas"); err != nil {
-			return fmt.Errorf("set spec.replicas: %w", err)
-		}
 		mutated = true
+		desired := int64(action.Scale.Replicas)
+		cur, found, err := unstructured.NestedInt64(obj.Object, "spec", "replicas")
+		if err != nil {
+			return fmt.Errorf("read spec.replicas on %s: %w", key, err)
+		}
+		if !found || cur != desired {
+			if err := unstructured.SetNestedField(obj.Object, desired, "spec", "replicas"); err != nil {
+				return fmt.Errorf("set spec.replicas: %w", err)
+			}
+			changed = true
+		}
 	}
 	if !mutated {
 		return errors.New("apply action: action specifies no mutation")
+	}
+	if !changed {
+		// Target already at the desired state. Skipping the write keeps held-state
+		// heartbeats from re-issuing an Update (and the resulting resourceVersion
+		// churn and spurious watch events) on every reconcile — material at the
+		// 2,000-lease scale target where the operator is client-go QPS-bound.
+		return nil
 	}
 
 	if err := c.Update(ctx, obj); err != nil {

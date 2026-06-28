@@ -75,7 +75,7 @@ The fallback path that gates unmodifiable workloads on a lease by injecting the
 | Path | Owns |
 | --- | --- |
 | `config/crd/berthlease.yaml` | Generated CRD manifest. |
-| `config/rbac` | Static RBAC manifests. |
+| `config/rbac` | Static, non-authoritative RBAC reference manifests; Helm (`deploy/helm/berth-operator`) is the deployment authority. Hand-synced with `values.yaml` `rbac.*`. |
 | `deploy/helm/berth-apiserver` | API server Helm chart. |
 | `deploy/helm/berth-operator` | Operator Helm chart and bundled CRD copy. |
 | `.github/workflows/ci.yaml` | DCO, REUSE, generated drift, lint, test, static analysis, and build gates. |

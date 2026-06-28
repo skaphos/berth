@@ -11,6 +11,7 @@ import (
 	berthv1alpha1 "github.com/skaphos/berth/api/v1alpha1"
 	"github.com/skaphos/berth/pkg/client"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,6 +26,9 @@ func newScheme(t *testing.T) *runtime.Scheme {
 		t.Fatal(err)
 	}
 	if err := appsv1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := batchv1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
 	return s

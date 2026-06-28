@@ -1,0 +1,54 @@
+{{- if .Values.metrics.secure }}
+{{- if and .Values.rbac.create .Values.metrics.auth.create }}
+# Grants the operator ServiceAccount the built-in system:auth-delegator role so
+# the authenticated metrics endpoint can run TokenReview / SubjectAccessReview
+# for each scrape.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "berth-operator.fullname" . }}-metrics-auth
+  labels:
+    {{- include "berth-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "berth-operator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if and .Values.rbac.create .Values.metrics.reader.create }}
+---
+# Allows a scraper to GET the /metrics endpoint. Bind it to your Prometheus
+# ServiceAccount (see metrics.reader.scraper).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "berth-operator.fullname" . }}-metrics-reader
+  labels:
+    {{- include "berth-operator.labels" . | nindent 4 }}
+rules:
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+{{- with .Values.metrics.reader.scraper.serviceAccount }}
+{{- if .name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "berth-operator.fullname" $ }}-metrics-reader
+  labels:
+    {{- include "berth-operator.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "berth-operator.fullname" $ }}-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ .name }}
+    namespace: {{ .namespace | default $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -145,6 +145,11 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("invalid enforce %q (want %q or %q)", c.Enforce, EnforceProbe, EnforceSignal)
 	}
+	if c.Mode == ModeRuntimeSingleton && c.Enforce == EnforceSignal && c.SignalTarget == "" {
+		return fmt.Errorf("signal target is required when enforce=%s in mode=%s: set %s to a process "+
+			"comm or executable basename (e.g. \"nginx\"); an empty target signals every process in the "+
+			"shared PID namespace, which can terminate co-located sidecars", EnforceSignal, ModeRuntimeSingleton, EnvSignalTarget)
+	}
 	if c.TTL <= 0 {
 		return errors.New("ttl must be positive")
 	}

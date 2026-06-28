@@ -56,8 +56,14 @@ a Secret and pass `--sql-dsn-file`; the Helm chart does this from
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--metrics-bind-address` | `:8080` | Metrics endpoint. |
+| `--metrics-bind-address` | `:8080` | Metrics endpoint (set `0` to disable). Plain HTTP unless `--metrics-secure` is set. |
+| `--metrics-secure` | `false` | Serve `/metrics` over HTTPS authenticated via Kubernetes TokenReview and authorized via SubjectAccessReview. Off by default (plain HTTP on a separate port, restrict with a NetworkPolicy); scrapers then need RBAC for `/metrics`. |
 | `--health-probe-bind-address` | `:8081` | Health and readiness endpoint. |
+| `--leader-elect` | `false` | Enable leader election so only one replica reconciles at a time. Required when running more than one replica (in-cluster HA). |
+| `--leader-election-id` | `berth-operator-leader` | Name of the `coordination.k8s.io/Lease` electing the active replica. |
+| `--leader-election-lease-duration` | `15s` | Duration non-leaders wait before force-acquiring leadership. |
+| `--leader-election-renew-deadline` | `10s` | Duration the leader retries refreshing its lease before giving up. |
+| `--leader-election-retry-period` | `2s` | Interval between leader-election attempts. |
 | `--berth-api-server` | empty | API server base URL. Required. |
 | `--berth-api-key` | empty | Static bearer token. Mutually exclusive with `--berth-api-key-file`. |
 | `--berth-api-key-file` | empty | File containing bearer token. Re-read with a short cache for sidecar rotation. |

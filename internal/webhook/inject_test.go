@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -123,8 +124,9 @@ func TestInjectStartupGateNoSidecarNoProbe(t *testing.T) {
 
 func TestInjectSignalSharesProcessNamespace(t *testing.T) {
 	pod := optInPod("prod", map[string]string{
-		AnnLeaseName: "checkout",
-		AnnEnforce:   string(acquire.EnforceSignal),
+		AnnLeaseName:    "checkout",
+		AnnEnforce:      string(acquire.EnforceSignal),
+		AnnSignalTarget: "nginx",
 	})
 	if err := testInjector().Default(context.Background(), pod); err != nil {
 		t.Fatalf("Default: %v", err)
@@ -173,14 +175,33 @@ func TestInjectSignalTargetIgnoredUnderProbe(t *testing.T) {
 
 func TestInjectSignalRejectsExplicitFalseShareProcessNamespace(t *testing.T) {
 	pod := optInPod("prod", map[string]string{
-		AnnLeaseName: "checkout",
-		AnnEnforce:   string(acquire.EnforceSignal),
+		AnnLeaseName:    "checkout",
+		AnnEnforce:      string(acquire.EnforceSignal),
+		AnnSignalTarget: "nginx",
 	})
 	no := false
 	pod.Spec.ShareProcessNamespace = &no
 
 	if err := testInjector().Default(context.Background(), pod); err == nil {
 		t.Fatal("expected rejection when shareProcessNamespace is explicitly false in signal mode")
+	}
+}
+
+func TestInjectSignalRequiresTarget(t *testing.T) {
+	// runtime-singleton + enforce=signal with no target must be rejected at
+	// admission so an unscoped signal enforcer never reaches a pod. Mode is set
+	// explicitly so the test holds independent of the injector's default mode.
+	pod := optInPod("prod", map[string]string{
+		AnnLeaseName: "checkout",
+		AnnMode:      string(acquire.ModeRuntimeSingleton),
+		AnnEnforce:   string(acquire.EnforceSignal),
+	})
+	err := testInjector().Default(context.Background(), pod)
+	if err == nil {
+		t.Fatal("expected rejection when enforce=signal has no signal-target in runtime-singleton mode")
+	}
+	if !strings.Contains(err.Error(), AnnSignalTarget) {
+		t.Fatalf("error should mention %s, got: %v", AnnSignalTarget, err)
 	}
 }
 

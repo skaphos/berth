@@ -15,6 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	berthv1alpha1 "github.com/skaphos/berth/api/v1alpha1"
@@ -60,10 +61,26 @@ func run() int {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(berthv1alpha1.AddToScheme(scheme))
 
+	// When --metrics-secure is set, serve /metrics over HTTPS (auto self-signed
+	// cert) and gate every scrape on Kubernetes authn (TokenReview) + authz
+	// (SubjectAccessReview). Off by default: the endpoint stays plain HTTP on a
+	// separate port, to be restricted with a NetworkPolicy.
+	metricsOpts := metricsserver.Options{BindAddress: cfg.metricsAddr}
+	if cfg.secureMetrics {
+		metricsOpts.SecureServing = true
+		metricsOpts.FilterProvider = filters.WithAuthenticationAndAuthorization
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: cfg.metricsAddr},
-		HealthProbeBindAddress: cfg.probeAddr,
+		Scheme:                        scheme,
+		Metrics:                       metricsOpts,
+		HealthProbeBindAddress:        cfg.probeAddr,
+		LeaderElection:                cfg.leaderElect,
+		LeaderElectionID:              cfg.leaderElectionID,
+		LeaderElectionReleaseOnCancel: true,
+		LeaseDuration:                 &cfg.leaderElectionLeaseDuration,
+		RenewDeadline:                 &cfg.leaderElectionRenewDeadline,
+		RetryPeriod:                   &cfg.leaderElectionRetryPeriod,
 	})
 	if err != nil {
 		ctrl.Log.Error(err, "unable to create manager")
@@ -152,6 +169,13 @@ type operatorConfig struct {
 	serverName         string
 	insecureSkipVerify bool
 	enableWebhook      bool
+	secureMetrics      bool
+
+	leaderElect                 bool
+	leaderElectionID            string
+	leaderElectionLeaseDuration time.Duration
+	leaderElectionRenewDeadline time.Duration
+	leaderElectionRetryPeriod   time.Duration
 
 	// injectorConfig is assembled from the injection-* flags and consumed
 	// only when enableWebhook is set.
@@ -187,9 +211,21 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		injDefaultTTLSecs  int
 		serverName         string
 		insecureSkipVerify bool
+		secureMetrics      bool
+
+		leaderElect                 bool
+		leaderElectionID            string
+		leaderElectionLeaseDuration time.Duration
+		leaderElectionRenewDeadline time.Duration
+		leaderElectionRetryPeriod   time.Duration
 	)
 
-	fs.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "address for the metrics endpoint")
+	fs.StringVar(&metricsAddr, "metrics-bind-address", ":8080",
+		"address for the metrics endpoint (set 0 to disable). Plain HTTP unless --metrics-secure is set.")
+	fs.BoolVar(&secureMetrics, "metrics-secure", false,
+		"serve /metrics over HTTPS authenticated via Kubernetes TokenReview and authorized via "+
+			"SubjectAccessReview. Off by default (plain HTTP on a separate port; restrict it with a "+
+			"NetworkPolicy). Enable for an authenticated endpoint; scrapers then need RBAC for /metrics.")
 	fs.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "address for the health probe endpoint")
 	fs.StringVar(&apiServerURL, "berth-api-server", "", "Berth API server base URL (required)")
 	fs.StringVar(&apiKey, "berth-api-key", "",
@@ -242,6 +278,18 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		"default berth.skaphos.io/enforce for pods that omit the annotation.")
 	fs.IntVar(&injDefaultTTLSecs, "injection-default-ttl-seconds", 30,
 		"default berth.skaphos.io/ttl-seconds for pods that omit the annotation.")
+	fs.BoolVar(&leaderElect, "leader-elect", false,
+		"enable leader election so only one operator replica reconciles at a time. Leave false for "+
+			"the single-replica default; set true when running more than one replica for in-cluster HA.")
+	fs.StringVar(&leaderElectionID, "leader-election-id", "berth-operator-leader",
+		"name of the coordination.k8s.io/Lease used to elect the active replica. Must be unique per "+
+			"operator deployment within its namespace.")
+	fs.DurationVar(&leaderElectionLeaseDuration, "leader-election-lease-duration", 15*time.Second,
+		"duration non-leader candidates wait before force-acquiring leadership.")
+	fs.DurationVar(&leaderElectionRenewDeadline, "leader-election-renew-deadline", 10*time.Second,
+		"duration the acting leader retries refreshing its lease before giving up leadership.")
+	fs.DurationVar(&leaderElectionRetryPeriod, "leader-election-retry-period", 2*time.Second,
+		"interval between leader-election attempts.")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -265,6 +313,14 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		serverName:         serverName,
 		insecureSkipVerify: insecureSkipVerify,
 		enableWebhook:      enableWebhook,
+		secureMetrics:      secureMetrics,
+
+		leaderElect:                 leaderElect,
+		leaderElectionID:            leaderElectionID,
+		leaderElectionLeaseDuration: leaderElectionLeaseDuration,
+		leaderElectionRenewDeadline: leaderElectionRenewDeadline,
+		leaderElectionRetryPeriod:   leaderElectionRetryPeriod,
+
 		injectorConfig: webhook.InjectorConfig{
 			HelperImage: injHelperImage,
 			APIServer:   apiServerURL,

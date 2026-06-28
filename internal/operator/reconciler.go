@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	berthv1alpha1 "github.com/skaphos/berth/api/v1alpha1"
 	"github.com/skaphos/berth/pkg/client"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -93,10 +94,21 @@ func (r *BerthLeaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
+	// Stamp the observed generation once; the value propagates to every status
+	// write below (the sub-reconcilers receive lease by pointer). Adding the
+	// finalizer above mutates only metadata and does not bump generation.
+	lease.Status.ObservedGeneration = lease.Generation
+
 	if err := validateSpec(&lease.Spec); err != nil {
 		log.Error(err, "invalid BerthLease spec")
-		setCondition(&lease.Status, ConditionAcquired, metav1.ConditionFalse, "InvalidSpec", err.Error())
-		_ = r.Status().Update(ctx, &lease)
+		setCondition(&lease.Status, ConditionAcquired, metav1.ConditionFalse, "InvalidSpec", err.Error(), lease.Generation)
+		if err := r.Status().Update(ctx, &lease); err != nil {
+			// Requeue (with backoff) so a transient or conflicting status write
+			// retries; otherwise the InvalidSpec condition and observedGeneration
+			// could stay unpersisted until the spec changes again. The spec
+			// itself is still terminal — a successful write returns no requeue.
+			return ctrl.Result{}, fmt.Errorf("update status after invalid spec: %w", err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -107,8 +119,10 @@ func (r *BerthLeaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	res, err := r.LeaseClient.Acquire(ctx, lease.Namespace, lease.Spec.LeaseName, holder, ttl)
 	if err != nil {
 		log.Error(err, "lease acquire failed")
-		setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionFalse, "AcquireFailed", err.Error())
-		_ = r.Status().Update(ctx, &lease)
+		setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionFalse, "AcquireFailed", err.Error(), lease.Generation)
+		if err := r.Status().Update(ctx, &lease); err != nil {
+			log.Error(err, "update status after acquire failure")
+		}
 		return ctrl.Result{RequeueAfter: defaultRequeueOnFailure}, nil
 	}
 
@@ -121,8 +135,10 @@ func (r *BerthLeaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *BerthLeaseReconciler) reconcileHeld(ctx context.Context, log logr.Logger, lease *berthv1alpha1.BerthLease, res client.AcquireResult, heartbeat time.Duration) (ctrl.Result, error) {
 	if err := applyAction(ctx, r.Client, lease.Namespace, lease.Spec.Target, lease.Spec.AcquireAction); err != nil {
 		log.Error(err, "apply acquireAction")
-		setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionFalse, "ApplyAcquireActionFailed", err.Error())
-		_ = r.Status().Update(ctx, lease)
+		setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionFalse, "ApplyAcquireActionFailed", err.Error(), lease.Generation)
+		if err := r.Status().Update(ctx, lease); err != nil {
+			log.Error(err, "update status after apply acquireAction failure")
+		}
 		return ctrl.Result{RequeueAfter: defaultRequeueOnFailure}, nil
 	}
 
@@ -133,8 +149,8 @@ func (r *BerthLeaseReconciler) reconcileHeld(ctx context.Context, log logr.Logge
 	lease.Status.AcquiredAt = timePtr(res.AcquiredAt)
 	lease.Status.ExpiresAt = timePtr(res.ExpiresAt)
 	lease.Status.LastHeartbeat = &now
-	setCondition(&lease.Status, ConditionAcquired, metav1.ConditionTrue, "Held", fmt.Sprintf("lease held with fencing token %d", res.FencingToken))
-	setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionTrue, "Heartbeating", "lease renewed")
+	setCondition(&lease.Status, ConditionAcquired, metav1.ConditionTrue, "Held", fmt.Sprintf("lease held with fencing token %d", res.FencingToken), lease.Generation)
+	setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionTrue, "Heartbeating", "lease renewed", lease.Generation)
 
 	if err := r.Status().Update(ctx, lease); err != nil {
 		return ctrl.Result{}, fmt.Errorf("update status: %w", err)
@@ -155,8 +171,8 @@ func (r *BerthLeaseReconciler) reconcileNotHeld(ctx context.Context, log logr.Lo
 	lease.Status.FencingToken = 0
 	lease.Status.AcquiredAt = nil
 	lease.Status.ExpiresAt = timePtr(res.ExpiresAt)
-	setCondition(&lease.Status, ConditionAcquired, metav1.ConditionFalse, "HeldByOther", fmt.Sprintf("lease held by %q", res.Holder))
-	setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionTrue, "Standby", "monitoring for reacquire")
+	setCondition(&lease.Status, ConditionAcquired, metav1.ConditionFalse, "HeldByOther", fmt.Sprintf("lease held by %q", res.Holder), lease.Generation)
+	setCondition(&lease.Status, ConditionHeartbeatHealthy, metav1.ConditionTrue, "Standby", "monitoring for reacquire", lease.Generation)
 
 	if err := r.Status().Update(ctx, lease); err != nil {
 		return ctrl.Result{}, fmt.Errorf("update status: %w", err)
@@ -189,6 +205,14 @@ func (r *BerthLeaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.LeaseClient == nil {
 		return errors.New("BerthLeaseReconciler.LeaseClient is required")
 	}
+	// The controller watches only BerthLease objects. It deliberately does
+	// not watch the referenced target workloads (Deployment / StatefulSet /
+	// ReplicaSet / CronJob): a cluster-wide workload informer would cache far
+	// more than the managed targets and add API-server load that conflicts
+	// with the per-cluster lease scale target. Manual drift on a target is
+	// instead re-converged by the periodic heartbeat reconcile, bounded by the
+	// heartbeat interval. See docs/architecture.md "Target Convergence and
+	// Watch Strategy".
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&berthv1alpha1.BerthLease{}).
 		Complete(r)
@@ -225,26 +249,16 @@ func reacquireInterval(heartbeat, ttl time.Duration) time.Duration {
 	return ttl / 3
 }
 
-func setCondition(status *berthv1alpha1.BerthLeaseStatus, condType string, condStatus metav1.ConditionStatus, reason, message string) {
-	now := metav1.NewTime(time.Now())
-	for i := range status.Conditions {
-		if status.Conditions[i].Type == condType {
-			c := &status.Conditions[i]
-			if c.Status != condStatus {
-				c.LastTransitionTime = now
-			}
-			c.Status = condStatus
-			c.Reason = reason
-			c.Message = message
-			return
-		}
-	}
-	status.Conditions = append(status.Conditions, metav1.Condition{
+// setCondition upserts a status condition using the apimachinery helper, which
+// preserves LastTransitionTime unless the status changes and stamps the
+// per-condition ObservedGeneration so clients get a freshness signal.
+func setCondition(status *berthv1alpha1.BerthLeaseStatus, condType string, condStatus metav1.ConditionStatus, reason, message string, observedGeneration int64) {
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
 		Type:               condType,
 		Status:             condStatus,
-		LastTransitionTime: now,
 		Reason:             reason,
 		Message:            message,
+		ObservedGeneration: observedGeneration,
 	})
 }
 
