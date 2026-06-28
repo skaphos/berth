@@ -1,0 +1,1259 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Distributed lease coordination for Kubernetes multi-cluster workloads.">
+      
+      
+      
+        <link rel="canonical" href="https://skaphos.github.io/berth/0.3.0/getting-started/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../concepts/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Getting Started - Berth</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#getting-started" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Berth
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Getting Started
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Berth
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-will-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you will build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-1-bring-up-the-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Bring up the topology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-deploy-the-workload-to-both-runner-clusters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Deploy the workload to both runner clusters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-apply-the-same-lease-to-both-clusters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Apply the same lease to both clusters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-4-observe-single-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Observe single-active
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-5-force-a-failover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 — Force a failover
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-6-rejoin-and-converge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 — Rejoin and converge
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-7-tear-it-all-down" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 7 — Tear it all down
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-just-happened" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What just happened
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workload Gating (Injection)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-will-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you will build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-1-bring-up-the-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Bring up the topology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-deploy-the-workload-to-both-runner-clusters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Deploy the workload to both runner clusters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-apply-the-same-lease-to-both-clusters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Apply the same lease to both clusters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-4-observe-single-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Observe single-active
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-5-force-a-failover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 — Force a failover
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-6-rejoin-and-converge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6 — Rejoin and converge
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-7-tear-it-all-down" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 7 — Tear it all down
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-just-happened" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What just happened
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/skaphos/berth/edit/main/docs/getting-started.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="getting-started">Getting Started</h1>
+<p>This tutorial takes you from an empty machine to a <strong>single workload that runs
+in exactly one of two clusters at a time, with automatic failover</strong> — Berth's
+core job. You will stand up a throwaway three-cluster topology with <code>kind</code>,
+deploy the same workload and the same <code>BerthLease</code> to two "runner" clusters,
+watch one win, and then force a failover and watch the other take over.</p>
+<p>Everything here uses the repository's local end-to-end harness, so the commands
+are copy-pasteable and known to work.</p>
+<div class="admonition warning">
+<p class="admonition-title">This is a learning sandbox, not a production install</p>
+<p>The harness uses self-signed TLS, a <code>NodePort</code> Service, static-key auth, and
+<code>insecureSkipVerify</code> on the operators. It exists to demonstrate behavior on
+one machine. For real deployments, follow the Helm instructions in the
+<a href="https://github.com/skaphos/berth#quickstart">project README</a> and the
+<a href="../reference/configuration/">Configuration reference</a> instead.</p>
+</div>
+<h2 id="what-you-will-build">What you will build</h2>
+<div class="highlight"><pre><span></span><code>                 berth-e2e-coord  (coordination cluster)
+                 ┌──────────────────────────────────┐
+                 │  berth-apiserver  (k8s Lease store)│
+                 └──────────────┬─────────────────────┘
+                                │  acquire / renew / release (HTTPS)
+              ┌─────────────────┴──────────────────┐
+              │                                      │
+   berth-e2e-east                          berth-e2e-west
+   ┌────────────────────┐                  ┌────────────────────┐
+   │ berth-operator      │                 │ berth-operator      │
+   │   --cluster-id=     │                 │   --cluster-id=     │
+   │     cluster-east    │                 │     cluster-west    │
+   │ demo-app Deployment │                 │ demo-app Deployment │
+   └────────────────────┘                  └────────────────────┘
+</code></pre></div>
+<p>Both runner clusters get an identical <code>BerthLease</code> named <code>demo-lease</code> and an
+identical <code>demo-app</code> Deployment. The two operators compete for one central
+lease. The winner scales its <code>demo-app</code> to 2 replicas; the loser keeps <code>demo-app</code>
+at 0. If the winner disappears, the lease expires and the standby takes over.</p>
+<h2 id="prerequisites">Prerequisites</h2>
+<p>You need these tools on your <code>PATH</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://kind.sigs.k8s.io/"><code>kind</code></a></td>
+<td>Creates the three local clusters.</td>
+</tr>
+<tr>
+<td><code>kubectl</code></td>
+<td>Inspects the clusters.</td>
+</tr>
+<tr>
+<td><a href="https://helm.sh/"><code>helm</code></a></td>
+<td>Installs the API server and operator charts.</td>
+</tr>
+<tr>
+<td><code>docker</code></td>
+<td>Builds the Berth images and runs the <code>kind</code> nodes.</td>
+</tr>
+<tr>
+<td><code>openssl</code></td>
+<td>Mints the harness's throwaway TLS material.</td>
+</tr>
+<tr>
+<td>Go 1.26+</td>
+<td>Runs the <code>task</code> build orchestration (declared as a Go tool, so no separate install).</td>
+</tr>
+</tbody>
+</table>
+<p>Clone the repository and work from its root:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/skaphos/berth.git
+<span class="nb">cd</span><span class="w"> </span>berth
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Resource footprint</p>
+<p>Three <code>kind</code> clusters plus image builds run comfortably in ~4 CPU and ~6 GB
+of memory. Make sure Docker has that headroom before you start.</p>
+</div>
+<h2 id="step-1-bring-up-the-topology">Step 1 — Bring up the topology</h2>
+<p>One command creates all three clusters, builds and loads the Berth images, mints
+TLS material, and installs the API server and both operators:</p>
+<div class="highlight"><pre><span></span><code>go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>e2e-up
+</code></pre></div>
+<p>This takes about two minutes. When it finishes it prints the discovered API
+server URL and the demo API key:</p>
+<div class="highlight"><pre><span></span><code>=== topology ready ===
+API_URL=https://172.18.0.4:3xxxx
+API_KEY=e2e-key
+</code></pre></div>
+<p>Three <code>kind</code> contexts now exist. Confirm they are reachable:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-coord<span class="w"> </span>get<span class="w"> </span>nodes
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w">  </span>get<span class="w"> </span>nodes
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w">  </span>get<span class="w"> </span>nodes
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">What just got installed</p>
+<ul>
+<li><strong>coord</strong> runs <code>berth-apiserver</code> in the <code>berth-system</code> namespace with the
+  Kubernetes <code>Lease</code> backend (<code>--store-backend=k8s</code>), storing authoritative
+  lease state as <code>coordination.k8s.io/Lease</code> objects in the
+  <code>berth-coordination</code> namespace.</li>
+<li><strong>east</strong> and <strong>west</strong> each run a <code>berth-operator</code> with a distinct
+  <code>--cluster-id</code> (<code>cluster-east</code> / <code>cluster-west</code>), pointed at the coord API
+  server.</li>
+</ul>
+</div>
+<p>Check that the control-plane pods are running:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-coord<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span>get<span class="w"> </span>pods
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w">  </span>-n<span class="w"> </span>berth-system<span class="w"> </span>get<span class="w"> </span>pods
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w">  </span>-n<span class="w"> </span>berth-system<span class="w"> </span>get<span class="w"> </span>pods
+</code></pre></div>
+<h2 id="step-2-deploy-the-workload-to-both-runner-clusters">Step 2 — Deploy the workload to both runner clusters</h2>
+<p><code>demo-app</code> is a trivial Deployment (the <code>pause</code> container — it starts fast and
+does nothing) that starts at <strong>0 replicas</strong>. Berth, not you, decides when it
+scales up. Apply it to <strong>both</strong> runner clusters:</p>
+<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39; | tee /tmp/demo-app.yaml</span>
+<span class="s">apiVersion: apps/v1</span>
+<span class="s">kind: Deployment</span>
+<span class="s">metadata:</span>
+<span class="s">  name: demo-app</span>
+<span class="s">  namespace: berth-system</span>
+<span class="s">spec:</span>
+<span class="s">  replicas: 0</span>
+<span class="s">  selector:</span>
+<span class="s">    matchLabels:</span>
+<span class="s">      app: demo-app</span>
+<span class="s">  template:</span>
+<span class="s">    metadata:</span>
+<span class="s">      labels:</span>
+<span class="s">        app: demo-app</span>
+<span class="s">    spec:</span>
+<span class="s">      containers:</span>
+<span class="s">        - name: pause</span>
+<span class="s">          image: registry.k8s.io/pause:3.9</span>
+<span class="s">      terminationGracePeriodSeconds: 1</span>
+<span class="s">EOF</span>
+
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-app.yaml
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-app.yaml
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Why <code>berth-system</code>?</p>
+<p>This tutorial reuses the namespace the harness already created. In a real
+deployment you would target your application's own namespace; the operator
+watches all namespaces, and just needs RBAC to scale the target there.</p>
+</div>
+<h2 id="step-3-apply-the-same-lease-to-both-clusters">Step 3 — Apply the same lease to both clusters</h2>
+<p>The <code>BerthLease</code> is the declarative request: <em>"keep <code>demo-app</code> at 2 replicas on
+whichever cluster currently holds <code>demo-lease</code>, and at 0 everywhere else."</em>
+Apply the <strong>identical</strong> manifest to both runner clusters:</p>
+<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39; | tee /tmp/demo-lease.yaml</span>
+<span class="s">apiVersion: berth.skaphos.io/v1alpha1</span>
+<span class="s">kind: BerthLease</span>
+<span class="s">metadata:</span>
+<span class="s">  name: demo-lease</span>
+<span class="s">  namespace: berth-system</span>
+<span class="s">spec:</span>
+<span class="s">  leaseName: demo-lease</span>
+<span class="s">  # Placeholder — each operator overrides this with its own --cluster-id.</span>
+<span class="s">  holderIdentity: unset</span>
+<span class="s">  ttlSeconds: 15</span>
+<span class="s">  heartbeatIntervalSeconds: 5</span>
+<span class="s">  semantics: at-most-once</span>
+<span class="s">  target:</span>
+<span class="s">    apiVersion: apps/v1</span>
+<span class="s">    kind: Deployment</span>
+<span class="s">    name: demo-app</span>
+<span class="s">  acquireAction:</span>
+<span class="s">    scale:</span>
+<span class="s">      replicas: 2</span>
+<span class="s">  releaseAction:</span>
+<span class="s">    scale:</span>
+<span class="s">      replicas: 0</span>
+<span class="s">EOF</span>
+
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-lease.yaml
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-lease.yaml
+</code></pre></div>
+<p>The two operators now race to acquire <code>demo-lease</code> from the central API server.
+The race resolves within a few heartbeats.</p>
+<h2 id="step-4-observe-single-active">Step 4 — Observe single-active</h2>
+<p>Watch the replica counts on both clusters. Exactly one side goes to <strong>2</strong>; the
+other stays at <strong>0</strong>:</p>
+<div class="highlight"><pre><span></span><code>watch<span class="w"> </span>-n1<span class="w"> </span><span class="s1">&#39;</span>
+<span class="s1">  echo &quot;east: $(kubectl --context kind-berth-e2e-east -n berth-system get deploy demo-app -o jsonpath=&#39;</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">&#39;)&quot;</span>
+<span class="s1">  echo &quot;west: $(kubectl --context kind-berth-e2e-west -n berth-system get deploy demo-app -o jsonpath=&#39;</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">&#39;)&quot;</span>
+<span class="s1">&#39;</span>
+</code></pre></div>
+<p>Within ~15 seconds you should see a stable split such as <code>east: 2 / west: 0</code>.
+That is the whole guarantee: one active workload across two clusters.</p>
+<p>Confirm it from the lease's own status. The holder reports <code>leaseState: held</code>
+and names itself in <code>currentHolder</code>; the standby reports <code>leaseState: waiting</code>:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.leaseState}{&quot; holder=&quot;}{.status.currentHolder}{&quot;\n&quot;}&#39;</span>
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.leaseState}{&quot; holder=&quot;}{.status.currentHolder}{&quot;\n&quot;}&#39;</span>
+</code></pre></div>
+<p>You can also peek at the authoritative record in the coordination cluster — the
+central <code>Lease</code> object that both operators are contending for:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-coord<span class="w"> </span>-n<span class="w"> </span>berth-coordination<span class="w"> </span>get<span class="w"> </span>leases
+</code></pre></div>
+<h2 id="step-5-force-a-failover">Step 5 — Force a failover</h2>
+<p>Now simulate the holder disappearing. Find the holder from Step 4, then scale
+<strong>its operator</strong> to zero so nothing renews the lease. (Scale the operator
+Deployment, not a single pod — a deleted pod is rescheduled and resumes renewing
+inside the TTL, so the lease never expires.)</p>
+<p>Assuming <code>east</code> is the current holder:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span>scale<span class="w"> </span>deploy/berth-operator<span class="w"> </span>--replicas<span class="o">=</span><span class="m">0</span>
+</code></pre></div>
+<p>Keep the watch from Step 4 running. The lease expires after its 15-second TTL,
+and the standby (<code>west</code>) acquires it and scales <strong>its</strong> <code>demo-app</code> to 2 — usually
+within ~25 seconds of the holder going quiet:</p>
+<div class="highlight"><pre><span></span><code>east: 2    # stale — no operator left to scale it down
+west: 2    # new holder took over
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Why the old holder stays at 2</p>
+<p>With its operator scaled to zero, nothing on <code>east</code> is left to apply the
+release action, so <code>demo-app</code> lingers at 2 until its operator returns. The
+<em>guarantee</em> Berth makes is about which cluster <strong>holds the lease</strong>, not about
+instantly tidying an abandoned target. The next step shows the cleanup.</p>
+</div>
+<h2 id="step-6-rejoin-and-converge">Step 6 — Rejoin and converge</h2>
+<p>Bring the original operator back:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span>scale<span class="w"> </span>deploy/berth-operator<span class="w"> </span>--replicas<span class="o">=</span><span class="m">1</span>
+</code></pre></div>
+<p>On its first reconcile, the rejoining operator sees that it no longer holds the
+lease (<code>Acquired=false</code>) and applies the release action, scaling <code>east</code>'s
+<code>demo-app</code> back to 0. The topology converges to the new steady state:</p>
+<div class="highlight"><pre><span></span><code>east: 0    # rejoined, observed it lost, scaled down
+west: 2    # still the holder
+</code></pre></div>
+<p>That is a full failover cycle: holder loss → standby takeover → original rejoin
+→ convergence.</p>
+<h2 id="step-7-tear-it-all-down">Step 7 — Tear it all down</h2>
+<div class="highlight"><pre><span></span><code>go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>e2e-down
+</code></pre></div>
+<p>This deletes the three <code>kind</code> clusters and the harness's temporary files.</p>
+<h2 id="what-just-happened">What just happened</h2>
+<ul>
+<li>A <strong>lease</strong> is a named, TTL-bounded claim. Only one holder owns it at a time.</li>
+<li>Each <strong>operator</strong> competes for the lease on behalf of its cluster, identified
+  by its <code>--cluster-id</code>. The holder renews on the heartbeat interval; if it stops
+  renewing, the lease expires after the TTL and a standby can win.</li>
+<li>A <strong><code>BerthLease</code></strong> ties that claim to a workload: <code>acquireAction</code> runs when the
+  cluster wins, <code>releaseAction</code> when it loses. Here both were <code>scale</code>, but
+  <code>suspend</code> (for CronJobs) works the same way.</li>
+<li>Failover time is bounded by <strong>TTL + the standby's reacquire interval</strong>. With
+  <code>ttlSeconds: 15</code> and <code>heartbeatIntervalSeconds: 5</code>, takeover lands in roughly
+  25 seconds.</li>
+</ul>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><strong>Understand the model</strong> — <a href="../concepts/">Concepts</a> explains holder identity,
+  fencing tokens, TTL/heartbeat, lease semantics, and the topology trade-offs.</li>
+<li><strong>Run it for real</strong> — the
+  <a href="https://github.com/skaphos/berth#quickstart">project README quickstart</a> shows
+  the production Helm installs for the API server and operator, and the
+  <a href="../reference/configuration/">Configuration reference</a> covers every flag and
+  Helm value.</li>
+<li><strong>Go deeper on behavior</strong> — <a href="../architecture/">Architecture</a> covers the lease
+  model, holder identity, fencing tokens, storage backends, authorization, and
+  failure behavior.</li>
+<li><strong>Gate a workload you cannot change</strong> — see
+  <a href="../workload-gating-injection/">Workload gating via injection</a>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

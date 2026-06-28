@@ -1,0 +1,1710 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Distributed lease coordination for Kubernetes multi-cluster workloads.">
+      
+      
+      
+        <link rel="canonical" href="https://skaphos.github.io/berth/0.3.0/operations/scalability/">
+      
+      
+        <link rel="prev" href="../../reference/configuration/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Scalability - Berth</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#scalability-and-load-testing" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Berth
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Scalability
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Berth
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workload Gating (Injection)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalability
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#target-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Workload
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sizing-arithmetic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sizing Arithmetic
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sizing Arithmetic">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-the-load-actually-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the load actually lives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-testing-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load-Testing Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Load-Testing Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-sizing-model-this-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 — Sizing model (this document)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-store-level-benchmarks-via-storetest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Store-level benchmarks via storetest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-api-server-prometheus-instrumentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — API-server Prometheus instrumentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-api-level-load-driver-testload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — API-level load driver (test/load/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 3 — API-level load driver (test/load/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#deployed-harness-testloadfixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployed harness (test/load/fixtures/)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-operator-level-load-on-the-3-cluster-kind-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — Operator-level load on the 3-cluster kind harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-injection-path-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Injection-path load
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-publish-the-sizing-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 — Publish the sizing recommendation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#2026-05-30-phase-1-store-level-baseline-mem-sqlite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2026-05-30 — Phase 1 store-level baseline (mem, SQLite)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-first-deployed-run-k8s-vs-sql-steady" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2026-05-30 — Phase 3 first deployed run (k8s vs sql, steady)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#target-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Workload
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sizing-arithmetic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sizing Arithmetic
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sizing Arithmetic">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-the-load-actually-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the load actually lives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-testing-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load-Testing Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Load-Testing Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-sizing-model-this-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 — Sizing model (this document)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-store-level-benchmarks-via-storetest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Store-level benchmarks via storetest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-api-server-prometheus-instrumentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — API-server Prometheus instrumentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-api-level-load-driver-testload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — API-level load driver (test/load/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 3 — API-level load driver (test/load/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#deployed-harness-testloadfixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployed harness (test/load/fixtures/)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-operator-level-load-on-the-3-cluster-kind-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — Operator-level load on the 3-cluster kind harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-injection-path-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Injection-path load
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-publish-the-sizing-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 — Publish the sizing recommendation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#2026-05-30-phase-1-store-level-baseline-mem-sqlite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2026-05-30 — Phase 1 store-level baseline (mem, SQLite)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-first-deployed-run-k8s-vs-sql-steady" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2026-05-30 — Phase 3 first deployed run (k8s vs sql, steady)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/skaphos/berth/edit/main/docs/operations/scalability.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<!--
+SPDX-FileCopyrightText: 2026 Skaphos
+SPDX-License-Identifier: MIT
+-->
+
+<h1 id="scalability-and-load-testing">Scalability and Load Testing</h1>
+<p>This page documents the scaling model Berth is being designed to meet, the
+load-testing plan that produces evidence for it, and the measurement results
+once each phase lands. It is the durable artifact for the
+"how big can Berth get?" conversation.</p>
+<p>Status: <strong>Phases 1–3 landing.</strong> Store-level baselines for <code>mem</code> and <code>sqlite</code>
+are measured (Phase 1; see <a href="#results">Results</a>), the API server is
+Prometheus-instrumented on a separate <code>/metrics</code> port (Phase 2), and the
+API-level load driver with all four scenarios is built and in-process-tested
+(Phase 3). A coord-only kind + Prometheus harness
+(<a href="https://github.com/skaphos/berth/tree/main/test/load/fixtures"><code>test/load/fixtures/</code></a>) stands up <code>k8s</code>- and
+<code>sql</code>-backed API servers under one Prometheus, capturing latency <strong>and</strong> per-pod
+CPU/memory. The first deployed runs are in (see
+<a href="#phase-3-first-deployed-run-k8s-vs-sql-steady">Results</a>) and
+already surfaced a real bottleneck — the <code>k8s</code> backend is throttle-bound by the
+client-go default <code>QPS=5/Burst=10</code>, not resource-bound. What remains is the QPS
+fix + re-run, then the operator/injection phases.</p>
+<h2 id="target-workload">Target Workload</h2>
+<p>The current sizing target is:</p>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Applications (distinct leases)</td>
+<td>up to <strong>2,000</strong></td>
+</tr>
+<tr>
+<td>Regions</td>
+<td><strong>8</strong></td>
+</tr>
+<tr>
+<td>Region topology</td>
+<td>pairs (active + standby), so one lease ↔ 2 clusters competing</td>
+</tr>
+<tr>
+<td>Default lease parameters</td>
+<td><code>ttlSeconds: 30</code>, <code>heartbeatIntervalSeconds: 10</code></td>
+</tr>
+<tr>
+<td>Backend store</td>
+<td><code>k8s</code> (primary), <code>sql</code> (alternative for runner-local topologies)</td>
+</tr>
+</tbody>
+</table>
+<p>This is one concrete target, not a hard limit. The harness in this page is
+parameterized so the same scenarios can be re-run for larger or smaller fleets.</p>
+<h2 id="sizing-arithmetic">Sizing Arithmetic</h2>
+<p>Numbers below are derived from the lease-lifecycle behavior described in
+<a href="../../architecture/">Architecture</a> and the default lease parameters above. They
+are the <strong>predicted</strong> load the harness must validate against; measured numbers
+land in <a href="#results">Results</a> once Phase 1+ run.</p>
+<p>Per held lease, with <code>ttl=30s</code>, <code>heartbeat=10s</code>:</p>
+<ul>
+<li>Holder issues one <code>renew</code> every <code>heartbeatIntervalSeconds</code> = <strong>0.1 req/s</strong>.</li>
+<li>Standby in the paired cluster issues one <code>acquire</code> (denied) at roughly the
+  same cadence while waiting = <strong>0.1 req/s</strong>.</li>
+</ul>
+<p>For 2,000 leases × 1 holder + 1 standby each:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Steady-state estimate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Holder <code>renew</code> QPS to API</td>
+<td>~<strong>200 req/s</strong></td>
+</tr>
+<tr>
+<td>Standby <code>acquire</code> (denied) QPS</td>
+<td>~<strong>200 req/s</strong></td>
+</tr>
+<tr>
+<td>Combined API write QPS</td>
+<td>~<strong>400 req/s</strong></td>
+</tr>
+<tr>
+<td>Backend write rate (<code>k8s</code>: etcd <code>Lease</code> updates)</td>
+<td>~400 writes/s</td>
+</tr>
+<tr>
+<td>Backend write rate (<code>sql</code>: row CAS updates)</td>
+<td>~400 tx/s</td>
+</tr>
+<tr>
+<td><code>BerthLease</code> CRs across tenant clusters</td>
+<td>up to <strong>4,000</strong> (2,000 per cluster in a pair)</td>
+</tr>
+</tbody>
+</table>
+<p>Bounded events:</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Load shape</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold start</td>
+<td>up to 2,000 simultaneous <code>acquire</code> calls inside the first heartbeat window.</td>
+</tr>
+<tr>
+<td>Region-pair failover</td>
+<td>up to ~<strong>250 standby-to-holder transitions</strong> inside one TTL (one region of the 8 = ~250 of the 2,000 leases).</td>
+</tr>
+<tr>
+<td>Operator restart</td>
+<td>up to 2,000 reconciles enqueued; bounded by controller-runtime workqueue parallelism.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="where-the-load-actually-lives">Where the load actually lives</h3>
+<p>Three independent surfaces, sized differently:</p>
+<ol>
+<li><strong>API server</strong> — the central rendezvous. Steady-state QPS above; CPU/RAM
+   sized for the chosen backend's per-request cost.</li>
+<li><strong>Backend store</strong> — almost certainly the ceiling.<ul>
+<li><code>k8s</code> backend: every renew is an etcd write on a single
+  <code>coordination.k8s.io/v1.Lease</code> object. The coordination cluster's etcd is
+  the bottleneck; this is the primary thing Phase 1 measures.</li>
+<li><code>sql</code> backend: every renew is an indexed CAS update; Postgres and MariaDB
+  scale horizontally on the API side because the DB handles concurrency,
+  but DB connection-pool sizing matters. SQLite is single-writer (see
+  <a href="../../architecture/#storage-backends">Architecture: Storage Backends</a>)
+  and is not on this target.</li>
+</ul>
+</li>
+<li><strong>Operator</strong> — per tenant cluster, ~2,000 <code>BerthLease</code> reconciles on a
+   <code>min(heartbeat, ttl/3)</code> cadence. Controller-runtime workqueue depth and
+   reconcile p99 are the signals.</li>
+</ol>
+<h2 id="load-testing-plan">Load-Testing Plan</h2>
+<p>A phased plan. Each phase produces a usable signal on its own; later phases
+build on earlier ones.</p>
+<h3 id="phase-0-sizing-model-this-document">Phase 0 — Sizing model (this document)</h3>
+<ul>
+<li>[x] Target workload captured.</li>
+<li>[x] Steady-state, cold-start, and failover arithmetic written down.</li>
+<li>[x] Phased checklist published.</li>
+</ul>
+<h3 id="phase-1-store-level-benchmarks-via-storetest">Phase 1 — Store-level benchmarks via <code>storetest</code></h3>
+<p>Adds <code>RunStoreBenchmarks(b, newStore)</code> to
+<a href="https://github.com/skaphos/berth/blob/main/internal/lease/storetest/benchmarks.go"><code>internal/lease/storetest</code></a>,
+mirroring the existing <code>RunStoreConformance</code> and reusing the <strong>same</strong> store
+factory (<code>*testing.B</code> satisfies <code>testing.TB</code>). Each store's test file calls it,
+so one workload runs on every backend. This produces the <strong>raw backend
+ceiling</strong> with no HTTP, auth, controller, or network noise.</p>
+<p>The three sub-benchmarks the suite runs:</p>
+<ul>
+<li><code>AcquireParallel</code> — N goroutines doing <code>Get</code>+CAS on a single hot key,
+  bumping the fencing token each write so writers genuinely collide; measures
+  CAS-conflict cost (the cold-start / standby herd).</li>
+<li><code>RenewSteadyState</code> — a fleet of independent holders renewing distinct keys at
+  full speed; the sustained renew ceiling that bounds steady-state QPS.</li>
+<li><code>FailoverFanout</code> — an already-expired lease with M standbys racing to
+  reclaim, exactly one winning; the acquire-after-expiry path. Per-iteration
+  setup/teardown is excluded from the timed region.</li>
+</ul>
+<p>Outputs are <code>benchstat</code>-comparable <code>-count</code>-batched text files committed under
+<a href="benchmarks/"><code>docs/operations/benchmarks/</code></a> and produced by a <code>task bench</code>
+recipe in <code>Taskfile.yml</code>.</p>
+<ul>
+<li>[x] <code>RunStoreBenchmarks</code> added to <code>internal/lease/storetest</code>.</li>
+<li>[x] Wired from <code>mem</code> (external <code>lease_test</code>, to avoid the <code>storetest</code>→<code>lease</code>
+      import cycle) and the <code>sqlstore</code> tests (SQLite, plus integration-tagged
+      Postgres and MariaDB).</li>
+<li>[x] Baseline numbers committed for <code>mem</code> and <code>sql</code> (SQLite); see
+      <a href="#results">Results</a>. Postgres and MariaDB run via <code>task bench-integration</code>
+      against the DSN-gated integration path (<code>BERTH_TEST_POSTGRES_DSN</code> /
+      <code>BERTH_TEST_MYSQL_DSN</code>) — same env contract as the existing conformance
+      integration tests.</li>
+<li>[ ] <code>k8s</code> backend benchmark. <strong>Deferred:</strong> the repo has no <code>envtest</code>
+      harness yet, and the unit tests use a fake clientset whose map+reactor
+      cost is not the real etcd ceiling. Standing up <code>envtest</code> (or running the
+      suite against a kind cluster) is tracked as its own follow-up so the
+      <code>k8s</code> number is honest rather than a fake-client artifact.</li>
+<li>[x] <code>task bench</code> (mem + sqlite, no infra) and <code>task bench-integration</code>
+      (Postgres / MariaDB) recipes.</li>
+</ul>
+<h3 id="phase-2-api-server-prometheus-instrumentation">Phase 2 — API-server Prometheus instrumentation</h3>
+<p>The API server previously exposed no metrics endpoint (only the operator did,
+via controller-runtime on <code>:8080</code>). Phase 2 adds <code>promhttp</code> with the standard
+RED metrics on the lease handlers and the backend store calls
+(<code>internal/metrics</code>):</p>
+<ul>
+<li><code>berth_apiserver_request_duration_seconds{route, method, status}</code></li>
+<li><code>berth_apiserver_requests_total{route, method, status}</code></li>
+<li><code>berth_apiserver_requests_inflight</code></li>
+<li><code>berth_apiserver_lease_outcomes_total{outcome}</code></li>
+<li><code>berth_lease_store_call_duration_seconds{op, backend, outcome}</code></li>
+</ul>
+<p>The <code>route</code> label is the matched mux pattern (templated, so cardinality is
+bounded), and <code>store-call</code> <code>outcome</code> separates the expected control-flow
+signals (<code>conflict</code>, <code>notfound</code>) from an unexpected backend <code>error</code>. The
+request middleware is the outermost wrapper, so recorded status includes auth
+rejections; the store wrapper is a transparent <code>lease.Store</code> decorator tagged
+with the resolved <code>backend</code>.</p>
+<p>The <code>lease_outcomes</code> counter (SKA-447) names a request's <strong>semantic</strong> result —
+<code>acquired</code>, <code>held-by-other</code>, <code>renewed</code>, <code>released</code>, <code>conflict</code>, <code>unauthorized</code>,
+<code>error</code> — which HTTP status alone cannot express: a denied contender
+(<code>held-by-other</code>) is a <code>200</code>, so contention is invisible in the status-keyed
+series. This is the signal for contention rate and auth-failure storms. Each
+request is also access-logged once (method, path, route, status, latency,
+correlation id, and the authenticated holder/tenant — never the token) via
+<code>api.LoggingMiddleware</code>, the outermost wrapper; <code>/healthz</code> logs at debug to keep
+liveness probes out of the steady-state log.</p>
+<p><strong>Endpoint placement — decided: separate unauthenticated port.</strong> <code>/metrics</code> is
+served on its own plain-HTTP port (<code>--metrics-addr</code>, default <code>:8080</code>), off the
+TLS/auth path, mirroring the operator's controller-runtime endpoint. This keeps
+the scrape path's per-request cost out of the instrumented lease path and
+matches the existing operational pattern; the cost is a new flag and a
+NetworkPolicy to restrict the port to the monitoring stack. The endpoint
+exposes no lease data — only RED and store-call series.</p>
+<ul>
+<li>[x] Endpoint placement decision (separate unauthenticated port; see above).</li>
+<li>[x] Handler middleware records request metrics (<code>api.MetricsMiddleware</code>).</li>
+<li>[x] Store wrapper records store-call metrics with backend label
+      (<code>metrics.WrapStore</code>).</li>
+<li>[x] Helm chart wires the scrape target: <code>metrics.service</code> adds the port,
+      <code>metrics.serviceMonitor.*</code> renders a <code>ServiceMonitor</code>, and
+      <code>metrics.podAnnotations.enabled</code> is the annotation-based alternative.
+      A NetworkPolicy restricting <code>:8080</code> to Prometheus is left to the
+      deploying cluster's policy set (documented, not yet templated).</li>
+</ul>
+<h3 id="phase-3-api-level-load-driver-testload">Phase 3 — API-level load driver (<code>test/load/</code>)</h3>
+<p>A Go program that drives the API server through <code>pkg/client</code>. The thin
+entrypoint lives at <a href="https://github.com/skaphos/berth/tree/main/test/load"><code>test/load</code></a> (run with <code>go run
+./test/load</code>); the scenario logic and latency math live in
+<a href="https://github.com/skaphos/berth/tree/main/internal/load"><code>internal/load</code></a> so they are unit-testable. It is a
+test/dev tool, deliberately <strong>not</strong> a shipped binary (no <code>task build</code>, no image,
+not released). Knobs:</p>
+<div class="highlight"><pre><span></span><code>--leases=2000      --pairs=8          --ttl=30s --heartbeat=10s
+--scenario={steady,coldstart,failover,churn}
+--duration=5m      --target=https://...   --concurrency=256
+--store-backend={k8s,sql}        # informational tag, not a switch
+--tenant=load-key  # API key id; scopes generated holders so authz admits them
+--api-key-file=... --ca-file=... --metrics-addr=:9090
+</code></pre></div>
+<p>(<code>--ttl</code> is whole-second granularity — the API expresses TTL as an int32
+<code>ttlSeconds</code>. <code>--heartbeat</code> is sub-second-capable; it only paces cadence.)</p>
+<p>When the target enforces authentication (the deployed fixtures use
+<code>--auth-mode=static-keys</code> with key id <code>load-key</code>), pass <code>--tenant=load-key</code> so
+every generated holder is scoped <code>load-key/...</code>; the API server binds each holder
+to the caller's tenant and otherwise returns 403. Leave <code>--tenant</code> empty for an
+<code>--auth-mode=none</code> target, where holder authorization is bypassed.</p>
+<p>Scenarios:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Models</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>steady</code></td>
+<td>N held + N standby contending, characterize p50/p95/p99/p99.9</td>
+</tr>
+<tr>
+<td><code>coldstart</code></td>
+<td>every <code>acquire</code> fired near-simultaneously (no concurrency cap — that is the scenario)</td>
+</tr>
+<tr>
+<td><code>failover</code></td>
+<td>the even-index half is left to expire for one TTL while the odd-index survivor half keeps renewing at heartbeat cadence; standby acquire-after-expiry latency measured against that concurrent renew load</td>
+</tr>
+<tr>
+<td><code>churn</code></td>
+<td>each heartbeat a <code>--churn-fraction</code> of holders release and a fresh holder re-acquires</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong><code>failover</code> semantics changed (SKA-458).</strong> The scenario previously let <em>all</em>
+leases expire and timed a reclaim burst against an otherwise idle backend — a
+valid cold mass-expiry worst-case, but an optimistically low reclaim latency.
+It now keeps the survivor half renewing throughout, so the reclaim is measured
+under realistic concurrent load. Do not compare <code>failover</code> artifacts from
+before this change 1:1 against ones after it.</p>
+</blockquote>
+<p>Emits a JSON latency summary (per-op count/errors/min/mean/p50/p95/p99/p99.9) on
+stdout, and — when <code>--metrics-addr</code> is set — its own
+<code>berth_load_request_duration_seconds{op,result}</code> on <code>/metrics</code> so Prometheus can
+scrape the driver mid-run.</p>
+<h4 id="deployed-harness-testloadfixtures">Deployed harness (<code>test/load/fixtures/</code>)</h4>
+<p>This harness exists to answer three questions, and it captures the telemetry
+for all three — latency alone is not enough:</p>
+<ol>
+<li><strong>Size CPU/memory requests &amp; plan scaling</strong> — measure per-pod CPU and memory
+   <em>usage</em> under load and compare against the configured requests/limits.</li>
+<li><strong>Identify bottlenecks</strong> — localize latency by comparing client-observed
+   latency against the server's RED metrics
+   (<code>berth_apiserver_request_duration_seconds</code>) and store-call latency
+   (<code>berth_lease_store_call_duration_seconds{backend}</code>), plus resource
+   saturation.</li>
+<li><strong>Baseline future releases</strong> — commit comparable artifacts (run params +
+   latency + resource usage) so a later release can be measured against today.</li>
+</ol>
+<p>The driver simulates every holder and standby itself from the host, so an
+API-level run against a real store needs only the <strong>coordination</strong> cluster — no
+operator/runner clusters. <a href="https://github.com/skaphos/berth/tree/main/test/load/fixtures"><code>test/load/fixtures/</code></a>
+brings up a single kind cluster (<code>berth-load</code>) hosting:</p>
+<ul>
+<li><code>berth-apiserver-k8s</code> — <code>k8s</code> backend on the cluster's own etcd;</li>
+<li><code>berth-apiserver-sql</code> — <code>sql</code> backend on an in-cluster throwaway Postgres;</li>
+<li>a <code>kube-prometheus-stack</code> scraping both apiservers' ServiceMonitors <strong>plus</strong>
+  kubelet/cAdvisor and kube-state-metrics, so per-pod CPU/memory usage and the
+  configured requests/limits are both recorded (goal 1). Grafana, Alertmanager,
+  and node-exporter stay off.</li>
+</ul>
+<p>The driver reaches each API server over a real network path — kind
+<code>extraPortMappings</code> publish fixed NodePorts (30443/30444/30090) to
+<code>127.0.0.1:18443/18444/19090</code>. This deliberately avoids <code>kubectl port-forward</code>,
+whose single proxied connection bottlenecks a load run and confounds the
+measurement (goal 2). One Prometheus covers both backends because the <code>backend</code>
+label on <code>berth_lease_store_call_duration_seconds</code> separates the store paths; a
+<code>k8s</code>-backend run also surfaces real etcd store latency, practically covering
+the Phase 1 "k8s row".</p>
+<div class="highlight"><pre><span></span><code>go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>load-up
+go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>load-run<span class="w"> </span><span class="nv">BACKEND</span><span class="o">=</span>k8s<span class="w"> </span><span class="nv">SCENARIO</span><span class="o">=</span>steady<span class="w"> </span><span class="nv">LEASES</span><span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="nv">DURATION</span><span class="o">=</span>60s
+go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>load-run<span class="w"> </span><span class="nv">BACKEND</span><span class="o">=</span>sql<span class="w"> </span><span class="nv">SCENARIO</span><span class="o">=</span>steady<span class="w"> </span><span class="nv">LEASES</span><span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="nv">DURATION</span><span class="o">=</span>60s
+go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>load-down
+</code></pre></div>
+<p><code>run.sh</code> writes one artifact per run to <a href="results/"><code>docs/operations/results/</code></a>
+pairing the driver's latency summary with a Prometheus resource snapshot
+(CPU avg/peak, memory peak, configured requests/limits) over the run window;
+fold the measured numbers into the <a href="#results">Results</a> tables. The harness is a
+measurement rig, not a deployment reference (self-signed TLS, fixed NodePorts,
+throwaway api key, emptyDir Postgres) — see
+<a href="https://github.com/skaphos/berth/blob/main/test/load/fixtures/README.md"><code>test/load/fixtures/README.md</code></a>.</p>
+<ul>
+<li>[x] Driver location decided: <code>test/load</code> entrypoint + <code>internal/load</code> logic
+      (not a shipped <code>cmd/*</code> binary).</li>
+<li>[x] All four scenarios implemented, plus an in-process end-to-end test that
+      runs each against the real <code>api.NewMux</code> + mem store over <code>httptest</code> (no
+      external infra) — proves the driver works; <code>internal/load</code> is at ~94%
+      coverage.</li>
+<li>[x] Coord-only kind + Prometheus harness wiring <code>k8s</code> + <code>sql</code> API servers to
+      one Prometheus, capturing latency <strong>and</strong> per-pod CPU/memory
+      (<code>test/load/fixtures/</code>, <code>task load-up</code>/<code>load-run</code>/<code>load-down</code>).</li>
+<li>[x] First live <code>k8s</code> + <code>sql</code> steady runs captured; see
+      <a href="#phase-3-first-deployed-run-k8s-vs-sql-steady">Results</a>.
+      Headline finding: the <code>k8s</code> backend is throttle-bound by client-go
+      <code>QPS=5/Burst=10</code>, not resource-bound.</li>
+<li>[ ] Raise/expose the <code>k8s</code> store client-go QPS/Burst, then re-run for an
+      unthrottled <code>k8s</code> curve and fold per-backend CPU-request guidance into the
+      Phase 6 recommendation.</li>
+</ul>
+<h3 id="phase-4-operator-level-load-on-the-3-cluster-kind-harness">Phase 4 — Operator-level load on the 3-cluster kind harness</h3>
+<p>Extends <a href="https://github.com/skaphos/berth/blob/main/test/e2e/fixtures/up.sh"><code>test/e2e/fixtures/up.sh</code></a> with a
+<code>load</code> mode that creates N <code>BerthLease</code> CRs across <code>east</code> and <code>west</code>. Measures:</p>
+<ul>
+<li>controller-runtime workqueue depth (already exported on operator <code>:8080</code>)</li>
+<li>reconcile p99 (already exported)</li>
+<li>end-to-end "BerthLease created" → <code>status.leaseState=held</code> latency</li>
+<li>failover wallclock when an operator pod is killed</li>
+</ul>
+<p>This is the only phase that exercises the full reconcile + finalizer + CRD
+path under sustained load.</p>
+<ul>
+<li>[ ] <code>up.sh load</code> mode and teardown.</li>
+<li>[ ] Metric capture (Prometheus + dashboards or JSON snapshots).</li>
+<li>[ ] Results table for 100 / 500 / 1,000 / 2,000 CRs per cluster.</li>
+</ul>
+<h3 id="phase-5-injection-path-load">Phase 5 — Injection-path load</h3>
+<p>Scales a Deployment per tenant cluster with the
+<code>berth.skaphos.io/inject: acquire</code> opt-in label. Distinct load shape from
+operator-as-holder: every Pod is a client, so the API-server fan-out factor is
+much larger. Validates the sizing for users who adopt the injection path (see
+<a href="../../workload-gating-injection/">Workload gating via injection</a>).</p>
+<ul>
+<li>[ ] Driver Deployment + scaler.</li>
+<li>[ ] Pod-acquire latency capture from API metrics.</li>
+<li>[ ] Results table at named replica counts.</li>
+</ul>
+<h3 id="phase-6-publish-the-sizing-recommendation">Phase 6 — Publish the sizing recommendation</h3>
+<p>This document is rewritten in place with measured numbers replacing
+predictions: per-backend throughput at named load, recommended API server
+CPU/RAM per 1,000 leases, recommended coordination-cluster etcd sizing (for
+<code>k8s</code>) or DB sizing (for <code>sql</code>), failover-time SLO under named load, and a
+<code>task load</code> recipe.</p>
+<ul>
+<li>[ ] Replace "predicted" tables with "measured" tables.</li>
+<li>[ ] Recommended deployment shape for the 2,000-app / 8-region / pairs target.</li>
+<li>[ ] <code>task load</code> runs the full scenario set against an instrumented target.</li>
+</ul>
+<h2 id="results">Results</h2>
+<p>Each phase appends a dated section with the rig description and the numbers.</p>
+<h3 id="2026-05-30-phase-1-store-level-baseline-mem-sqlite">2026-05-30 — Phase 1 store-level baseline (mem, SQLite)</h3>
+<p>Rig: AMD Ryzen 9 9950X3D (32 hardware threads), Go test <code>-benchtime=2s
+-count=6</code>, in-process. SQLite is in-memory (<code>mode=memory&amp;cache=shared</code>). Raw
+<code>go test -bench</code> output is committed under
+<a href="benchmarks/"><code>docs/operations/benchmarks/</code></a> (<code>mem.txt</code>, <code>sqlite.txt</code>) and is
+<code>benchstat</code>-ready. Median of six runs:</p>
+<table>
+<thead>
+<tr>
+<th>Benchmark</th>
+<th><code>mem</code></th>
+<th><code>sqlite</code> (in-mem)</th>
+<th>What it bounds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AcquireParallel</code> (per <code>Get</code>+CAS op)</td>
+<td>~0.25 µs</td>
+<td>~19 µs</td>
+<td>CAS-conflict cost on one hot key</td>
+</tr>
+<tr>
+<td><code>RenewSteadyState</code> (per renew op)</td>
+<td>~0.40 µs</td>
+<td>~21 µs</td>
+<td>sustained holder renew ceiling</td>
+</tr>
+<tr>
+<td><code>FailoverFanout</code> (per 8-standby reclaim round)</td>
+<td>~39 µs</td>
+<td>~250 µs</td>
+<td>acquire-after-expiry on failover</td>
+</tr>
+</tbody>
+</table>
+<p>Read-out against the <a href="#sizing-arithmetic">sizing arithmetic</a> (combined target
+~400 write req/s for 2,000 leases):</p>
+<ul>
+<li><strong>The store layer is not the bottleneck at the target.</strong> A single-process
+  renew ceiling of ~0.40 µs/op (<code>mem</code>) or ~21 µs/op (<code>sqlite</code>) is ~2.5M and
+  ~47k renews/s respectively — both orders of magnitude above the ~200 req/s
+  holder-renew load the 2,000-lease target implies.</li>
+<li>This is the expected shape: the real ceiling lives in the <strong>per-request
+  round-trip</strong> — HTTP, auth, and the backend's network/durability cost — which
+  Phases 2–4 measure. <code>mem</code>/<code>sqlite</code> here are the in-process floor every
+  durable backend is compared against, not a production sizing.</li>
+<li><code>sqlite</code> is ~50–80× slower than <code>mem</code> per op but still far above target; it
+  remains single-writer (not on the production target) and is included only as
+  a cheap, infra-free regression signal.</li>
+</ul>
+<p>Pending for a complete Phase 1: <code>k8s</code> (etcd) and the DSN-backed Postgres /
+MariaDB numbers, which carry real network and durability cost and are the ones
+the sizing recommendation will actually rest on.</p>
+<h3 id="phase-3-first-deployed-run-k8s-vs-sql-steady">2026-05-30 — Phase 3 first deployed run (<code>k8s</code> vs <code>sql</code>, steady)</h3>
+<p>Rig: the <code>test/load/fixtures/</code> harness (coord-only kind, single-replica API
+servers, etcd from the kind node, in-cluster Postgres 16), driver on the host
+over the fixed-NodePort path. <code>steady</code> scenario, ttl 30s / heartbeat 10s, 10s
+request timeout. Raw artifacts (latency + per-pod resource snapshot) under
+<a href="results/"><code>docs/operations/results/</code></a>. These are kind/laptop numbers — useful
+for <strong>shape and bottleneck</strong>, not absolute capacity.</p>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>acquire p50</th>
+<th>acquire p95</th>
+<th>acquire err</th>
+<th>renew p50</th>
+<th>CPU peak (req 0.1c)</th>
+<th>mem peak (req 128Mi)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>k8s</code>, 300 leases</td>
+<td>10,001 ms</td>
+<td>10,026 ms</td>
+<td>1184/1192</td>
+<td>9.5 ms</td>
+<td>0.007 c</td>
+<td>20 MiB</td>
+</tr>
+<tr>
+<td><code>k8s</code>, 8 leases</td>
+<td>585 ms</td>
+<td>2,399 ms</td>
+<td>0/32</td>
+<td>601 ms</td>
+<td>0.004 c</td>
+<td>13 MiB</td>
+</tr>
+<tr>
+<td><code>sql</code>, 300 leases</td>
+<td>6.3 ms</td>
+<td>1,655 ms</td>
+<td>60/1800</td>
+<td>7.8 ms</td>
+<td>0.086 c</td>
+<td>38 MiB</td>
+</tr>
+</tbody>
+</table>
+<p>Read against the three harness goals:</p>
+<ul>
+<li><strong>Bottleneck (goal 2): the <code>k8s</code> backend is throttle-bound by client-go, not
+  resource-bound.</strong> Under 300 concurrent acquires the API server pod is
+  <em>idle</em> (0.007 c, 20 MiB) yet nearly every acquire hits the 10s deadline. The
+  pod's own logs are unambiguous: <code>"Waited before sending request"
+  delay="10.0s" reason="client-side throttling, not priority and fairness"</code> on
+  the <code>coordination.k8s.io</code> Lease calls. The default client-go limiter
+  (<code>QPS=5, Burst=10</code>) caps the store, and because every heartbeat fires
+  renew+contend for <em>all</em> leases at once, the in-flight count exceeds Burst=10
+  at even ~8 leases (the 8-lease run is slow but error-free; the 300-lease run
+  times out). The unthrottled store latency is ~1–2 ms (renew min 1.3 ms).
+  <strong>Root cause:</strong> <a href="https://github.com/skaphos/berth/blob/main/internal/k8s/client.go"><code>internal/k8s/client.go</code></a>
+  builds the clientset via <code>rest.InClusterConfig()</code> and never sets
+  <code>cfg.QPS</code>/<code>cfg.Burst</code>, so they take client-go's defaults (5 / 10).
+  <strong>Action:</strong> make them configurable and raise the defaults before the <code>k8s</code>
+  backend can carry the 2,000-lease target.</li>
+<li><strong><code>sql</code> scales far better on the same load:</strong> acquire p50 6.3 ms vs 10 s, and
+  it degrades gracefully (p95 ~1.6 s, 3% errors) instead of collapsing — no
+  client-side throttle; a connection pool absorbs the burst.</li>
+<li><strong>Sizing (goal 1):</strong> neither backend is memory-bound here (≤38 MiB against a
+  128 MiB request — the request could drop). <code>sql</code> reaches <strong>86% of its 0.1-core
+  request</strong> at 300 leases while <code>k8s</code> stays idle, so the per-backend CPU-request
+  guidance differs: <code>sql</code> needs CPU headroom to scale; <code>k8s</code> needs QPS headroom,
+  not cores. Re-run after the QPS fix to get a <code>k8s</code> curve that isn't
+  throttle-clipped.</li>
+</ul>
+<h2 id="open-questions">Open Questions</h2>
+<ul>
+<li><strong>Metrics endpoint placement</strong> — <strong>resolved (Phase 2): separate
+  unauthenticated port</strong> (<code>--metrics-addr</code>, default <code>:8080</code>), matching the
+  operator and keeping the scrape path off the instrumented TLS/auth path. The
+  remaining follow-up is a templated NetworkPolicy restricting <code>:8080</code> to the
+  monitoring stack — documented but left to the deploying cluster's policy set
+  for now.</li>
+<li>
+<p><strong>SQL backend matrix.</strong> <code>sqlstore_integration_test.go</code> already covers
+  Postgres + MariaDB + SQLite for correctness; Phase 1 benchmarks reuse the
+  same factory. SQLite runs infra-free in <code>task bench</code>; Postgres and MariaDB
+  run via <code>task bench-integration</code> against the existing DSN env contract
+  (<code>BERTH_TEST_POSTGRES_DSN</code> / <code>BERTH_TEST_MYSQL_DSN</code>) — there is no
+  testcontainers wiring in the repo, so the earlier "testcontainers" framing
+  was aspirational. The sizing recommendation only targets Postgres / MariaDB
+  (SQLite is single-writer per the architecture doc).</p>
+</li>
+<li>
+<p><strong><code>k8s</code> (etcd) benchmark needs a real backend.</strong> The unit tests use a fake
+  clientset; benchmarking it would measure the fake's map+reactor cost, not
+  etcd. A faithful <code>k8s</code> number needs <code>envtest</code> (not yet wired in this repo) or
+  a kind cluster. Tracked as a Phase 1 follow-up before the <code>k8s</code> row in
+  <a href="#results">Results</a> can be filled in.</p>
+</li>
+<li><strong>Reporting cadence.</strong> Once the harness is stable, a nightly CI job that
+  re-runs Phase 1 benchmarks against <code>mem</code> and <code>sql</code> (sqlite + tc) and
+  publishes <code>benchstat</code> deltas would catch regressions cheaply. Not in the
+  Phase 0 scope.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

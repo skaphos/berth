@@ -1,0 +1,24 @@
+goos: linux
+goarch: amd64
+pkg: github.com/skaphos/berth/internal/lease/sqlstore
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor          
+BenchmarkSQLiteStore/AcquireParallel-32         	  121113	     19373 ns/op	    3518 B/op	      96 allocs/op
+BenchmarkSQLiteStore/AcquireParallel-32         	  119596	     19534 ns/op	    3518 B/op	      96 allocs/op
+BenchmarkSQLiteStore/AcquireParallel-32         	  123720	     19268 ns/op	    3518 B/op	      96 allocs/op
+BenchmarkSQLiteStore/AcquireParallel-32         	  125736	     19388 ns/op	    3517 B/op	      96 allocs/op
+BenchmarkSQLiteStore/AcquireParallel-32         	  120706	     19498 ns/op	    3518 B/op	      96 allocs/op
+BenchmarkSQLiteStore/AcquireParallel-32         	  121688	     19296 ns/op	    3518 B/op	      96 allocs/op
+BenchmarkSQLiteStore/RenewSteadyState-32        	  108976	     21144 ns/op	    3568 B/op	      91 allocs/op
+BenchmarkSQLiteStore/RenewSteadyState-32        	  111398	     21224 ns/op	    3568 B/op	      91 allocs/op
+BenchmarkSQLiteStore/RenewSteadyState-32        	  112482	     21338 ns/op	    3568 B/op	      91 allocs/op
+BenchmarkSQLiteStore/RenewSteadyState-32        	  112191	     21420 ns/op	    3568 B/op	      91 allocs/op
+BenchmarkSQLiteStore/RenewSteadyState-32        	  115400	     21067 ns/op	    3568 B/op	      91 allocs/op
+BenchmarkSQLiteStore/RenewSteadyState-32        	  112551	     21199 ns/op	    3568 B/op	      91 allocs/op
+BenchmarkSQLiteStore/FailoverFanout-32          	    9966	    247280 ns/op	   28171 B/op	     786 allocs/op
+BenchmarkSQLiteStore/FailoverFanout-32          	    9621	    249899 ns/op	   28068 B/op	     783 allocs/op
+BenchmarkSQLiteStore/FailoverFanout-32          	    9303	    251173 ns/op	   28131 B/op	     785 allocs/op
+BenchmarkSQLiteStore/FailoverFanout-32          	   10000	    247686 ns/op	   28148 B/op	     785 allocs/op
+BenchmarkSQLiteStore/FailoverFanout-32          	    9712	    250070 ns/op	   28194 B/op	     786 allocs/op
+BenchmarkSQLiteStore/FailoverFanout-32          	    9957	    251653 ns/op	   28103 B/op	     784 allocs/op
+PASS
+ok  	github.com/skaphos/berth/internal/lease/sqlstore	81.980s
