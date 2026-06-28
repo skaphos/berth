@@ -1317,9 +1317,9 @@ so the webhook is only consulted for opted-in Pods.</p>
 </tr>
 <tr>
 <td><code>berth.skaphos.io/signal-target</code></td>
-<td>No</td>
-<td><em>(unset → broad)</em></td>
-<td><code>signal</code> only: scope enforcement to the workload process, matched by <code>comm</code> or executable basename (e.g. <code>nginx</code>). <strong>Strongly recommended in multi-container Pods</strong> — see the hazard note under <a href="#enforcement-runtime-singleton">Enforcement</a>.</td>
+<td><strong>Required</strong> for <code>signal</code> in <code>runtime-singleton</code></td>
+<td><em>(none)</em></td>
+<td><code>signal</code> only: scope enforcement to the workload process, matched by <code>comm</code> or executable basename (e.g. <code>nginx</code>). The webhook <strong>rejects</strong> a <code>runtime-singleton</code> Pod that requests <code>enforce: signal</code> without it — see the hazard note under <a href="#enforcement-runtime-singleton">Enforcement</a>.</td>
 </tr>
 </tbody>
 </table>
@@ -1355,16 +1355,17 @@ becomes a controlled crashloop, not an unguarded restart.</p>
   where the probe cannot run.</li>
 </ul>
 <blockquote>
-<p><strong>Multi-sidecar hazard.</strong> Without <code>berth.skaphos.io/signal-target</code>, the
-sidecar signals <strong>every</strong> process in the shared PID namespace except PID 1
-and berth's own — so on lease loss it also <code>SIGTERM</code>/<code>SIGKILL</code>s co-located
-sidecars (service mesh, log shippers, metrics agents), not just the gated
-workload. The helper logs a warning when it starts unscoped. In any Pod with
-more than the one workload container, set <code>signal-target</code> to the workload's
-process name (<code>comm</code>, or the executable basename; the kernel truncates
-<code>comm</code> to 15 bytes, which the matcher accounts for) to bound the blast
-radius. <code>probe</code> remains the recommended default precisely because it has no
-such cross-container reach.</p>
+<p><strong>Multi-sidecar hazard.</strong> An unscoped signal enforcer signals <strong>every</strong>
+process in the shared PID namespace except PID 1 and berth's own — so on
+lease loss it would also <code>SIGTERM</code>/<code>SIGKILL</code> co-located sidecars (service
+mesh, log shippers, metrics agents), not just the gated workload. Because
+of this, the webhook now <strong>rejects</strong> a <code>runtime-singleton</code> Pod that requests
+<code>enforce: signal</code> without <code>berth.skaphos.io/signal-target</code>, and a
+directly-run helper fails the same validation at startup. Set it to the
+workload's process name (<code>comm</code>, or the executable basename; the kernel
+truncates <code>comm</code> to 15 bytes, which the matcher accounts for) to bound the
+blast radius. <code>probe</code> remains the recommended default precisely because it
+has no such cross-container reach.</p>
 </blockquote>
 <p>Both are <strong>best-effort within a bounded window</strong>: there is detection + kill
 latency between lease loss and the container stopping. The <strong>fencing token</strong>

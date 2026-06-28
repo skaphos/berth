@@ -485,6 +485,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#target-convergence-and-watch-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Convergence and Watch Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#injected-workload-gating" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -924,6 +935,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#target-convergence-and-watch-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Convergence and Watch Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#injected-workload-gating" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1229,6 +1251,47 @@ single-writer backend; run it with one API server replica only.</p>
 </tbody>
 </table>
 <p>Each action may set at most one of <code>suspend</code> or <code>scale</code>.</p>
+<h2 id="target-convergence-and-watch-strategy">Target Convergence and Watch Strategy</h2>
+<p>The operator reconciles a <code>BerthLease</code> on a level-triggered cadence: a held
+lease re-reconciles every <code>heartbeatIntervalSeconds</code>, and a standby
+re-reconciles every <code>min(heartbeatIntervalSeconds, ttlSeconds/3)</code>. On each
+reconcile it re-reads the <code>spec.target</code> workload and re-applies the
+state-appropriate action (<code>acquireAction</code> while held, <code>releaseAction</code> while
+waiting). A manual edit to a managed target — for example, someone scaling a
+gated Deployment back up by hand — is therefore re-converged on the next
+reconcile, within the heartbeat window (about 10 s at the default
+<code>ttlSeconds: 30</code> / <code>heartbeatIntervalSeconds: 10</code>). The re-apply is idempotent:
+when the target already matches the desired action the reconciler skips the
+write, so steady-state convergence costs one live read (a single GET to the API
+server — the operator runs no informer over targets) and no write.</p>
+<p>The operator deliberately does <strong>not</strong> watch target workloads. It registers
+only <code>For(&amp;BerthLease{})</code> and relies on the periodic re-assert above rather than
+mapping Deployment / StatefulSet / ReplicaSet / CronJob events back to their
+owning <code>BerthLease</code>. This is an intentional trade-off, not an omission:</p>
+<ul>
+<li><strong>A cluster-wide workload watch defeats the scale target.</strong> The sizing target
+  is up to 2,000 leases per tenant cluster (see
+  <a href="../operations/scalability/">Scalability</a>). A broad informer would cache
+  <em>every</em> Deployment, StatefulSet, ReplicaSet, and CronJob in the cluster — not
+  just the ones a <code>BerthLease</code> references — and ReplicaSets in particular
+  accumulate with every rollout, so the cache grows with total cluster workload
+  rather than with Berth's own footprint. The initial LIST and ongoing WATCH
+  also add load to the API path the <code>k8s</code> backend is already throttle-bound on
+  (client-go <code>QPS=5/Burst=10</code>).</li>
+<li><strong>The watch cannot be cheaply scoped.</strong> Targets are arbitrary user-owned
+  workloads with no Berth-applied label or field, so a <code>cache.ByObject</code>
+  selector cannot narrow the informer without the operator first stamping a
+  marker on every user workload — a write beyond the declared action.</li>
+<li><strong>The benefit is small.</strong> A watch would cut drift-correction latency from
+  one heartbeat (about 10 s) to sub-second. For a coordination primitive whose
+  failover RTO is already bounded by the lease TTL (tens of seconds), that
+  margin does not justify the cache and API-server cost.</li>
+</ul>
+<p>If a future deployment genuinely needs sub-second correction in a small or
+single-tenant cluster, the supported extension would be an <strong>opt-in</strong> flag (for
+example <code>--watch-targets</code>) that registers a scoped <code>Watches</code> source plus a field
+index on <code>BerthLease</code> by target reference — never an always-on cluster-wide
+watch. It is a deliberate non-default.</p>
 <h2 id="injected-workload-gating">Injected Workload Gating</h2>
 <p>For workloads whose image cannot be changed, the operator can run a mutating
 admission webhook (<code>--enable-injection-webhook</code>) that injects the
@@ -1258,7 +1321,15 @@ workload needs its own token-aware integration for end-to-end fencing against
 downstream systems.</p>
 <h2 id="known-limitations">Known Limitations</h2>
 <ul>
-<li>The operator currently runs one replica and does not use leader election.</li>
+<li>The operator runs a single active replica by default. Leader election is
+  opt-in (<code>leaderElection.enabled</code> / <code>--leader-elect</code>) for in-cluster HA; with
+  more than one replica it is required so exactly one replica reconciles at a
+  time. Even under a shared <code>--cluster-id</code> holder it prevents duplicate central
+  API load and racing <code>BerthLease</code> status writes.</li>
+<li>Manual edits to a managed target workload are re-converged on the next
+  heartbeat reconcile (bounded by the heartbeat interval, ~10 s at defaults),
+  not via a workload watch — an intentional trade-off for the per-cluster scale
+  target; see <a href="#target-convergence-and-watch-strategy">Target Convergence and Watch Strategy</a>.</li>
 <li><code>at-least-once</code> is part of the CRD surface, but the current central manager
   implements exclusive holder behavior.</li>
 <li>The management console package exists as a placeholder.</li>

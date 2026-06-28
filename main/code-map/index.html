@@ -1081,7 +1081,7 @@ and points to the files most likely to matter when changing behavior.</p>
 </tr>
 <tr>
 <td><code>config/rbac</code></td>
-<td>Static RBAC manifests.</td>
+<td>Static, non-authoritative RBAC reference manifests; Helm (<code>deploy/helm/berth-operator</code>) is the deployment authority. Hand-synced with <code>values.yaml</code> <code>rbac.*</code>.</td>
 </tr>
 <tr>
 <td><code>deploy/helm/berth-apiserver</code></td>

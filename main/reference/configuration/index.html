@@ -991,12 +991,42 @@ a Secret and pass <code>--sql-dsn-file</code>; the Helm chart does this from
 <tr>
 <td><code>--metrics-bind-address</code></td>
 <td><code>:8080</code></td>
-<td>Metrics endpoint.</td>
+<td>Metrics endpoint (set <code>0</code> to disable). Plain HTTP unless <code>--metrics-secure</code> is set.</td>
+</tr>
+<tr>
+<td><code>--metrics-secure</code></td>
+<td><code>false</code></td>
+<td>Serve <code>/metrics</code> over HTTPS authenticated via Kubernetes TokenReview and authorized via SubjectAccessReview. Off by default (plain HTTP on a separate port, restrict with a NetworkPolicy); scrapers then need RBAC for <code>/metrics</code>.</td>
 </tr>
 <tr>
 <td><code>--health-probe-bind-address</code></td>
 <td><code>:8081</code></td>
 <td>Health and readiness endpoint.</td>
+</tr>
+<tr>
+<td><code>--leader-elect</code></td>
+<td><code>false</code></td>
+<td>Enable leader election so only one replica reconciles at a time. Required when running more than one replica (in-cluster HA).</td>
+</tr>
+<tr>
+<td><code>--leader-election-id</code></td>
+<td><code>berth-operator-leader</code></td>
+<td>Name of the <code>coordination.k8s.io/Lease</code> electing the active replica.</td>
+</tr>
+<tr>
+<td><code>--leader-election-lease-duration</code></td>
+<td><code>15s</code></td>
+<td>Duration non-leaders wait before force-acquiring leadership.</td>
+</tr>
+<tr>
+<td><code>--leader-election-renew-deadline</code></td>
+<td><code>10s</code></td>
+<td>Duration the leader retries refreshing its lease before giving up.</td>
+</tr>
+<tr>
+<td><code>--leader-election-retry-period</code></td>
+<td><code>2s</code></td>
+<td>Interval between leader-election attempts.</td>
 </tr>
 <tr>
 <td><code>--berth-api-server</code></td>

@@ -1123,6 +1123,12 @@ via [SchemeBuilder] and [AddToScheme]. The API group is "berth.skaphos.io".</p>
 </thead>
 <tbody>
 <tr>
+<td><code>observedGeneration</code> <em>integer</em></td>
+<td>ObservedGeneration is the most recent .metadata.generation observed by<br />the operator. It is set on every status write so clients can tell<br />whether status reflects the current spec.</td>
+<td></td>
+<td>Minimum: 0 <br />Optional: {} <br /></td>
+</tr>
+<tr>
 <td><code>leaseState</code> <em>string</em></td>
 <td>LeaseState is the current state of the lease (e.g. "held", "released", "expired").</td>
 <td></td>
