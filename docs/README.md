@@ -8,6 +8,8 @@ It is published with MkDocs Material and `mike` at
 
 | Document | Purpose |
 | --- | --- |
+| [Getting started](getting-started.md) | End-to-end tutorial: stand up a local three-cluster topology and watch a workload fail over between clusters. |
+| [Concepts](concepts.md) | The mental model: leases, holder identity, TTL/heartbeat, fencing tokens, semantics, and topologies. |
 | [Architecture](architecture.md) | System model, runtime shape, storage backends, and failure behavior. |
 | [Workload gating via injection](workload-gating-injection.md) | Gate unmodifiable workloads on a lease with the injected `berth-acquire` helper. |
 | [Configuration reference](reference/configuration.md) | API server, operator, broker, Helm values, and environment inputs. |
