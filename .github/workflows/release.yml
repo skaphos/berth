@@ -219,9 +219,15 @@ jobs:
             "berth-apiserver-${VERSION}.tgz" \
             "berth-operator-${VERSION}.tgz" \
             "berth-${VERSION}.spdx.json" > checksums.txt
+          # cosign v3 defaults to the new Sigstore bundle format, where a single
+          # --bundle file (cert + signature + Rekor entry) replaces the legacy
+          # --output-signature/--output-certificate pair. Verify with:
+          #   cosign verify-blob --bundle checksums.txt.sigstore.json \
+          #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+          #     --certificate-identity-regexp '^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v' \
+          #     checksums.txt
           cosign sign-blob \
-            --output-signature checksums.txt.sig \
-            --output-certificate checksums.txt.pem \
+            --bundle checksums.txt.sigstore.json \
             checksums.txt
 
       - name: Attest build provenance (release artifacts)
@@ -240,6 +246,5 @@ jobs:
             dist/charts/berth-operator-${{ steps.vars.outputs.version }}.tgz
             dist/charts/berth-${{ steps.vars.outputs.version }}.spdx.json
             dist/charts/checksums.txt
-            dist/charts/checksums.txt.sig
-            dist/charts/checksums.txt.pem
+            dist/charts/checksums.txt.sigstore.json
           generate_release_notes: true
