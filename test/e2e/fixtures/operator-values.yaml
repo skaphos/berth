@@ -51,6 +51,13 @@ injection:
     tag: e2e
     pullPolicy: IfNotPresent
     apiKeyFile: /var/run/berth/api-key
+    # SKA-444: the webhook mounts the bearer token from this Secret into each
+    # opted-in pod at apiKeyFile. up.sh creates `berth-api-key` (key `api-key`)
+    # in berth-system and injection_test.go copies it into the inject-e2e
+    # namespace. The chart requires apiKeySecret whenever apiKeyFile is set.
+    apiKeySecret:
+      name: berth-api-key
+      key: api-key
   defaults:
     mode: runtime-singleton
     enforce: probe
