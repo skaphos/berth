@@ -34,6 +34,7 @@ nav:
   - Code Map: code-map.md
   - Reference:
       - API: reference/api.md
+      - API Versioning: reference/api-versioning.md
       - Configuration: reference/configuration.md
   - Operations:
       - Scalability: operations/scalability.md

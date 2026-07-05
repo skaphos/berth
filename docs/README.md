@@ -14,6 +14,7 @@ It is published with MkDocs Material and `mike` at
 | [Workload gating via injection](workload-gating-injection.md) | Gate unmodifiable workloads on a lease with the injected `berth-acquire` helper. |
 | [Configuration reference](reference/configuration.md) | API server, operator, broker, Helm values, and environment inputs. |
 | [API reference](reference/api.md) | Generated CRD reference for `berth.skaphos.io/v1alpha1`. |
+| [API versioning](reference/api-versioning.md) | CRD API versioning policy — maturity ladder, compatible vs. breaking schema changes, and deprecation windows. Mirror of the org standard. |
 | [Code map](code-map.md) | Package and entrypoint tour for contributors. |
 | [Scalability and load testing](operations/scalability.md) | Sizing model, target workload, and the phased load-testing plan. |
 | `test/e2e/fixtures/README.md` | Local three-cluster test topology. |
