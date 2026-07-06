@@ -104,7 +104,8 @@ jobs:
           # Determine the release-please subject.
           # - Squash merge: HEAD itself carries the "chore(main): release ..." subject.
           # - Regular merge commit: the second parent (the merged branch tip) carries it.
-          subject="$(git log -1 --pretty=%s)"
+          head_subject="$(git log -1 --pretty=%s)"
+          subject="${head_subject}"
           if git rev-parse -q --verify HEAD^2 >/dev/null 2>&1; then
             merged_subject="$(git log -1 --pretty=%s HEAD^2 2>/dev/null || true)"
             if [[ "${merged_subject}" == "chore(main): release "* ]]; then
@@ -112,8 +113,14 @@ jobs:
             fi
           fi
 
+          # Recover the release PR number for the label update. A squash merge
+          # carries it as the "(#NNN)" suffix on the release subject; a merge
+          # commit carries it on HEAD's own "Merge pull request #NNN ..." subject
+          # (which the release-subject substitution above dropped).
           pr_number=""
           if [[ "${subject}" =~ \(\#([0-9]+)\)$ ]]; then
+            pr_number="${BASH_REMATCH[1]}"
+          elif [[ "${head_subject}" =~ ^Merge\ pull\ request\ \#([0-9]+) ]]; then
             pr_number="${BASH_REMATCH[1]}"
           fi
 
