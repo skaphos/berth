@@ -1,6 +1,6 @@
 name: Release
 
-# Triggered by a tag matching v* (pushed by release-tag.yml after a
+# Triggered by a tag matching v* (pushed by release-please.yml after a
 # release-please PR merges). Builds and pushes the three Berth container
 # images and the two Helm charts to GHCR, then publishes a GitHub release
 # with auto-generated notes.

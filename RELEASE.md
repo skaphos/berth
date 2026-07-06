@@ -6,10 +6,14 @@ Actions to publish release artifacts.
 ## Release Flow
 
 1. Commits land on `main` through pull requests.
-2. `.github/workflows/release-pr.yml` updates the Release Please pull request.
+2. `.github/workflows/release-please.yml` runs stock
+   `googleapis/release-please-action`, which maintains a single rolling Release
+   Please pull request from the Conventional Commits on `main`.
 3. A maintainer reviews and merges the release pull request.
-4. `.github/workflows/release-tag.yml` pushes the release tag for merged
-   release PRs.
+4. The same `release-please.yml` run then pushes the `vX.Y.Z` tag (Release
+   Please runs with `skip-github-release`, so `release.yml` owns the GitHub
+   release; the tag is pushed with the release-bot app token, because a tag
+   pushed by the default `GITHUB_TOKEN` would not trigger `release.yml`).
 5. `.github/workflows/release.yml` builds and publishes artifacts for `v*`
    tags.
 6. `.github/workflows/docs.yml` publishes the versioned documentation site for
