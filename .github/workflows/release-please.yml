@@ -162,7 +162,7 @@ jobs:
               ;;
           esac
 
-          if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -qx '.release-please-manifest.json'; then
+          if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -Fqx '.release-please-manifest.json'; then
             echo "No release manifest change in HEAD; skipping tag creation."
             exit 0
           fi
