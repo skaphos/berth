@@ -767,9 +767,10 @@ from <em>shipped in a release</em>:</p>
 <h2 id="how-releases-are-cut">How releases are cut</h2>
 <p>Releases are produced by release-please:</p>
 <ol>
-<li><code>release-pr.yml</code> maintains a rolling <code>chore(release): release vX.Y.Z</code> PR on
-   <code>main</code>, accumulating the changelog and version bump.</li>
-<li>Merging that PR triggers <code>release-tag.yml</code>, which pushes the <code>vX.Y.Z</code> tag.</li>
+<li><code>release-please.yml</code> runs stock <code>googleapis/release-please-action</code>, which
+   maintains a rolling <code>chore(main): release X.Y.Z</code> PR on <code>main</code>, accumulating
+   the changelog and version bump.</li>
+<li>Merging that PR lets the same <code>release-please.yml</code> run push the <code>vX.Y.Z</code> tag.</li>
 <li>The tag triggers <code>release.yml</code>, which builds/pushes images and charts and
    <strong>publishes the GitHub release</strong> (with auto-generated notes).</li>
 <li>The published release triggers <code>linear-release.yml</code>, which parses the release
