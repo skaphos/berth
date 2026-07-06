@@ -19,6 +19,13 @@ permissions:
   pull-requests: write
   issues: write
 
+# Serialize per branch so two close-in-time pushes to main cannot race on tag
+# creation and label edits. Never cancel in-progress: a half-run that already
+# pushed a tag must finish its label bookkeeping.
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-please:
     name: Release Please
@@ -40,6 +47,9 @@ jobs:
       - name: Reconcile tagged release PR labels
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The reconcile step runs before checkout, so gh has no git remote to
+          # infer the repo from; set GH_REPO explicitly for every gh call.
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -98,6 +108,9 @@ jobs:
       - name: Create release tag after release PR merge
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The reconcile step runs before checkout, so gh has no git remote to
+          # infer the repo from; set GH_REPO explicitly for every gh call.
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 

@@ -33,7 +33,8 @@ The release workflow publishes:
 
 ## Required Credentials
 
-Release PR and tag workflows mint a GitHub App token using:
+The Release Please workflow mints a GitHub App token (to open the release PR
+and push the tag) using:
 
 | Name | Type | Purpose |
 | --- | --- | --- |
