@@ -21,9 +21,10 @@ from *shipped in a release*:
 
 Releases are produced by release-please:
 
-1. `release-pr.yml` maintains a rolling `chore(release): release vX.Y.Z` PR on
-   `main`, accumulating the changelog and version bump.
-2. Merging that PR triggers `release-tag.yml`, which pushes the `vX.Y.Z` tag.
+1. `release-please.yml` runs stock `googleapis/release-please-action`, which
+   maintains a rolling `chore(main): release X.Y.Z` PR on `main`, accumulating
+   the changelog and version bump.
+2. Merging that PR lets the same `release-please.yml` run push the `vX.Y.Z` tag.
 3. The tag triggers `release.yml`, which builds/pushes images and charts and
    **publishes the GitHub release** (with auto-generated notes).
 4. The published release triggers `linear-release.yml`, which parses the release
