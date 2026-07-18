@@ -138,3 +138,9 @@ Unset DSNs skip the corresponding driver tests.
 ## License
 
 MIT. See [LICENSE](LICENSE) and [LICENSES/MIT.txt](LICENSES/MIT.txt).
+
+---
+
+Skaphos is a project of [Rillan AI LLC](https://skaphos.io), a Missouri
+limited liability company. © 2026 Rillan AI LLC. Released under
+the [MIT License](./LICENSE).
