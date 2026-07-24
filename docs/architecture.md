@@ -50,6 +50,12 @@ The API server exposes three lease lifecycle endpoints:
 | `POST` | `/v1alpha1/namespaces/{namespace}/leases/{name}/renew` | Extend a held lease after validating holder and fencing token. |
 | `POST` | `/v1alpha1/namespaces/{namespace}/leases/{name}/release` | Release a held lease after validating holder and fencing token. |
 
+All three validate the key after authorization: `{namespace}` must be an RFC
+1123 DNS label (no dots), `{name}` an RFC 1123 DNS subdomain, joined length
+at most 253 characters. Malformed keys get a `400` naming the field — they
+never reach a store, which is what keeps the key→stored-object mapping
+injective across tenants (see [Concepts → Leases](concepts.md#leases)).
+
 Both health routes are unauthenticated. `/healthz` is an always-200 liveness
 check. `/readyz` is readiness: it probes the lease store via a constant-cost
 `Store.Ping` (a DB ping / single-item k8s List, never a full scan) and returns
@@ -124,19 +130,35 @@ this is a development-only mode and the API server warns loudly at startup.
 
 A lease is identified by namespace and name. Its record tracks:
 
-- holder identity
+- holder identity (empty marks a **tombstone** — a released or
+  garbage-collected lease whose record is retained)
 - TTL
 - acquisition time
 - last renewal time
 - monotonic fencing token
+- a store-owned **version**, advanced on every write
 
 The fencing token increments on fresh acquisition after release or expiry and
 stays stable across renewals by the same holder. Clients must send it on
-renew and release so stale holders cannot modify a lease they lost.
+renew and release so stale holders cannot modify a lease they lost. Records
+are never deleted: release and garbage collection clear the holder and keep
+the token as the key's high-water mark, so token values never repeat for a
+key ([Concepts → Fencing tokens](concepts.md#fencing-tokens)).
+
+Every conditional store write is predicated on the record **version**, which
+changes on every successful write — renewals included. Two writes prepared
+from the same observed state can therefore never both land: a stale renew
+racing a standby's reclaim loses deterministically, whichever order the
+writes arrive in. The fencing token is a domain value, not the concurrency
+predicate.
 
 TTL expiry is enforced lazily during acquire and renew. A background
-`TTLEnforcer` can scan and clean expired records, but correctness does not
-depend on the scan loop.
+`TTLEnforcer` sweeps expired records into tombstones after a grace window,
+reclaiming the holder/TTL state a never-reacquired key would otherwise keep
+forever. Each sweep write is predicated on the version captured during the
+scan; because versions are never reused for a key, a sweep can never touch a
+lease written after its scan — correctness does not depend on the scan loop,
+its timing, or how many API-server replicas run one concurrently.
 
 ## Storage Backends
 

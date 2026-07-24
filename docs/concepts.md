@@ -22,7 +22,19 @@ so they share one authoritative answer to "who may act?"
 
 A **lease** is a named, time-bounded, single-holder claim. It is identified by a
 **namespace** and a **name** (for example `pipeline/ingest-worker`), and at any
-moment it has at most one holder. Its record tracks:
+moment it has at most one holder.
+
+The two segments have a required shape, checked on every lease request: the
+namespace must be an RFC 1123 **DNS label** (lowercase alphanumerics and `-`,
+at most 63 characters — no dots), the name an RFC 1123 **DNS subdomain**
+(dots allowed), and the dot-joined pair at most 253 characters. This mirrors
+how Kubernetes names namespaces, and it is a safety rule, not a style rule:
+it guarantees two distinct keys can never collide into one stored object in
+any backend, so no tenant can address another tenant's lease by crafting an
+ambiguous key. Requests with malformed segments are rejected with `400` and a
+message naming the offending field.
+
+A lease's record tracks:
 
 - the **holder identity** — who currently owns it,
 - a **TTL** — how long the claim survives without renewal,
@@ -97,9 +109,21 @@ renew and release.
 
 This is the guard against a *stale holder* — one that lost the lease (say, after
 a network partition) but doesn't know it yet. Its token is now behind the
-current one, so the API server rejects its renew/release calls. The token is a
-32-bit counter with a hard ceiling that refuses to wrap, so a reused token can
-never silently authorize a stale write.
+current one, so the API server rejects its renew/release calls.
+
+Monotonicity holds across the **entire life of the key**, not just one
+holder's tenure: releasing a lease (or having it garbage-collected after
+expiry) leaves a small **tombstone** record behind that preserves the
+highest token ever issued, and the next acquisition always goes strictly
+past it. A token value, once issued for a key, is never issued again. That
+is what makes the downstream guidance below sound — a downstream can keep
+only the highest token it has seen and reject anything at or below it.
+
+The token is a 32-bit counter with a hard ceiling that refuses to wrap, so a
+reused token can never silently authorize a stale write. Because the counter
+now survives release and garbage collection, the ceiling is cumulative over
+the key's lifetime — still ~2.1 billion holder transitions, unreachable at
+any realistic failover rate.
 
 !!! warning "Fencing protects the lease, not your downstream"
     Berth rejects stale lease operations by token, but it cannot fence *your*
@@ -107,6 +131,15 @@ never silently authorize a stale write.
     window matters for, say, writes to a shared database, your workload needs to
     carry the fencing token through to that downstream system and have the
     downstream reject stale tokens too.
+
+!!! note "Tombstones and out-of-band deletion"
+    Tombstones are how the token high-water mark survives: Berth never
+    deletes a lease record, it only clears the holder. One O(1) record per
+    distinct key ever used stays in the backing store. Deleting a record out
+    of band (a SQL `DELETE`, `kubectl delete lease` in the coordination
+    namespace) resets that key's token history and forfeits the
+    never-reused guarantee for it — don't do it while anything downstream
+    still compares tokens for that key.
 
 ## Lease semantics
 
