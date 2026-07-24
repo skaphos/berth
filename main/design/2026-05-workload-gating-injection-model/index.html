@@ -1601,19 +1601,29 @@ Record below.</p>
 semantics renew a lease when the incoming holder matches the current holder.
 That behavior is useful for a long-lived holder, but unsafe if multiple pods
 share the same holder identity in runtime singleton mode.</p>
+<p>The first segment is the <strong>tenant-owning root</strong> — the cluster identity when
+configured, otherwise the pod namespace — and is separated from the rest of the
+hierarchy by <code>/</code>, with the remaining segments joined by <code>:</code>. This is required
+for holder authorization (SKA-446): the API server admits a holder only when it
+equals the caller's tenant or is scoped under <code>"&lt;tenant&gt;/"</code>, so a purely
+<code>:</code>-joined holder is rejected <code>403</code> on any authenticated backend. Deployments
+therefore set the tenant (static-key id or OIDC claim) equal to that root
+segment — e.g. key id == <code>--cluster-id</code>.</p>
 <p><strong>Startup gate default (v1)</strong>:
 - Derive from the owning controller of the Pod when available:
   <code>namespace</code> + <code>kind</code> + <code>name</code>.
-- Example: <code>prod:deployment:checkout-service</code>.
+- Example: <code>prod/deployment:checkout-service</code>.
 - This may allow multiple pods from the same workload to pass startup if they
   share the holder identity. That is acceptable only because startup gate does
   not provide runtime singleton behavior.</p>
 <p><strong>Runtime singleton default (v1)</strong>:
 - Derive a unique candidate identity from cluster identity, namespace, owner
   reference lineage where discoverable, and pod name.
-- Example: <code>east:prod:deployment:checkout-service:pod:checkout-service-7f6c9b9d8d-j4n8x</code>.
+- Example: <code>east/prod:deployment:checkout-service:pod:checkout-service-7f6c9b9d8d-j4n8x</code>
+  (tenant <code>east</code> owns it).
 - If cluster identity is not configured, the webhook or helper must still
-  include pod identity so replicas do not share a holder by accident.</p>
+  include pod identity so replicas do not share a holder by accident, and the
+  namespace becomes the <code>/</code>-rooted owner.</p>
 <p><strong>Override behavior</strong>:
 - If the <code>berth.skaphos.io/holder-identity</code> annotation is present on the Pod
   template, it <strong>completely replaces</strong> the default.

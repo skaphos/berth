@@ -1043,7 +1043,8 @@ TLS material, and installs the API server and both operators:</p>
 server URL and the demo API key:</p>
 <div class="highlight"><pre><span></span><code>=== topology ready ===
 API_URL=https://172.18.0.4:3xxxx
-API_KEY=e2e-key
+EAST_API_KEY=cluster-east
+WEST_API_KEY=cluster-west
 </code></pre></div>
 <p>Three <code>kind</code> contexts now exist. Confirm they are reachable:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-coord<span class="w"> </span>get<span class="w"> </span>nodes
@@ -1060,6 +1061,13 @@ kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-w
 <li><strong>east</strong> and <strong>west</strong> each run a <code>berth-operator</code> with a distinct
   <code>--cluster-id</code> (<code>cluster-east</code> / <code>cluster-west</code>), pointed at the coord API
   server.</li>
+<li>each operator authenticates with <strong>its own static key whose key id equals
+  its <code>--cluster-id</code></strong>, so it is its own tenant. With <code>static-keys</code> auth the
+  tenant is the key id and lease calls are holder-authorized — the operator's
+  holder (its <code>--cluster-id</code>) must be owned by that tenant, or acquires are
+  rejected <code>403</code>. The two clusters are therefore distinct tenants contending
+  for one lease name, the cross-cluster model from
+  <a href="../architecture/#authorization">Authorization</a>.</li>
 </ul>
 </div>
 <p>Check that the control-plane pods are running:</p>
