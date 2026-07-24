@@ -12,6 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	apimachineryvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -105,7 +106,7 @@ func TestK8sStorePutCreateConflictsWhenPresent(t *testing.T) {
 	}
 }
 
-func TestK8sStorePutCASRequiresMatchingTransitions(t *testing.T) {
+func TestK8sStorePutCASRequiresMatchingVersion(t *testing.T) {
 	t.Parallel()
 
 	store, _ := newK8sStore(t)
@@ -114,22 +115,53 @@ func TestK8sStorePutCASRequiresMatchingTransitions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stale := *first
-	stale.FencingToken = 2
-	if err := store.Put(context.Background(), 99, &stale); !errors.Is(err, ErrConflict) {
+	next := *first
+	next.FencingToken = 2
+	if err := store.Put(context.Background(), 99, &next); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale CAS err = %v, want ErrConflict", err)
 	}
 
-	if err := store.Put(context.Background(), first.FencingToken, &stale); err != nil {
+	if err := store.Put(context.Background(), 1, &next); err != nil {
 		t.Fatalf("matching CAS: %v", err)
 	}
 
-	got, err := store.Get(context.Background(), stale.Key)
+	got, err := store.Get(context.Background(), next.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.FencingToken != 2 {
 		t.Fatalf("FencingToken = %d, want 2", got.FencingToken)
+	}
+	if got.Version != 2 {
+		t.Fatalf("Version after update = %d, want 2", got.Version)
+	}
+}
+
+// TestK8sStoreLegacyObjectReadsAsVersionOne covers upgrade-in-place: Lease
+// objects written before the version annotation existed must read as
+// version 1 and accept exactly one CAS write at that version.
+func TestK8sStoreLegacyObjectReadsAsVersionOne(t *testing.T) {
+	t.Parallel()
+
+	legacy := leaseFromRecord(sampleRecord(), testNamespace, 1)
+	delete(legacy.Annotations, versionAnnotation)
+	store, _ := newK8sStore(t, legacy)
+
+	got, err := store.Get(context.Background(), sampleRecord().Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Version != 1 {
+		t.Fatalf("legacy Version = %d, want 1", got.Version)
+	}
+
+	upd := *got
+	upd.RenewedAt = got.RenewedAt.Add(time.Minute)
+	if err := store.Put(context.Background(), 1, &upd); err != nil {
+		t.Fatalf("first post-upgrade CAS: %v", err)
+	}
+	if err := store.Put(context.Background(), 1, &upd); !errors.Is(err, ErrConflict) {
+		t.Fatalf("second CAS at version 1 = %v, want ErrConflict", err)
 	}
 }
 
@@ -143,31 +175,39 @@ func TestK8sStorePutCASOnAbsentReturnsConflict(t *testing.T) {
 	}
 }
 
-func TestK8sStoreDeleteNotFound(t *testing.T) {
+// TestK8sLeaseNameInjectiveForValidKeys is the property behind the key
+// validation rules: over ValidateKey-accepted keys, the "<ns>.<name>"
+// encoding can never collide, because a valid namespace contains no dot and
+// the first dot is therefore always the separator. The historical collision
+// pair ("a","b.c") vs ("a.b","c") is representable only because the second
+// key's namespace is now rejected.
+func TestK8sLeaseNameInjectiveForValidKeys(t *testing.T) {
 	t.Parallel()
 
-	store, _ := newK8sStore(t)
-	if err := store.Delete(context.Background(), Key{Namespace: "x", Name: "y"}, 1); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("err = %v, want ErrNotFound", err)
+	if err := ValidateKey(Key{Namespace: "a.b", Name: "c"}); err == nil {
+		t.Fatal("dotted namespace must be rejected by ValidateKey")
 	}
-}
 
-func TestK8sStoreDeleteRequiresMatchingTransitions(t *testing.T) {
-	t.Parallel()
-
-	store, _ := newK8sStore(t)
-	rec := sampleRecord()
-	if err := store.Put(context.Background(), 0, rec); err != nil {
-		t.Fatal(err)
+	keys := []Key{
+		{Namespace: "a", Name: "b.c"},
+		{Namespace: "a", Name: "b"},
+		{Namespace: "tenant-a", Name: "ingest"},
+		{Namespace: "tenant-a", Name: "ingest.shard-1"},
+		{Namespace: "tenant", Name: "a.ingest"},
 	}
-	if err := store.Delete(context.Background(), rec.Key, 99); !errors.Is(err, ErrConflict) {
-		t.Fatalf("err = %v, want ErrConflict", err)
-	}
-	if err := store.Delete(context.Background(), rec.Key, rec.FencingToken); err != nil {
-		t.Fatalf("matching delete: %v", err)
-	}
-	if _, err := store.Get(context.Background(), rec.Key); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("after delete err = %v, want ErrNotFound", err)
+	seen := make(map[string]Key, len(keys))
+	for _, k := range keys {
+		if err := ValidateKey(k); err != nil {
+			t.Fatalf("fixture key %v must be valid: %v", k, err)
+		}
+		name := k8sLeaseName(k)
+		if errs := apimachineryvalidation.IsDNS1123Subdomain(name); len(errs) > 0 {
+			t.Fatalf("encoded name %q is not a valid object name: %v", name, errs)
+		}
+		if prev, dup := seen[name]; dup {
+			t.Fatalf("keys %v and %v collide into object name %q", prev, k, name)
+		}
+		seen[name] = k
 	}
 }
 
@@ -225,6 +265,9 @@ func TestK8sStoreEncodesNameAndAnnotates(t *testing.T) {
 	}
 	if persisted.Labels[managedByLabel] != managedByValue {
 		t.Fatalf("managed-by label = %q, want %q", persisted.Labels[managedByLabel], managedByValue)
+	}
+	if persisted.Annotations[versionAnnotation] != "1" {
+		t.Fatalf("version annotation = %q, want 1", persisted.Annotations[versionAnnotation])
 	}
 	if persisted.Spec.HolderIdentity == nil || *persisted.Spec.HolderIdentity != "cluster-east" {
 		t.Fatalf("holderIdentity = %v, want cluster-east", persisted.Spec.HolderIdentity)

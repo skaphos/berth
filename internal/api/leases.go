@@ -129,6 +129,9 @@ func handleAcquire(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		if !authorize(w, r, authz, key.Namespace, req.Holder) {
 			return
 		}
+		if !validateKey(w, r, key) {
+			return
+		}
 		res, err := mgr.Acquire(r.Context(), key, req.Holder, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
 			writeInternalError(w, r, err)
@@ -165,6 +168,9 @@ func handleRenew(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		if !authorize(w, r, authz, key.Namespace, req.Holder) {
 			return
 		}
+		if !validateKey(w, r, key) {
+			return
+		}
 		res, err := mgr.Renew(r.Context(), key, req.Holder, req.FencingToken, time.Duration(req.TTLSeconds)*time.Second)
 		if err != nil {
 			writeInternalError(w, r, err)
@@ -193,6 +199,9 @@ func handleRelease(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		if !authorize(w, r, authz, key.Namespace, req.Holder) {
 			return
 		}
+		if !validateKey(w, r, key) {
+			return
+		}
 		err := mgr.Release(r.Context(), key, req.Holder, req.FencingToken)
 		if err != nil {
 			if errors.Is(err, lease.ErrConflict) {
@@ -206,6 +215,21 @@ func handleRelease(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		recordOutcome(r.Context(), outcomeReleased)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// validateKey rejects malformed lease keys with a 400 naming the offending
+// field and allowed format. It runs after authorize so authorization
+// failures keep returning 403 first (no pre-auth probing of key rules), and
+// before any manager call so an invalid key never reaches a store — in the
+// k8s backend an unvalidated dotted namespace would make two distinct keys
+// collide into one backing object across tenants.
+func validateKey(w http.ResponseWriter, r *http.Request, key lease.Key) bool {
+	if err := lease.ValidateKey(key); err != nil {
+		recordOutcome(r.Context(), outcomeInvalidKey)
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	return true
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

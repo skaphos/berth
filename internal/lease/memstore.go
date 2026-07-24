@@ -53,8 +53,8 @@ func (s *MemStore) List(ctx context.Context) ([]Record, error) {
 	return out, nil
 }
 
-// Put implements [Store] with compare-and-swap semantics on FencingToken.
-func (s *MemStore) Put(ctx context.Context, expected int32, rec *Record) error {
+// Put implements [Store] with compare-and-swap semantics on Version.
+func (s *MemStore) Put(ctx context.Context, expectedVersion int64, rec *Record) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -64,33 +64,17 @@ func (s *MemStore) Put(ctx context.Context, expected int32, rec *Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cur, exists := s.records[rec.Key]
-	if expected == 0 {
+	if expectedVersion == 0 {
 		if exists {
 			return ErrConflict
 		}
 	} else {
-		if !exists || cur.FencingToken != expected {
+		if !exists || cur.Version != expectedVersion {
 			return ErrConflict
 		}
 	}
-	s.records[rec.Key] = *rec
-	return nil
-}
-
-// Delete implements [Store].
-func (s *MemStore) Delete(ctx context.Context, key Key, expected int32) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cur, exists := s.records[key]
-	if !exists {
-		return ErrNotFound
-	}
-	if cur.FencingToken != expected {
-		return ErrConflict
-	}
-	delete(s.records, key)
+	stored := *rec
+	stored.Version = expectedVersion + 1
+	s.records[rec.Key] = stored
 	return nil
 }

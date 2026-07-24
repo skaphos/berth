@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,13 +141,16 @@ func TestClientPathEscapesNamespaceAndName(t *testing.T) {
 	c, cleanup := newTestClientServer(t)
 	defer cleanup()
 
-	// Names with slashes/spaces would otherwise fail to route. The lease
-	// keys are still valid in the store; the wire format must escape them.
-	res, err := c.Acquire(context.Background(), "team a", "service/x", "h", 30*time.Second)
-	if err != nil {
-		t.Fatalf("Acquire: %v", err)
+	// Names with slashes/spaces would otherwise fail to route. The server
+	// rejects such keys outright (they are not valid DNS segments), but the
+	// wire format must still escape them so the request reaches the lease
+	// handler and comes back as a clean validation error — not a 404 or a
+	// mis-routed path.
+	_, err := c.Acquire(context.Background(), "team a", "service/x", "h", 30*time.Second)
+	if err == nil {
+		t.Fatal("Acquire with an invalid key must fail")
 	}
-	if !res.Acquired {
-		t.Fatal("expected Acquired=true")
+	if !strings.Contains(err.Error(), "status 400") || !strings.Contains(err.Error(), "invalid namespace") {
+		t.Fatalf("err = %v, want the handler's 400 invalid-namespace response (proves the escaped path routed)", err)
 	}
 }

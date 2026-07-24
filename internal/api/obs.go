@@ -22,6 +22,7 @@ const (
 	outcomeReleased     = "released"
 	outcomeConflict     = "conflict"
 	outcomeUnauthorized = "unauthorized"
+	outcomeInvalidKey   = "invalid-key"
 	outcomeError        = "error"
 )
 

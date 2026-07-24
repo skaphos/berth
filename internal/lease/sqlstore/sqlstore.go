@@ -141,8 +141,10 @@ func (s *Store) List(ctx context.Context) ([]lease.Record, error) {
 	return out, nil
 }
 
-// Put implements lease.Store.
-func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) error {
+// Put implements lease.Store. The version predicate lives in the SQL itself:
+// the insert is create-if-absent and the update matches WHERE version = ?
+// and stores version + 1, so rows-affected tells the whole CAS story.
+func (s *Store) Put(ctx context.Context, expectedVersion int64, rec *lease.Record) error {
 	if rec == nil {
 		return lease.ErrConflict
 	}
@@ -153,7 +155,7 @@ func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) erro
 	defer func() { _ = tx.Rollback() }()
 
 	var res sql.Result
-	if expected == 0 {
+	if expectedVersion == 0 {
 		res, err = tx.ExecContext(ctx, s.dialect.insertSQL, s.recordArgs(rec)...)
 		if err != nil {
 			if s.dialect.duplicateKey != nil && s.dialect.duplicateKey(err) {
@@ -162,7 +164,7 @@ func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) erro
 			return fmt.Errorf("sql store: insert %s: %w", rec.Key, err)
 		}
 	} else {
-		args := append(s.recordUpdateArgs(rec), rec.Key.Namespace, rec.Key.Name, expected)
+		args := append(s.recordUpdateArgs(rec), rec.Key.Namespace, rec.Key.Name, expectedVersion)
 		res, err = tx.ExecContext(ctx, s.dialect.updateSQL, args...)
 		if err != nil {
 			return fmt.Errorf("sql store: update %s: %w", rec.Key, err)
@@ -172,11 +174,7 @@ func (s *Store) Put(ctx context.Context, expected int32, rec *lease.Record) erro
 	if err != nil {
 		return fmt.Errorf("sql store: rows affected %s: %w", rec.Key, err)
 	}
-	if expected == 0 {
-		if affected != 1 {
-			return lease.ErrConflict
-		}
-	} else if affected == 0 {
+	if affected != 1 {
 		return lease.ErrConflict
 	}
 	if err := tx.Commit(); err != nil {
@@ -190,37 +188,15 @@ func isMySQLDuplicateKey(err error) bool {
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
-// Delete implements lease.Store.
-func (s *Store) Delete(ctx context.Context, key lease.Key, expected int32) error {
-	tx, err := s.db.BeginTx(ctx, s.dialect.writeTx)
-	if err != nil {
-		return fmt.Errorf("sql store: begin delete: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	res, err := tx.ExecContext(ctx, s.dialect.deleteSQL, key.Namespace, key.Name, expected)
-	if err != nil {
-		return fmt.Errorf("sql store: delete %s: %w", key, err)
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("sql store: rows affected delete %s: %w", key, err)
-	}
-	if affected == 0 {
-		if _, err := s.getTx(ctx, tx, key); err != nil {
-			if errors.Is(err, lease.ErrNotFound) {
-				return lease.ErrNotFound
-			}
-			return err
-		}
-		return lease.ErrConflict
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("sql store: commit delete %s: %w", key, err)
-	}
-	return nil
+func isMySQLDuplicateColumn(err error) bool {
+	var mysqlErr *mysqldriver.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1060
 }
 
+// migrate applies the base schema, then the additive alterations that
+// upgrade tables created before a column existed. Alterations run outside
+// the schema transaction because a tolerated duplicate-column failure
+// aborts the transaction it runs in on some engines.
 func (s *Store) migrate(ctx context.Context) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -234,6 +210,14 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("sql store: commit migrate: %w", err)
+	}
+	for _, stmt := range s.dialect.alterations {
+		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+			if s.dialect.duplicateColumn != nil && s.dialect.duplicateColumn(err) {
+				continue
+			}
+			return fmt.Errorf("sql store: migrate alteration: %w", err)
+		}
 	}
 	return nil
 }
@@ -285,8 +269,9 @@ func scanRecord(row rowScanner) (*lease.Record, error) {
 		acquired  any
 		renewed   any
 		token     int32
+		version   int64
 	)
-	if err := row.Scan(&namespace, &name, &holder, &ttlMS, &acquired, &renewed, &token); err != nil {
+	if err := row.Scan(&namespace, &name, &holder, &ttlMS, &acquired, &renewed, &token, &version); err != nil {
 		return nil, err
 	}
 	acquiredAt, err := parseTime(acquired)
@@ -304,6 +289,7 @@ func scanRecord(row rowScanner) (*lease.Record, error) {
 		AcquiredAt:   acquiredAt,
 		RenewedAt:    renewedAt,
 		FencingToken: token,
+		Version:      version,
 	}, nil
 }
 

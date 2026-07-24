@@ -42,17 +42,10 @@ func (s *meteredStore) List(ctx context.Context) ([]lease.Record, error) {
 	return recs, err
 }
 
-func (s *meteredStore) Put(ctx context.Context, expected int32, record *lease.Record) error {
+func (s *meteredStore) Put(ctx context.Context, expectedVersion int64, record *lease.Record) error {
 	start := time.Now()
-	err := s.inner.Put(ctx, expected, record)
+	err := s.inner.Put(ctx, expectedVersion, record)
 	s.observe("put", start, err)
-	return err
-}
-
-func (s *meteredStore) Delete(ctx context.Context, key lease.Key, expected int32) error {
-	start := time.Now()
-	err := s.inner.Delete(ctx, key, expected)
-	s.observe("delete", start, err)
 	return err
 }
 

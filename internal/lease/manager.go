@@ -66,11 +66,14 @@ type AcquireResult struct {
 //   - No record exists: a new lease is created; FencingToken is 1.
 //   - Same holder, not expired: lease is renewed in place, FencingToken
 //     preserved.
-//   - Existing record is expired: lease is reclaimed for holder, FencingToken
-//     is bumped.
+//   - Existing record is a tombstone or expired: lease is (re)claimed for
+//     holder, FencingToken is bumped past the key's high-water mark.
 //   - Held by another, not expired: returns Acquired=false and the existing
 //     holder's identity, fencing token, and expiry.
 func (m *Manager) Acquire(ctx context.Context, key Key, holder string, ttl time.Duration) (AcquireResult, error) {
+	if err := ValidateKey(key); err != nil {
+		return AcquireResult{}, fmt.Errorf("acquire: %w", err)
+	}
 	if holder == "" {
 		return AcquireResult{}, errors.New("acquire: holder is required")
 	}
@@ -86,7 +89,7 @@ func (m *Manager) Acquire(ctx context.Context, key Key, holder string, ttl time.
 
 		now := m.now()
 		var (
-			expected   int32
+			expected   int64
 			token      int32
 			acquiredAt time.Time
 		)
@@ -97,20 +100,21 @@ func (m *Manager) Acquire(ctx context.Context, key Key, holder string, ttl time.
 			token = 1
 			acquiredAt = now
 		case cur.Holder == holder && !cur.Expired(now):
-			expected = cur.FencingToken
+			expected = cur.Version
 			token = cur.FencingToken
 			acquiredAt = cur.AcquiredAt
-		case cur.Expired(now):
-			// Reclaiming an expired lease bumps the fencing token. int32 is a
-			// deliberate domain bound (see [Record.FencingToken]); refuse to
-			// wrap at the ceiling rather than reuse a token, which would let a
-			// stale holder's writes pass the fencing check.
+		case cur.Tombstone() || cur.Expired(now):
+			// (Re)claiming a tombstoned or expired lease bumps the fencing
+			// token past the key's high-water mark. int32 is a deliberate
+			// domain bound (see [Record.FencingToken]); refuse to wrap at the
+			// ceiling rather than reuse a token, which would let a stale
+			// holder's writes pass the fencing check.
 			if cur.FencingToken == math.MaxInt32 {
 				return AcquireResult{}, fmt.Errorf(
 					"acquire: fencing token for %s/%s exhausted at int32 ceiling (%d); lease cannot be safely reacquired",
 					key.Namespace, key.Name, math.MaxInt32)
 			}
-			expected = cur.FencingToken
+			expected = cur.Version
 			token = cur.FencingToken + 1
 			acquiredAt = now
 		default:
@@ -150,8 +154,14 @@ func (m *Manager) Acquire(ctx context.Context, key Key, holder string, ttl time.
 
 // Renew extends the TTL of a lease held by holder under fencing token. ttl
 // must be positive. Returns Acquired=false (with no error) if the lease has
-// been lost — different holder, mismatched token, expired, or absent.
+// been lost — different holder, mismatched token, expired, released, or
+// absent. The store write is conditioned on the record version observed
+// here, so a renewal that races a concurrent reclaim can never overwrite
+// it: exactly one of the two writes succeeds.
 func (m *Manager) Renew(ctx context.Context, key Key, holder string, token int32, ttl time.Duration) (AcquireResult, error) {
+	if err := ValidateKey(key); err != nil {
+		return AcquireResult{}, fmt.Errorf("renew: %w", err)
+	}
 	if holder == "" {
 		return AcquireResult{}, errors.New("renew: holder is required")
 	}
@@ -184,7 +194,7 @@ func (m *Manager) Renew(ctx context.Context, key Key, holder string, token int32
 	next := *cur
 	next.RenewedAt = now
 	next.TTL = ttl
-	if err := m.store.Put(ctx, cur.FencingToken, &next); err != nil {
+	if err := m.store.Put(ctx, cur.Version, &next); err != nil {
 		if errors.Is(err, ErrConflict) {
 			return AcquireResult{
 				Acquired:     false,
@@ -204,10 +214,16 @@ func (m *Manager) Renew(ctx context.Context, key Key, holder string, token int32
 }
 
 // Release voluntarily releases a lease held by holder under fencing token.
-// The operation is idempotent: releasing an already-absent lease, or losing
-// a race with another reclaimer, returns nil. Returns [ErrConflict] when
-// the lease is currently held by a different identity or token.
+// The record is tombstoned, not deleted: the fencing token is preserved as
+// the key's high-water mark so the next acquisition issues a strictly
+// greater token. The operation is idempotent: releasing an already-released
+// or absent lease, or losing a race with another reclaimer, returns nil.
+// Returns [ErrConflict] when the lease is currently held by a different
+// identity or token.
 func (m *Manager) Release(ctx context.Context, key Key, holder string, token int32) error {
+	if err := ValidateKey(key); err != nil {
+		return fmt.Errorf("release: %w", err)
+	}
 	if holder == "" {
 		return errors.New("release: holder is required")
 	}
@@ -218,14 +234,35 @@ func (m *Manager) Release(ctx context.Context, key Key, holder string, token int
 		}
 		return fmt.Errorf("release: get: %w", err)
 	}
+	if cur.Tombstone() {
+		return nil
+	}
 	if cur.Holder != holder || cur.FencingToken != token {
 		return ErrConflict
 	}
-	if err := m.store.Delete(ctx, key, cur.FencingToken); err != nil {
-		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrConflict) {
+	tomb := tombstoneFrom(cur, m.now())
+	if err := m.store.Put(ctx, cur.Version, tomb); err != nil {
+		if errors.Is(err, ErrConflict) {
+			// Lost a race with a reclaimer or another release; either way the
+			// caller no longer holds the lease, which is what release wants.
 			return nil
 		}
-		return fmt.Errorf("release: delete: %w", err)
+		return fmt.Errorf("release: put tombstone: %w", err)
 	}
 	return nil
+}
+
+// tombstoneFrom builds the tombstone record that replaces cur on release or
+// garbage collection: holder cleared, fencing token preserved as the key's
+// high-water mark. RenewedAt records when the tombstone was written; with
+// no TTL the record is immediately reclaimable.
+func tombstoneFrom(cur *Record, now time.Time) *Record {
+	return &Record{
+		Key:          cur.Key,
+		Holder:       "",
+		TTL:          0,
+		AcquiredAt:   cur.AcquiredAt,
+		RenewedAt:    now,
+		FencingToken: cur.FencingToken,
+	}
 }

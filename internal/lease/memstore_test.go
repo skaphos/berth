@@ -36,7 +36,7 @@ func TestMemStorePutSecondCreateConflicts(t *testing.T) {
 	}
 }
 
-func TestMemStorePutCASRequiresMatchingToken(t *testing.T) {
+func TestMemStorePutCASRequiresMatchingVersion(t *testing.T) {
 	t.Parallel()
 
 	s := NewMemStore()
@@ -46,13 +46,20 @@ func TestMemStorePutCASRequiresMatchingToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stale := &Record{Key: key, Holder: "h", FencingToken: 2}
-	if err := s.Put(context.Background(), 99, stale); !errors.Is(err, ErrConflict) {
+	next := &Record{Key: key, Holder: "h", FencingToken: 2}
+	if err := s.Put(context.Background(), 99, next); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale CAS err = %v, want ErrConflict", err)
 	}
 
-	if err := s.Put(context.Background(), 1, stale); err != nil {
+	if err := s.Put(context.Background(), 1, next); err != nil {
 		t.Fatalf("matching CAS: %v", err)
+	}
+	got, err := s.Get(context.Background(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Version != 2 {
+		t.Fatalf("Version after update = %d, want 2", got.Version)
 	}
 }
 
@@ -75,25 +82,6 @@ func TestMemStoreGetReturnsCopy(t *testing.T) {
 	}
 }
 
-func TestMemStoreDeleteRequiresMatchingToken(t *testing.T) {
-	t.Parallel()
-
-	s := NewMemStore()
-	key := Key{Namespace: "ns", Name: "a"}
-	if err := s.Put(context.Background(), 0, &Record{Key: key, Holder: "h", FencingToken: 1}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Delete(context.Background(), key, 99); !errors.Is(err, ErrConflict) {
-		t.Fatalf("err = %v, want ErrConflict", err)
-	}
-	if err := s.Delete(context.Background(), key, 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Delete(context.Background(), key, 1); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("err = %v, want ErrNotFound", err)
-	}
-}
-
 func TestMemStoreContextCancellationIsHonored(t *testing.T) {
 	t.Parallel()
 
@@ -109,9 +97,6 @@ func TestMemStoreContextCancellationIsHonored(t *testing.T) {
 	}
 	if err := s.Put(ctx, 0, &Record{Key: Key{Namespace: "ns", Name: "a"}}); err == nil {
 		t.Fatal("Put must surface context cancellation")
-	}
-	if err := s.Delete(ctx, Key{Namespace: "ns", Name: "a"}, 1); err == nil {
-		t.Fatal("Delete must surface context cancellation")
 	}
 	if err := s.Ping(ctx); err == nil {
 		t.Fatal("Ping must surface context cancellation")
