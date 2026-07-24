@@ -72,6 +72,15 @@ helm install berth-operator deploy/helm/berth-operator \
   --set berth.tls.caBundleConfigMap=berth-ca-bundle
 ```
 
+> **The API key's tenant must own the operator's `clusterID`.** With
+> `static-keys` auth the caller's tenant is the key id, and lease requests are
+> holder-authorized: the operator's holder is its `clusterID`, so that value
+> must equal the key id or be scoped under `"<key-id>/"`, or every acquire is
+> rejected `403`. Give each cluster its own key with key id equal to its
+> `clusterID` (`cluster-east`, `cluster-west`, …) — distinct tenants contending
+> for the same lease name is the intended cross-cluster model. See
+> [Authorization](docs/architecture.md#authorization).
+
 Apply the same `BerthLease` manifest to each cluster:
 
 ```yaml
