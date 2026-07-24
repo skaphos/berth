@@ -149,7 +149,7 @@ Upstream standards are normative (`go-engineering-standard.md`,
   `internal/` and `pkg/`. Preserve the split between cross-platform CLI
   concerns and Linux runtime components.
 - **Store contract**: `internal/lease.Store` implementations (mem, k8s, sql)
-  MUST provide linearizable per-key Get/Put/Delete and share one conformance
+  MUST provide linearizable per-key Get/Put/List and share one conformance
   suite (`internal/lease/storetest`); a semantic change to the contract MUST
   update the contract doc, every backend, and the conformance suite in the
   same change.
