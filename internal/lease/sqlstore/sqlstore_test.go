@@ -166,7 +166,7 @@ func TestSQLiteStorePutCreateConflictsWhenPresent(t *testing.T) {
 	}
 }
 
-func TestSQLiteStorePutCASRequiresMatchingToken(t *testing.T) {
+func TestSQLiteStorePutCASRequiresMatchingVersion(t *testing.T) {
 	t.Parallel()
 
 	store := newSQLiteStore(t)
@@ -175,22 +175,93 @@ func TestSQLiteStorePutCASRequiresMatchingToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stale := *first
-	stale.Holder = "cluster-west"
-	stale.FencingToken = 2
-	if err := store.Put(context.Background(), 99, &stale); !errors.Is(err, lease.ErrConflict) {
+	next := *first
+	next.Holder = "cluster-west"
+	next.FencingToken = 2
+	if err := store.Put(context.Background(), 99, &next); !errors.Is(err, lease.ErrConflict) {
 		t.Fatalf("stale CAS err = %v, want ErrConflict", err)
 	}
 
-	if err := store.Put(context.Background(), first.FencingToken, &stale); err != nil {
+	if err := store.Put(context.Background(), 1, &next); err != nil {
 		t.Fatalf("matching CAS: %v", err)
 	}
-	got, err := store.Get(context.Background(), stale.Key)
+	got, err := store.Get(context.Background(), next.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Holder != "cluster-west" || got.FencingToken != 2 {
 		t.Fatalf("got holder/token = %s/%d, want cluster-west/2", got.Holder, got.FencingToken)
+	}
+	if got.Version != 2 {
+		t.Fatalf("Version after update = %d, want 2", got.Version)
+	}
+}
+
+// TestSQLiteStoreMigratesLegacySchemaInPlace covers upgrade-in-place: a
+// database created from the pre-version schema gains the version column via
+// migrate=auto, its legacy rows read as Version 1, and the alteration is
+// idempotent across repeated opens.
+func TestSQLiteStoreMigratesLegacySchemaInPlace(t *testing.T) {
+	t.Parallel()
+
+	dsn := "file:" + sqliteTestName(t) + "?mode=memory&cache=shared"
+
+	// Build the legacy schema (no version column) and one legacy row via a
+	// raw connection that stays open to keep the shared-memory DB alive.
+	raw, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+	if _, err := raw.Exec(`CREATE TABLE berth_leases (
+		namespace text NOT NULL, name text NOT NULL, holder text NOT NULL,
+		ttl_ms integer NOT NULL, acquired_at text NOT NULL, renewed_at text NOT NULL,
+		fencing_token integer NOT NULL, PRIMARY KEY (namespace, name))`); err != nil {
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	if _, err := raw.Exec(
+		`INSERT INTO berth_leases VALUES ('tenant-a', 'ingest', 'cluster-east', 30000, ?, ?, 3)`,
+		"2026-05-24T10:30:00Z", "2026-05-24T10:30:00Z"); err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+
+	for range 2 { // second open proves the alteration is idempotent
+		store, err := New(context.Background(), Config{Driver: DriverSQLite, DSN: dsn})
+		if err != nil {
+			t.Fatalf("open with migrate=auto over legacy schema: %v", err)
+		}
+		got, err := store.Get(context.Background(), lease.Key{Namespace: "tenant-a", Name: "ingest"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Version != 1 {
+			t.Fatalf("legacy row Version = %d, want 1", got.Version)
+		}
+		if got.FencingToken != 3 {
+			t.Fatalf("legacy row token = %d, want 3", got.FencingToken)
+		}
+		if err := store.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The first post-upgrade CAS at version 1 succeeds exactly once.
+	store, err := New(context.Background(), Config{Driver: DriverSQLite, DSN: dsn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	got, err := store.Get(context.Background(), lease.Key{Namespace: "tenant-a", Name: "ingest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	upd := *got
+	upd.RenewedAt = got.RenewedAt.Add(time.Minute)
+	if err := store.Put(context.Background(), 1, &upd); err != nil {
+		t.Fatalf("first post-upgrade CAS: %v", err)
+	}
+	if err := store.Put(context.Background(), 1, &upd); !errors.Is(err, lease.ErrConflict) {
+		t.Fatalf("second CAS at version 1 = %v, want ErrConflict", err)
 	}
 }
 
@@ -200,28 +271,6 @@ func TestSQLiteStorePutCASOnAbsentReturnsConflict(t *testing.T) {
 	store := newSQLiteStore(t)
 	if err := store.Put(context.Background(), 1, sampleRecord()); !errors.Is(err, lease.ErrConflict) {
 		t.Fatalf("err = %v, want ErrConflict", err)
-	}
-}
-
-func TestSQLiteStoreDeleteDistinguishesNotFoundAndConflict(t *testing.T) {
-	t.Parallel()
-
-	store := newSQLiteStore(t)
-	rec := sampleRecord()
-	if err := store.Delete(context.Background(), rec.Key, 1); !errors.Is(err, lease.ErrNotFound) {
-		t.Fatalf("missing delete err = %v, want ErrNotFound", err)
-	}
-	if err := store.Put(context.Background(), 0, rec); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Delete(context.Background(), rec.Key, 99); !errors.Is(err, lease.ErrConflict) {
-		t.Fatalf("stale delete err = %v, want ErrConflict", err)
-	}
-	if err := store.Delete(context.Background(), rec.Key, rec.FencingToken); err != nil {
-		t.Fatalf("matching delete: %v", err)
-	}
-	if _, err := store.Get(context.Background(), rec.Key); !errors.Is(err, lease.ErrNotFound) {
-		t.Fatalf("after delete err = %v, want ErrNotFound", err)
 	}
 }
 
@@ -263,9 +312,6 @@ func TestSQLiteStoreContextCancellationIsHonored(t *testing.T) {
 	}
 	if err := store.Put(ctx, 0, sampleRecord()); err == nil {
 		t.Fatal("Put must surface context cancellation")
-	}
-	if err := store.Delete(ctx, lease.Key{Namespace: "ns", Name: "a"}, 1); err == nil {
-		t.Fatal("Delete must surface context cancellation")
 	}
 }
 

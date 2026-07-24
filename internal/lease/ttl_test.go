@@ -3,6 +3,7 @@ package lease
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -53,7 +54,17 @@ func seedRecord(t *testing.T, store Store, key Key, renewedAt time.Time, ttl tim
 	}
 }
 
-func TestTTLEnforcerCollectsExpiredBeyondGrace(t *testing.T) {
+// mustGet fetches key or fails the test.
+func mustGet(t *testing.T, store Store, key Key) *Record {
+	t.Helper()
+	rec, err := store.Get(context.Background(), key)
+	if err != nil {
+		t.Fatalf("Get %v: %v", key, err)
+	}
+	return rec
+}
+
+func TestTTLEnforcerTombstonesExpiredBeyondGrace(t *testing.T) {
 	t.Parallel()
 
 	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
@@ -67,8 +78,34 @@ func TestTTLEnforcerCollectsExpiredBeyondGrace(t *testing.T) {
 
 	enforcer.collect(context.Background())
 
-	if _, err := store.Get(context.Background(), key); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("Get after collect = %v, want ErrNotFound (record should be GC'd)", err)
+	got := mustGet(t, store, key)
+	if !got.Tombstone() {
+		t.Fatalf("record after collect = %+v, want tombstone (holder cleared)", got)
+	}
+	if got.FencingToken != 1 {
+		t.Fatalf("tombstone token = %d, want the high-water mark 1 preserved", got.FencingToken)
+	}
+}
+
+func TestTTLEnforcerSkipsTombstones(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	store := NewMemStore()
+	key := Key{Namespace: "ns", Name: "tombstoned"}
+	tomb := &Record{Key: key, Holder: "", RenewedAt: base, FencingToken: 7}
+	if err := store.Put(context.Background(), 0, tomb); err != nil {
+		t.Fatal(err)
+	}
+
+	enforcer := NewTTLEnforcer(store, time.Second, 5*time.Minute)
+	enforcer.now = func() time.Time { return base.Add(24 * time.Hour) }
+
+	enforcer.collect(context.Background())
+
+	got := mustGet(t, store, key)
+	if got.Version != 1 || got.FencingToken != 7 {
+		t.Fatalf("tombstone was rewritten by the sweep: %+v", got)
 	}
 }
 
@@ -86,8 +123,8 @@ func TestTTLEnforcerSkipsExpiredWithinGrace(t *testing.T) {
 
 	enforcer.collect(context.Background())
 
-	if _, err := store.Get(context.Background(), key); err != nil {
-		t.Fatalf("Get after collect = %v, want record retained within grace", err)
+	if got := mustGet(t, store, key); got.Tombstone() {
+		t.Fatal("record inside the grace window must not be tombstoned")
 	}
 }
 
@@ -105,8 +142,81 @@ func TestTTLEnforcerSkipsLiveLease(t *testing.T) {
 
 	enforcer.collect(context.Background())
 
-	if _, err := store.Get(context.Background(), key); err != nil {
-		t.Fatalf("Get after collect = %v, want live lease retained", err)
+	if got := mustGet(t, store, key); got.Tombstone() {
+		t.Fatal("live lease must not be tombstoned")
+	}
+}
+
+// TestTTLEnforcerScanStaleWriteSkipsReacquiredLease is the issue #93
+// regression at the enforcer level: a record scanned as collectable but
+// released and freshly reacquired before the sweep's write must be left
+// alone — the version CAS from the scan can no longer match.
+func TestTTLEnforcerScanStaleWriteSkipsReacquiredLease(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	store := NewMemStore()
+	mgr := NewManager(store).WithClock(func() time.Time { return base.Add(10 * time.Minute) })
+	key := Key{Namespace: "ns", Name: "reacquired"}
+	seedRecord(t, store, key, base, time.Minute) // expired long ago
+
+	// Interpose on List so that after the enforcer scans, but before it
+	// writes, the lease is released and reacquired fresh.
+	interposed := &listInterposingStore{Store: store}
+	interposed.afterList = func() {
+		if err := mgr.Release(context.Background(), key, "holder-1", 1); err != nil {
+			t.Errorf("release: %v", err)
+		}
+		res, err := mgr.Acquire(context.Background(), key, "holder-2", time.Hour)
+		if err != nil || !res.Acquired {
+			t.Errorf("reacquire: %v acquired=%v", err, res.Acquired)
+		}
+	}
+
+	enforcer := NewTTLEnforcer(interposed, time.Second, 5*time.Minute)
+	enforcer.now = func() time.Time { return base.Add(10 * time.Minute) }
+
+	enforcer.collect(context.Background())
+
+	got := mustGet(t, store, key)
+	if got.Tombstone() || got.Holder != "holder-2" {
+		t.Fatalf("sweep disturbed the reacquired lease: %+v", got)
+	}
+	if got.FencingToken != 2 {
+		t.Fatalf("reacquired token = %d, want 2", got.FencingToken)
+	}
+}
+
+// TestTTLEnforcerConcurrentSweepsAreIdempotent verifies the multi-replica
+// property: several enforcers sweeping the same store leave exactly one
+// tombstone write behind.
+func TestTTLEnforcerConcurrentSweepsAreIdempotent(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	store := NewMemStore()
+	key := Key{Namespace: "ns", Name: "contended"}
+	seedRecord(t, store, key, base, time.Minute)
+
+	const replicas = 8
+	var wg sync.WaitGroup
+	wg.Add(replicas)
+	for range replicas {
+		go func() {
+			defer wg.Done()
+			enforcer := NewTTLEnforcer(store, time.Second, 5*time.Minute)
+			enforcer.now = func() time.Time { return base.Add(10 * time.Minute) }
+			enforcer.collect(context.Background())
+		}()
+	}
+	wg.Wait()
+
+	got := mustGet(t, store, key)
+	if !got.Tombstone() || got.FencingToken != 1 {
+		t.Fatalf("record after concurrent sweeps = %+v, want tombstone with token 1", got)
+	}
+	if got.Version != 2 {
+		t.Fatalf("Version = %d, want 2 (exactly one sweep write)", got.Version)
 	}
 }
 
@@ -127,7 +237,23 @@ func TestTTLEnforcerRunCollectsOnTicker(t *testing.T) {
 		t.Fatalf("Run err = %v, want context.DeadlineExceeded", err)
 	}
 
-	if _, err := store.Get(context.Background(), key); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("Get after Run = %v, want ErrNotFound (ticker should have GC'd)", err)
+	if got := mustGet(t, store, key); !got.Tombstone() {
+		t.Fatalf("record after Run = %+v, want tombstone (ticker should have swept)", got)
 	}
+}
+
+// listInterposingStore runs afterList once, immediately after a successful
+// List, to open a deterministic window between a GC scan and its writes.
+type listInterposingStore struct {
+	Store
+	afterList func()
+	once      sync.Once
+}
+
+func (s *listInterposingStore) List(ctx context.Context) ([]Record, error) {
+	recs, err := s.Store.List(ctx)
+	if err == nil && s.afterList != nil {
+		s.once.Do(s.afterList)
+	}
+	return recs, err
 }

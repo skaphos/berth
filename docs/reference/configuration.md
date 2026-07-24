@@ -52,6 +52,20 @@ replica for edge, dev, or CI deployments. In Kubernetes, mount the SQL DSN from
 a Secret and pass `--sql-dsn-file`; the Helm chart does this from
 `store.sql.dsnSecret`.
 
+With `--sql-migrate auto` (the default), schema changes are applied
+additively and idempotently at startup — including the `version` column that
+upgrades tables created before it existed (legacy rows read as version 1).
+With `--sql-migrate off`, apply the equivalent statement yourself before
+upgrading, e.g. for Postgres:
+
+```sql
+ALTER TABLE berth_leases ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 1;
+```
+
+(MySQL/MariaDB and SQLite use the same column without `IF NOT EXISTS`.) An
+API server pointed at an unmigrated table fails cleanly on first use rather
+than corrupting lease state.
+
 ## Operator Flags
 
 | Flag | Default | Meaning |

@@ -191,6 +191,97 @@ func TestReleaseValidatesArgs(t *testing.T) {
 	resp.Body.Close()
 }
 
+// TestLeaseEndpointsRejectInvalidKeys covers the issue #94 API-boundary
+// validation: a namespace segment that is not a DNS label (here: dotted)
+// must be rejected with a 400 naming the field, on every lease endpoint,
+// before any store access. Without this, ("a","b.c") and ("a.b","c") could
+// collide into one backing object in the k8s store — across tenants.
+func TestLeaseEndpointsRejectInvalidKeys(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newTestServer()
+	defer srv.Close()
+
+	cases := []struct {
+		name string
+		path string
+		body any
+	}{
+		{name: "acquire", path: "/v1alpha1/namespaces/a.b/leases/c/acquire", body: AcquireRequest{Holder: "h1", TTLSeconds: 30}},
+		{name: "renew", path: "/v1alpha1/namespaces/a.b/leases/c/renew", body: RenewRequest{Holder: "h1", FencingToken: 1, TTLSeconds: 30}},
+		{name: "release", path: "/v1alpha1/namespaces/a.b/leases/c/release", body: ReleaseRequest{Holder: "h1", FencingToken: 1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := postJSON(t, srv, tc.path, tc.body)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", resp.StatusCode)
+			}
+			var out errorResponse
+			decode(t, resp, &out)
+			if !strings.Contains(out.Error, "invalid namespace") || !strings.Contains(out.Error, "a.b") {
+				t.Fatalf("error = %q, want it to name the namespace field and value", out.Error)
+			}
+		})
+	}
+}
+
+// TestLeaseEndpointsAllowDottedNames pins the other half of the key rules:
+// dots stay legal in the name segment, so existing dotted lease names keep
+// working — the collision is closed by restricting the namespace alone.
+func TestLeaseEndpointsAllowDottedNames(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newTestServer()
+	defer srv.Close()
+
+	resp := postJSON(t, srv, "/v1alpha1/namespaces/a/leases/b.c/acquire", AcquireRequest{Holder: "h1", TTLSeconds: 30})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (dotted name is valid)", resp.StatusCode)
+	}
+	var out LeaseResponse
+	decode(t, resp, &out)
+	if !out.Acquired {
+		t.Fatal("expected Acquired=true for a valid dotted-name key")
+	}
+}
+
+// TestAuthorizationRunsBeforeKeyValidation pins the response ordering: an
+// unauthorized request with an invalid namespace gets 403, not 400 — key
+// format rules are not probeable without credentials. (Namespace
+// authorization is permissive by design, so the denial comes from the
+// holder check: the identity's tenant is team-a but the holder claims
+// another tenant's prefix.)
+func TestAuthorizationRunsBeforeKeyValidation(t *testing.T) {
+	t.Parallel()
+
+	authn := auth.NewStaticAuthenticator(map[string]auth.Identity{
+		"good-token": {Holder: "team-a", Tenant: "team-a"},
+	})
+	mgr := lease.NewManager(lease.NewMemStore())
+	srv := httptest.NewServer(NewMux(mgr, authn, nil))
+	defer srv.Close()
+
+	// The holder is outside team-a's tenant and the namespace is invalid;
+	// the authorization check must answer first.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost,
+		srv.URL+"/v1alpha1/namespaces/a.b/leases/c/acquire",
+		strings.NewReader(`{"holder":"other-team/h","ttlSeconds":30}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer good-token")
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 (authorization answers before key validation)", resp.StatusCode)
+	}
+}
+
 // TestAuthIntegrationStaticKeysGatesLeaseRoutes wires a real
 // StaticAuthenticator into NewMux and exercises the three auth outcomes
 // against a lease endpoint: missing header, wrong token, valid token.

@@ -67,7 +67,7 @@ func benchmarkAcquireParallel(b *testing.B, newStore func(testing.TB) lease.Stor
 			}
 			next := *cur
 			next.FencingToken = cur.FencingToken + 1
-			if err := store.Put(ctx, cur.FencingToken, &next); err != nil &&
+			if err := store.Put(ctx, cur.Version, &next); err != nil &&
 				!errors.Is(err, lease.ErrConflict) {
 				b.Errorf("put: %v", err)
 				return
@@ -147,23 +147,30 @@ func benchmarkFailoverFanout(b *testing.B, newStore func(testing.TB) lease.Store
 			b.Fatalf("seed incumbent: %v", err)
 		}
 
+		type win struct {
+			holder string
+			token  int32
+		}
 		var (
 			wg    sync.WaitGroup
 			start = make(chan struct{})
-			wins  = make([]bool, standbys)
+			wins  = make([]*win, standbys)
 		)
 		wg.Add(standbys)
 		for s := 0; s < standbys; s++ {
 			go func(s int) {
 				defer wg.Done()
 				<-start
+				holder := fmt.Sprintf("standby-%d", s)
 				// Winner takes a long TTL so the rest are cleanly denied.
-				res, err := mgr.Acquire(ctx, key, fmt.Sprintf("standby-%d", s), time.Hour)
+				res, err := mgr.Acquire(ctx, key, holder, time.Hour)
 				if err != nil {
 					b.Errorf("standby %d acquire: %v", s, err)
 					return
 				}
-				wins[s] = res.Acquired
+				if res.Acquired {
+					wins[s] = &win{holder: holder, token: res.FencingToken}
+				}
 			}(s)
 		}
 
@@ -172,9 +179,11 @@ func benchmarkFailoverFanout(b *testing.B, newStore func(testing.TB) lease.Store
 		wg.Wait()
 		b.StopTimer()
 
+		var winner *win
 		won := 0
 		for _, w := range wins {
-			if w {
+			if w != nil {
+				winner = w
 				won++
 			}
 		}
@@ -182,11 +191,10 @@ func benchmarkFailoverFanout(b *testing.B, newStore func(testing.TB) lease.Store
 			b.Fatalf("failover winners = %d, want exactly 1", won)
 		}
 
-		// Clear the key so the next round starts from a clean create.
-		if cur, err := store.Get(ctx, key); err == nil {
-			if err := store.Delete(ctx, key, cur.FencingToken); err != nil {
-				b.Fatalf("teardown delete: %v", err)
-			}
+		// Release the winner's hold so the next round's incumbent can
+		// reacquire from the tombstone.
+		if err := mgr.Release(ctx, key, winner.holder, winner.token); err != nil {
+			b.Fatalf("teardown release: %v", err)
 		}
 		b.StartTimer()
 	}

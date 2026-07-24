@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
@@ -19,21 +20,29 @@ const (
 	managedByValue = "berth"
 
 	// Annotations preserve the original Berth (tenant-namespace, lease-name)
-	// pair. The K8s Lease.metadata.name encoding is lossy in principle (a
-	// dot-joined value would round-trip ambiguously if either side ever
-	// contains a dot), so the annotations are the source of truth for
-	// reverse translation.
+	// pair. The K8s Lease.metadata.name encoding is unambiguous for
+	// validated keys (the namespace segment cannot contain a dot, so the
+	// first dot is the separator), but the annotations remain the source of
+	// truth for reverse translation.
 	tenantNamespaceAnnotation = "berth.skaphos.io/tenant-namespace"
 	leaseNameAnnotation       = "berth.skaphos.io/lease-name"
+
+	// versionAnnotation persists [Record.Version]. Objects written before
+	// the annotation existed read as version 1; the resourceVersion guard on
+	// updates keeps even their first post-upgrade racing writes safe.
+	versionAnnotation = "berth.skaphos.io/version"
 )
 
 // K8sLeaseStore implements [Store] against coordination.k8s.io/v1.Lease
 // objects in a single namespace of a coordination cluster.
 //
 // Each Berth lease maps 1:1 to a Lease object; the FencingToken is
-// persisted as Lease.spec.leaseTransitions, and storage-level CAS is
-// implemented via metadata.resourceVersion (the kube-apiserver returns 409
-// Conflict on a stale UPDATE, which is translated to [ErrConflict]).
+// persisted as Lease.spec.leaseTransitions and the record Version as an
+// annotation. Storage-level CAS is double-guarded: Put checks the version
+// annotation against the caller's expectation and the subsequent UPDATE
+// carries metadata.resourceVersion from the same read, so the kube-apiserver
+// returns 409 Conflict on any interleaved write (translated to
+// [ErrConflict]).
 //
 // All Berth leases across all tenants are pooled in a single coordination
 // namespace; the K8s Lease.metadata.name encodes the Berth (tenant-ns,
@@ -101,16 +110,18 @@ func (s *K8sLeaseStore) List(ctx context.Context) ([]Record, error) {
 	return out, nil
 }
 
-// Put implements [Store]. expected=0 creates; expected>0 updates only when
-// the current Lease's leaseTransitions equals expected.
-func (s *K8sLeaseStore) Put(ctx context.Context, expected int32, rec *Record) error {
+// Put implements [Store]. expectedVersion=0 creates; expectedVersion>0
+// updates only when the current Lease's version annotation equals
+// expectedVersion, with the update additionally guarded by the
+// resourceVersion captured in the same read.
+func (s *K8sLeaseStore) Put(ctx context.Context, expectedVersion int64, rec *Record) error {
 	if rec == nil {
 		return ErrConflict
 	}
 	leases := s.client.CoordinationV1().Leases(s.namespace)
 
-	if expected == 0 {
-		_, err := leases.Create(ctx, leaseFromRecord(rec, s.namespace), metav1.CreateOptions{})
+	if expectedVersion == 0 {
+		_, err := leases.Create(ctx, leaseFromRecord(rec, s.namespace, 1), metav1.CreateOptions{})
 		if err != nil {
 			if apierrors.IsAlreadyExists(err) {
 				return ErrConflict
@@ -127,10 +138,10 @@ func (s *K8sLeaseStore) Put(ctx context.Context, expected int32, rec *Record) er
 		}
 		return fmt.Errorf("k8s lease store: get %s for put: %w", rec.Key, err)
 	}
-	if cur.Spec.LeaseTransitions == nil || *cur.Spec.LeaseTransitions != expected {
+	if versionFromLease(cur) != expectedVersion {
 		return ErrConflict
 	}
-	applyRecordToLease(cur, rec)
+	applyRecordToLease(cur, rec, expectedVersion+1)
 	if _, err := leases.Update(ctx, cur, metav1.UpdateOptions{}); err != nil {
 		if apierrors.IsConflict(err) {
 			return ErrConflict
@@ -140,38 +151,23 @@ func (s *K8sLeaseStore) Put(ctx context.Context, expected int32, rec *Record) er
 	return nil
 }
 
-// Delete implements [Store].
-func (s *K8sLeaseStore) Delete(ctx context.Context, key Key, expected int32) error {
-	leases := s.client.CoordinationV1().Leases(s.namespace)
-	cur, err := leases.Get(ctx, k8sLeaseName(key), metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("k8s lease store: get %s for delete: %w", key, err)
-	}
-	if cur.Spec.LeaseTransitions == nil || *cur.Spec.LeaseTransitions != expected {
-		return ErrConflict
-	}
-	rv := cur.ResourceVersion
-	err = leases.Delete(ctx, k8sLeaseName(key), metav1.DeleteOptions{
-		Preconditions: &metav1.Preconditions{ResourceVersion: &rv},
-	})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return ErrNotFound
-		}
-		if apierrors.IsConflict(err) {
-			return ErrConflict
-		}
-		return fmt.Errorf("k8s lease store: delete %s: %w", key, err)
-	}
-	return nil
-}
-
-// k8sLeaseName encodes a Berth Key as a coordination.k8s.io Lease name.
+// k8sLeaseName encodes a Berth Key as a coordination.k8s.io Lease name. The
+// encoding is injective for keys accepted by [ValidateKey]: the namespace
+// segment cannot contain a dot, so the first dot always separates namespace
+// from name.
 func k8sLeaseName(key Key) string {
 	return key.Namespace + "." + key.Name
+}
+
+// versionFromLease reads the record version annotation. Objects written
+// before the annotation existed (or with a mangled value) read as version 1,
+// the same default the SQL migration applies to legacy rows.
+func versionFromLease(l *coordinationv1.Lease) int64 {
+	v, err := strconv.ParseInt(l.Annotations[versionAnnotation], 10, 64)
+	if err != nil || v < 1 {
+		return 1
+	}
+	return v
 }
 
 // recordFromLease translates a Lease into a Record. Returns an error when
@@ -185,7 +181,7 @@ func recordFromLease(l *coordinationv1.Lease) (*Record, error) {
 	if !ok {
 		return nil, fmt.Errorf("lease %s/%s: missing annotation %s", l.Namespace, l.Name, leaseNameAnnotation)
 	}
-	rec := &Record{Key: Key{Namespace: tenant, Name: name}}
+	rec := &Record{Key: Key{Namespace: tenant, Name: name}, Version: versionFromLease(l)}
 	if l.Spec.HolderIdentity != nil {
 		rec.Holder = *l.Spec.HolderIdentity
 	}
@@ -204,8 +200,9 @@ func recordFromLease(l *coordinationv1.Lease) (*Record, error) {
 	return rec, nil
 }
 
-// leaseFromRecord builds a fresh Lease (no resourceVersion) for Create.
-func leaseFromRecord(rec *Record, namespace string) *coordinationv1.Lease {
+// leaseFromRecord builds a fresh Lease (no resourceVersion) for Create,
+// stored at the given version.
+func leaseFromRecord(rec *Record, namespace string, version int64) *coordinationv1.Lease {
 	holder := rec.Holder
 	ttl := int32(rec.TTL / time.Second)
 	transitions := rec.FencingToken
@@ -219,6 +216,7 @@ func leaseFromRecord(rec *Record, namespace string) *coordinationv1.Lease {
 			Annotations: map[string]string{
 				tenantNamespaceAnnotation: rec.Key.Namespace,
 				leaseNameAnnotation:       rec.Key.Name,
+				versionAnnotation:         strconv.FormatInt(version, 10),
 			},
 		},
 		Spec: coordinationv1.LeaseSpec{
@@ -232,9 +230,9 @@ func leaseFromRecord(rec *Record, namespace string) *coordinationv1.Lease {
 }
 
 // applyRecordToLease overwrites the spec of an existing Lease while
-// preserving its resourceVersion. Labels and annotations are repaired in
-// case they were stripped externally.
-func applyRecordToLease(l *coordinationv1.Lease, rec *Record) {
+// preserving its resourceVersion, storing the record at the given version.
+// Labels and annotations are repaired in case they were stripped externally.
+func applyRecordToLease(l *coordinationv1.Lease, rec *Record, version int64) {
 	holder := rec.Holder
 	ttl := int32(rec.TTL / time.Second)
 	transitions := rec.FencingToken
@@ -250,6 +248,7 @@ func applyRecordToLease(l *coordinationv1.Lease, rec *Record) {
 	}
 	l.Annotations[tenantNamespaceAnnotation] = rec.Key.Namespace
 	l.Annotations[leaseNameAnnotation] = rec.Key.Name
+	l.Annotations[versionAnnotation] = strconv.FormatInt(version, 10)
 	if l.Labels == nil {
 		l.Labels = map[string]string{}
 	}
