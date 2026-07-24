@@ -149,8 +149,10 @@ Upstream standards are normative (`go-engineering-standard.md`,
   `internal/` and `pkg/`. Preserve the split between cross-platform CLI
   concerns and Linux runtime components.
 - **Store contract**: `internal/lease.Store` implementations (mem, k8s, sql)
-  MUST provide linearizable per-key Get/Put/Delete and share one conformance
-  suite (`internal/lease/storetest`); a semantic change to the contract MUST
+  MUST provide linearizable per-key Get/Put (there is deliberately no delete
+  operation — records are tombstoned, never removed, so fencing state is
+  never reset) and share one conformance suite
+  (`internal/lease/storetest`); a semantic change to the contract MUST
   update the contract doc, every backend, and the conformance suite in the
   same change.
 - **Testing**: every regression fix ships with a covering test that fails
@@ -196,4 +198,4 @@ Specs and plans are gated against this constitution. A deviation is either
 justified in writing in the plan's complexity/deviation tracking, or a
 proposed amendment — silent divergence is not an option.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-07-24
+**Version**: 1.0.1 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-07-24
