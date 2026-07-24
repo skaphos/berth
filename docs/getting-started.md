@@ -79,7 +79,8 @@ server URL and the demo API key:
 ```text
 === topology ready ===
 API_URL=https://172.18.0.4:3xxxx
-API_KEY=e2e-key
+EAST_API_KEY=cluster-east
+WEST_API_KEY=cluster-west
 ```
 
 Three `kind` contexts now exist. Confirm they are reachable:
