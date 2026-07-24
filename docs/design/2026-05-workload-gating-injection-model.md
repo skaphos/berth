@@ -336,10 +336,19 @@ semantics renew a lease when the incoming holder matches the current holder.
 That behavior is useful for a long-lived holder, but unsafe if multiple pods
 share the same holder identity in runtime singleton mode.
 
+The first segment is the **tenant-owning root** — the cluster identity when
+configured, otherwise the pod namespace — and is separated from the rest of the
+hierarchy by `/`, with the remaining segments joined by `:`. This is required
+for holder authorization (SKA-446): the API server admits a holder only when it
+equals the caller's tenant or is scoped under `"<tenant>/"`, so a purely
+`:`-joined holder is rejected `403` on any authenticated backend. Deployments
+therefore set the tenant (static-key id or OIDC claim) equal to that root
+segment — e.g. key id == `--cluster-id`.
+
 **Startup gate default (v1)**:
 - Derive from the owning controller of the Pod when available:
   `namespace` + `kind` + `name`.
-- Example: `prod:deployment:checkout-service`.
+- Example: `prod/deployment:checkout-service`.
 - This may allow multiple pods from the same workload to pass startup if they
   share the holder identity. That is acceptable only because startup gate does
   not provide runtime singleton behavior.
@@ -347,9 +356,11 @@ share the same holder identity in runtime singleton mode.
 **Runtime singleton default (v1)**:
 - Derive a unique candidate identity from cluster identity, namespace, owner
   reference lineage where discoverable, and pod name.
-- Example: `east:prod:deployment:checkout-service:pod:checkout-service-7f6c9b9d8d-j4n8x`.
+- Example: `east/prod:deployment:checkout-service:pod:checkout-service-7f6c9b9d8d-j4n8x`
+  (tenant `east` owns it).
 - If cluster identity is not configured, the webhook or helper must still
-  include pod identity so replicas do not share a holder by accident.
+  include pod identity so replicas do not share a holder by accident, and the
+  namespace becomes the `/`-rooted owner.
 
 **Override behavior**:
 - If the `berth.skaphos.io/holder-identity` annotation is present on the Pod

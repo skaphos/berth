@@ -65,14 +65,25 @@ for cluster in "$COORD_CLUSTER" "$EAST_CLUSTER" "$WEST_CLUSTER"; do
 done
 wait
 
-log "generating throwaway TLS material + API key"
+log "generating throwaway TLS material + per-cluster API keys"
 openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout "$TMP_DIR/tls.key" -out "$TMP_DIR/tls.crt" \
   -days 1 -subj "/CN=berth-apiserver.${NAMESPACE}.svc" >/dev/null 2>&1
 
-API_KEY="e2e-key"
-API_KEY_HASH="$(printf '%s' "$API_KEY" | sha256sum | cut -d' ' -f1)"
-printf '%s:%s\n' "$API_KEY" "$API_KEY_HASH" > "$TMP_DIR/api-keys"
+# Each runner cluster is its own tenant: with static-key auth the tenant IS the
+# key id (internal/auth/static.go), and lease requests are holder-authorized —
+# the request holder must equal the caller's tenant or be scoped "<tenant>/..."
+# (internal/tenant/authorizer.go). The operator's holder is its --cluster-id, so
+# the key id must equal (or own) that cluster id or every acquire returns 403.
+# We therefore mint one key per cluster with key id == cluster id. Distinct
+# tenants contending for the same lease name is exactly the documented
+# cross-cluster failover model (docs/architecture.md "Authorization"). The
+# bearer token reuses the key id for test simplicity.
+: > "$TMP_DIR/api-keys"
+for cid in cluster-east cluster-west; do
+  hash="$(printf '%s' "$cid" | sha256sum | cut -d' ' -f1)"
+  printf '%s:%s\n' "$cid" "$hash" >> "$TMP_DIR/api-keys"
+done
 
 log "generating injection webhook serving cert (self-signed; SAN = webhook Service DNS)"
 # The MutatingWebhookConfiguration's caBundle is the cert itself (self-signed),
@@ -112,9 +123,12 @@ echo "coord apiserver reachable at $API_URL"
 install_operator() {
   local cluster="$1"
   local cluster_id="$2"
+  # The operator authenticates as its own tenant: bearer token == key id ==
+  # cluster id, so its --cluster-id holder is owned by that tenant (see the
+  # per-cluster key generation above).
   kubectl --context "kind-$cluster" create namespace "$NAMESPACE"
   kubectl --context "kind-$cluster" -n "$NAMESPACE" create secret generic berth-api-key \
-    --from-literal=api-key="$API_KEY"
+    --from-literal=api-key="$cluster_id"
   # Webhook serving cert for the injection webhook (operator-values enables it).
   kubectl --context "kind-$cluster" -n "$NAMESPACE" create secret tls berth-operator-injection-tls \
     --cert="$TMP_DIR/webhook.crt" --key="$TMP_DIR/webhook.key"
@@ -136,5 +150,8 @@ log "installing west operator"
 install_operator "$WEST_CLUSTER" cluster-west
 
 log "topology ready"
-printf 'API_URL=%s\nAPI_KEY=%s\n' "$API_URL" "$API_KEY" > "$TMP_DIR/env"
+# Per-cluster keys (token == key id == cluster id); each operator authenticates
+# as its own tenant. No single shared API key any more.
+printf 'API_URL=%s\nEAST_API_KEY=%s\nWEST_API_KEY=%s\n' \
+  "$API_URL" "cluster-east" "cluster-west" > "$TMP_DIR/env"
 cat "$TMP_DIR/env"

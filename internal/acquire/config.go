@@ -210,7 +210,21 @@ func (c *Config) Holder() string {
 		}
 	}
 
-	return strings.Join(parts, ":")
+	// The first segment is the tenant-owning root, separated from the rest of
+	// the hierarchy with "/" so the derived holder is recognized as *owned* by a
+	// tenant equal to that root — the tenant-ownership boundary is exactly
+	// "<tenant>/" (see internal/tenant.DefaultAuthorizer.AuthorizeHolder). The
+	// root is mode-specific: runtime-singleton roots at the cluster id when set
+	// (falling back to the pod namespace), while startup-gate always roots at
+	// the pod namespace — it never includes the cluster id, even when one is
+	// configured. A ":"-joined root (the earlier format) is owned by no tenant,
+	// so an authenticated backend rejects every injected acquire with 403. The
+	// remaining segments stay ":"-joined; in runtime-singleton mode the whole
+	// string is still a unique per-pod identity.
+	if len(parts) <= 1 {
+		return strings.Join(parts, ":")
+	}
+	return parts[0] + "/" + strings.Join(parts[1:], ":")
 }
 
 // NewClient builds a Berth API client from the configured endpoint and

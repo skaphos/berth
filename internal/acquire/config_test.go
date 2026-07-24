@@ -1,6 +1,7 @@
 package acquire
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -89,7 +90,10 @@ func TestHolderRuntimeSingletonIncludesPodName(t *testing.T) {
 	c.ApplyDefaults()
 
 	got := c.Holder()
-	want := "east:prod:deployment:checkout:pod:checkout-7f6c-j4n8x"
+	// The cluster id ("east") is the tenant-owning root, separated from the rest
+	// of the hierarchy by "/" so it passes holder authorization under a tenant
+	// equal to the cluster id (see TestHolderIsOwnedByClusterTenant).
+	want := "east/prod:deployment:checkout:pod:checkout-7f6c-j4n8x"
 	if got != want {
 		t.Errorf("Holder() = %q, want %q", got, want)
 	}
@@ -100,9 +104,10 @@ func TestHolderRuntimeSingletonWithoutClusterStillUnique(t *testing.T) {
 	c.Mode = ModeRuntimeSingleton
 	c.ApplyDefaults()
 	// No cluster id / workload info, but the pod name must still be present
-	// so replicas never share a holder.
+	// so replicas never share a holder. The namespace becomes the "/"-rooted
+	// tenant owner in the cluster-id's absence.
 	got := c.Holder()
-	want := "prod:pod:checkout-7f6c-j4n8x"
+	want := "prod/pod:checkout-7f6c-j4n8x"
 	if got != want {
 		t.Errorf("Holder() = %q, want %q", got, want)
 	}
@@ -116,9 +121,33 @@ func TestHolderStartupGatePrefersWorkload(t *testing.T) {
 	c.ApplyDefaults()
 
 	got := c.Holder()
-	want := "prod:deployment:checkout"
+	want := "prod/deployment:checkout"
 	if got != want {
 		t.Errorf("Holder() = %q, want %q", got, want)
+	}
+}
+
+// TestHolderIsOwnedByClusterTenant is the regression guard for #91: an injected
+// runtime-singleton helper's derived holder must be owned by a tenant equal to
+// its cluster id, or the holder-authorization added in SKA-446 rejects every
+// acquire with 403 (the failure that kept TestInjectionGating red). Ownership
+// is the "<tenant>/" prefix boundary, so the derived holder must begin with
+// "<clusterID>/" while remaining a unique per-pod value.
+func TestHolderIsOwnedByClusterTenant(t *testing.T) {
+	c := baseConfig()
+	c.Mode = ModeRuntimeSingleton
+	c.ClusterID = "cluster-east"
+	c.WorkloadKind = "deployment"
+	c.WorkloadName = "checkout"
+	c.ApplyDefaults()
+
+	holder := c.Holder()
+	tenant := c.ClusterID
+	if holder != tenant && !strings.HasPrefix(holder, tenant+"/") {
+		t.Fatalf("Holder() = %q is not owned by tenant %q (want %q or %q/...)", holder, tenant, tenant, tenant)
+	}
+	if !strings.Contains(holder, c.PodName) {
+		t.Errorf("Holder() = %q dropped the pod name %q; replicas would share a holder", holder, c.PodName)
 	}
 }
 

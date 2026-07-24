@@ -79,7 +79,8 @@ server URL and the demo API key:
 ```text
 === topology ready ===
 API_URL=https://172.18.0.4:3xxxx
-API_KEY=e2e-key
+EAST_API_KEY=cluster-east
+WEST_API_KEY=cluster-west
 ```
 
 Three `kind` contexts now exist. Confirm they are reachable:
@@ -98,6 +99,13 @@ kubectl --context kind-berth-e2e-west  get nodes
     - **east** and **west** each run a `berth-operator` with a distinct
       `--cluster-id` (`cluster-east` / `cluster-west`), pointed at the coord API
       server.
+    - each operator authenticates with **its own static key whose key id equals
+      its `--cluster-id`**, so it is its own tenant. With `static-keys` auth the
+      tenant is the key id and lease calls are holder-authorized — the operator's
+      holder (its `--cluster-id`) must be owned by that tenant, or acquires are
+      rejected `403`. The two clusters are therefore distinct tenants contending
+      for one lease name, the cross-cluster model from
+      [Authorization](architecture.md#authorization).
 
 Check that the control-plane pods are running:
 
