@@ -1006,6 +1006,16 @@ SQLite is durable and ACID, but single-writer; use it only with one API server
 replica for edge, dev, or CI deployments. In Kubernetes, mount the SQL DSN from
 a Secret and pass <code>--sql-dsn-file</code>; the Helm chart does this from
 <code>store.sql.dsnSecret</code>.</p>
+<p>With <code>--sql-migrate auto</code> (the default), schema changes are applied
+additively and idempotently at startup — including the <code>version</code> column that
+upgrades tables created before it existed (legacy rows read as version 1).
+With <code>--sql-migrate off</code>, apply the equivalent statement yourself before
+upgrading, e.g. for Postgres:</p>
+<div class="highlight"><pre><span></span><code><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">berth_leases</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="k">version</span><span class="w"> </span><span class="nb">bigint</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+</code></pre></div>
+<p>(MySQL/MariaDB and SQLite use the same column without <code>IF NOT EXISTS</code>.) An
+API server pointed at an unmigrated table fails cleanly on first use rather
+than corrupting lease state.</p>
 <h2 id="operator-flags">Operator Flags</h2>
 <table>
 <thead>
