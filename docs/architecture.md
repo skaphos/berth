@@ -279,6 +279,14 @@ The API server rejects stale renew/release calls by fencing token, but a target
 workload needs its own token-aware integration for end-to-end fencing against
 downstream systems.
 
+These bounds assume lease calls fail fast. An API server that accepts a
+connection and then stalls is not a connectivity error the caller sees, so every
+lease call is bounded: the Go client applies `client.DefaultTimeout` (override
+with `client.WithTimeout`), and the injected sidecar additionally bounds each
+renew and reacquire at one heartbeat interval. A holder therefore re-evaluates
+enforcement within a heartbeat of its last attempt, whatever the server does,
+and the past-expiry self-fence still fires against an unresponsive API.
+
 ## Known Limitations
 
 - The operator runs a single active replica by default. Leader election is
