@@ -1,0 +1,1986 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Distributed lease coordination for Kubernetes multi-cluster workloads.">
+      
+      
+      
+        <link rel="canonical" href="https://skaphos.github.io/berth/0.3.1/design/2026-05-workload-gating-injection-model/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Workload Gating via Init-Container Injection (Design) - Berth</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#workload-gating-via-init-container-injection-design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Berth
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Workload Gating via Init-Container Injection (Design)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Berth
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workload Gating (Injection)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api-versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Versioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context-and-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context and Problem
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context and Problem">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#primary-motivations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Primary Motivations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals (v1)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#activation-model-pod-level-gating-not-scale-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activation Model: Pod-Level Gating, Not Scale Actions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-of-lease-holding-approaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison of Lease-Holding Approaches
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparison of Lease-Holding Approaches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-decision-factors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Decision Factors
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Decision Factors">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#risk-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#active-system-selection-controlled-failover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Active System Selection &amp; Controlled Failover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decision-guidance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Guidance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#injected-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Injected Modes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Injected Modes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup Gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runtime-singleton" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime Singleton
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Runtime Singleton">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#active-enforcement-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Active Enforcement (v1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restart-re-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restart Re-Gating
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-label-annotation-contract-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed Label / Annotation Contract (v1)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proposed Label / Annotation Contract (v1)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#label-keys-selection-intent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label Keys (Selection &amp; Intent)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annotation-keys-behavior-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Annotation Keys (Behavior &amp; Configuration)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Annotation Keys (Behavior &amp; Configuration)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#auth-api-server-discovery-dual-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auth / API Server Discovery (Dual Support)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#holder-identity-defaulting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Holder Identity Defaulting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation-error-behavior-webhook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation &amp; Error Behavior (Webhook)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#webhook-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Webhook Design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helper-binary-berth-acquire-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helper Binary (berth-acquire) Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-discovery-gitops-friendly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Discovery (GitOps Friendly)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workload-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workload Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workload Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#deployment-runtime-singleton-legacy-cross-cluster-singleton" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment — runtime singleton (legacy cross-cluster singleton)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#statefulset-runtime-singleton" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StatefulSet — runtime singleton
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#job-startup-gate-recommended-for-run-to-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job — startup gate (recommended for run-to-completion)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cronjob-note-the-deeper-label-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CronJob — note the deeper label path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resulting-mutated-pod-runtime-singleton-enforceprobe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resulting mutated Pod (runtime singleton, enforce=probe)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-record-labelsannotations-vs-wrapper-crd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Record: Labels/Annotations vs. Wrapper CRD
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-safety-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security &amp; Safety Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-future-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions &amp; Future Work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Records
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/skaphos/berth/edit/main/docs/design/2026-05-workload-gating-injection-model.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="workload-gating-via-init-container-injection-design">Workload Gating via Init-Container Injection (Design)</h1>
+<ul>
+<li><strong>Status</strong>: Accepted (rev. 2026-05-25) — decisions ratified in ADRs <a href="../../adr/0001-pod-level-gating-for-injected-singletons/">0001</a>, <a href="../../adr/0002-label-annotation-opt-in-over-crd/">0002</a>, <a href="../../adr/0003-sidecar-runtime-enforcement-by-container-kill/">0003</a></li>
+<li><strong>Design ticket</strong>: <a href="https://linear.app/rillan/issue/SKA-437">SKA-437</a> (this document is its deliverable)</li>
+<li><strong>Track</strong>: <a href="https://linear.app/rillan/issue/SKA-274">SKA-274</a> — children <a href="https://linear.app/rillan/issue/SKA-438">SKA-438</a> (helper), <a href="https://linear.app/rillan/issue/SKA-439">SKA-439</a> (webhook), <a href="https://linear.app/rillan/issue/SKA-440">SKA-440</a> (Helm), <a href="https://linear.app/rillan/issue/SKA-441">SKA-441</a> (docs/test)</li>
+<li><strong>Parent Epic</strong>: <a href="https://linear.app/rillan/issue/SKA-268">SKA-268</a> (Cross-cluster singleton Deployment via Berth lease)</li>
+<li><strong>Related</strong>: <a href="https://linear.app/rillan/issue/SKA-271">SKA-271</a> (operator-as-holder), <a href="https://linear.app/rillan/issue/SKA-436">SKA-436</a> (cross-cluster failover-after-expiry fix)</li>
+</ul>
+<h2 id="context-and-problem">Context and Problem</h2>
+<p>Berth provides distributed lease coordination so that only one instance of a workload is active across multiple clusters at a time.</p>
+<p>There are three primary ways users can participate in lease holding:</p>
+<ol>
+<li><strong>Direct integration</strong> — Application code uses the Berth Go client (or CLI) to acquire/release leases.</li>
+<li><strong>Operator-as-holder</strong> (SKA-271) — The per-cluster Berth operator holds the lease on behalf of a <code>BerthLease</code> target (Deployment, StatefulSet, etc.) and applies scale or suspend actions. No changes to the application image.</li>
+<li><strong>Injected helper (this design)</strong> — For workloads where the image cannot be changed (legacy, vendor, unmaintained), a small <code>berth-acquire</code> helper is injected via a mutating admission webhook. The helper participates in the lease using pod-template labels/annotations.</li>
+</ol>
+<p>This document defines the contract, mechanisms, and trade-offs for approach #3.</p>
+<h3 id="primary-motivations">Primary Motivations</h3>
+<ul>
+<li><strong>Legacy / vendor / unmaintained images</strong>: The container image cannot reasonably be modified to embed lease client logic.</li>
+<li><strong>Active/warm standby + controlled failover</strong>: In addition to automatic leader-election style singletons, operators may need a way for automation or humans to <em>select</em> which standby becomes active and trigger a deliberate, clean whole-system failover. This draft reserves space for that behavior but does not claim it exists until the release-and-selection protocol is designed.</li>
+</ul>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Provide a safe, minimal, label/annotation-driven opt-in mechanism.</li>
+<li>Support two explicitly different injected modes:</li>
+<li><strong>Startup gate</strong>: block pod startup until an initial lease acquire succeeds, with no runtime lease guarantee after the init container exits.</li>
+<li><strong>Runtime singleton</strong>: block startup, keep a helper sidecar running, renew the lease while the pod is active, <strong>actively stop the main container if the lease is lost</strong>, and release best-effort on shutdown. Active enforcement (the kill) is in scope for v1, not deferred.</li>
+<li>Preserve a path for external actors (automation, CLI, humans) to drive explicit failover by selecting the active system once the runtime singleton release-and-selection protocol is defined.</li>
+<li>Reuse as much of the existing Berth lease model, auth, and client machinery as possible.</li>
+<li>Keep the mutation surface narrow (pod templates only) and safe.</li>
+</ul>
+<h2 id="non-goals-v1">Non-Goals (v1)</h2>
+<ul>
+<li>New high-level CRD for workload gating.</li>
+<li>Automatic traffic steering or readiness gating driven by the helper (future work).</li>
+<li>Full replacement of operator-as-holder for most users.</li>
+</ul>
+<h2 id="activation-model-pod-level-gating-not-scale-actions">Activation Model: Pod-Level Gating, Not Scale Actions</h2>
+<p>This is the most important architectural decision in this design, and it
+diverges from the earlier framing in the parent tickets.</p>
+<p>The operator-as-holder path (SKA-271) activates a workload by <strong>scaling it</strong>:
+the operator holds the lease on the workload's behalf and applies
+<code>AcquireAction</code> / <code>ReleaseAction</code> (<code>scale.replicas</code>) on a <code>BerthLease</code> to bring
+the Deployment up or down. That works because the operator sits <em>outside</em> the
+workload.</p>
+<p>The injected path is fundamentally different: the helper runs <strong>inside the
+pod</strong>, and by the time it runs the pod is already scheduled. There is nothing
+to "scale to 0" — the pod exists. So the injected path gates at the pod level
+instead:</p>
+<ul>
+<li><strong>Init container</strong> holds the pod at startup until it acquires the lease (the
+  "hold").</li>
+<li><strong>Sidecar</strong> keeps the lease and, on loss, <strong>stops the main container</strong> (the
+  enforced "only once").</li>
+</ul>
+<p>Consequently, <strong>the injected path does not use <code>AcquireAction</code> /
+<code>ReleaseAction</code> and does not require a <code>BerthLease</code> object at all.</strong> The helper
+talks to the Berth API lease model directly. A <code>BerthLease</code> may still exist and
+participate for observability or for an operator-driven workflow, but it is not
+on the injected path's critical path.</p>
+<blockquote>
+<p><strong>Ticket correction required.</strong> SKA-437 ("Initial workload transition
+mechanism — use the existing <code>BerthLease</code> <code>AcquireAction</code> + <code>ReleaseAction</code>")
+and SKA-274 ("Initial implementation will use scale-up / scale-down via
+<code>AcquireAction</code>/<code>ReleaseAction</code>") describe the <em>operator-as-holder</em> mechanism,
+not this one. Their acceptance criteria for the injected path should be
+updated to "pod-level gating: init-container hold + sidecar enforcement,"
+reusing the lease RPCs (Acquire / Renew / Release) directly rather than CRD
+scale actions.</p>
+</blockquote>
+<h2 id="comparison-of-lease-holding-approaches">Comparison of Lease-Holding Approaches</h2>
+<p><strong>Key Decision Factors</strong> (the lenses that matter most for choosing a path):</p>
+<ul>
+<li><strong>Risk profile</strong> — split-brain window size, fencing surface area, and number of potential concurrent holders</li>
+<li><strong>Active system selection &amp; controlled failover</strong> — ability for automation or humans to deliberately select which instance becomes active and drive a clean handoff</li>
+<li><strong>Decision guidance</strong> — clear trade-offs and recommendations for when to use each approach</li>
+</ul>
+<h3 id="summary-comparison">Summary Comparison</h3>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Direct App Integration</th>
+<th>Operator-as-Holder (SKA-271)</th>
+<th>Injected <code>berth-acquire</code> (this design)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>App / image changes required</td>
+<td>Yes</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Requires a <code>BerthLease</code> object</td>
+<td>No — app calls the lease API directly</td>
+<td>Yes — CRD with a <code>target</code> ref drives the operator</td>
+<td>No — the helper calls the lease API directly (a <code>BerthLease</code> may coexist for observability but is off the critical path)</td>
+</tr>
+<tr>
+<td>Holder identity cardinality</td>
+<td>Per-process / per-replica</td>
+<td>One per cluster (the operator)</td>
+<td>Startup gate: short-lived during init, may be workload-level. Runtime singleton: one unique holder per candidate pod</td>
+</tr>
+<tr>
+<td>Activation mechanism</td>
+<td>App code acquires and self-gates</td>
+<td>Operator scales the whole target via <code>AcquireAction</code>/<code>ReleaseAction</code></td>
+<td>Pod-level: init container gates start; runtime-singleton sidecar additionally enforces at runtime</td>
+</tr>
+<tr>
+<td><strong>Runtime enforcement on lease loss</strong></td>
+<td>App must detect loss and stop itself</td>
+<td>Operator scales target to <code>releaseAction.replicas</code> (typically 0)</td>
+<td>Startup gate: <strong>none</strong> after init exits. Runtime singleton: sidecar <strong>kills the main container</strong> (<code>enforce=probe</code>/<code>signal</code>) and holds it gated until it re-acquires</td>
+</tr>
+<tr>
+<td>Primary failover trigger</td>
+<td>Application-driven</td>
+<td>TTL expiry → operator reacquires &amp; scales</td>
+<td>Startup gate: none after start. Runtime singleton: TTL expiry → standby pod's init/sidecar acquires; (future) explicit selection</td>
+</tr>
+<tr>
+<td>Active system selection</td>
+<td>Application logic</td>
+<td>First-to-acquire wins</td>
+<td>First-to-acquire in v1; deliberate external selection remains a designed extension</td>
+</tr>
+<tr>
+<td>Overlap / split-brain window</td>
+<td>App-dependent</td>
+<td>TTL window at controller level (one target toggled)</td>
+<td>TTL window <strong>plus</strong> per-pod detection+kill latency; bounded best-effort, not a hard mutex</td>
+</tr>
+<tr>
+<td>Failover RTO</td>
+<td>App-defined</td>
+<td>≈ TTL + reacquire interval</td>
+<td>≈ TTL + reacquire interval + kill latency</td>
+</tr>
+<tr>
+<td>Run-to-completion (Job/CronJob)</td>
+<td>App-controlled</td>
+<td>Poor fit — operator toggles replicas, not per-run gating</td>
+<td>Good fit via startup-gate; native sidecar lets runtime-singleton Jobs still complete</td>
+</tr>
+<tr>
+<td>Rolling-update behavior</td>
+<td>App-defined</td>
+<td>Normal rollout</td>
+<td>Runtime singleton can stall the new pod up to one TTL waiting to acquire</td>
+</tr>
+<tr>
+<td><strong>Risk profile</strong> (split-brain, fencing surface)</td>
+<td>Depends heavily on application correctness</td>
+<td>Lower — very small number of holders (one operator per cluster)</td>
+<td>Higher — many pods can become holders; larger fencing surface, though runtime enforcement bounds the overlap window</td>
+</tr>
+<tr>
+<td>GitOps &amp; operational ergonomics</td>
+<td>High (application owns the integration)</td>
+<td>Lowest day-to-day burden</td>
+<td>Medium (labels + webhook + config discovery)</td>
+</tr>
+<tr>
+<td>Best suited for</td>
+<td>Actively maintained services that need custom behavior</td>
+<td>Most no-code cross-cluster singletons (current recommended path)</td>
+<td>Unmodifiable legacy/vendor singleton pods, startup dependency ordering, or future deliberate active/warm handoff</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Future capabilities</strong> (not committed in v1 of the injected path):
+- Richer helper signaling (readiness influence, explicit "I am chosen" handoff protocol)
+- Pod readiness / traffic steering integration driven from the lease
+- Optional higher-level CRD wrapper over the label/annotation contract</p>
+<h3 id="recommendation">Recommendation</h3>
+<ul>
+<li><strong>Default / preferred path</strong> for new or actively maintainable workloads: <strong>Operator-as-holder</strong>.</li>
+<li>Use <strong>Direct integration</strong> when the application needs fine-grained control or custom holder/renewal logic.</li>
+<li>Use the <strong>injected path</strong> when you truly cannot change the container image, when startup ordering against a Berth lease is sufficient, or when this design grows first-class support for deliberate, externally-driven active system selection and controlled failover.</li>
+</ul>
+<p>The rest of this document and the parent tickets (SKA-268, SKA-271, SKA-274) expand on the risk and selection differences.</p>
+<h2 id="key-decision-factors">Key Decision Factors</h2>
+<p>This section expands on the three lenses that should drive most path selection decisions.</p>
+<h3 id="risk-profile">Risk Profile</h3>
+<p>The dominant risk difference between the approaches is the <strong>number of independent entities that can hold a lease</strong> and therefore the surface area over which correct fencing behavior must be implemented and maintained.</p>
+<ul>
+<li><strong>Direct integration</strong> places the burden entirely on application developers. If the application correctly uses the fencing token on shutdown, crashes, and restarts, the risk is manageable. Many applications get this wrong at least some of the time.</li>
+<li><strong>Operator-as-holder</strong> minimizes the number of holders to one long-lived process per cluster. The operator is under our control, has good operational visibility, and performs best-effort release on deletion using the fencing token. This is currently the lowest-risk no-code path.</li>
+<li><strong>Injected runtime singleton</strong> (v1) creates the largest number of potential holders — every replica of every opted-in workload can attempt to acquire. Each injected helper must correctly capture and use the fencing token on graceful shutdown, OOM kills, node drains, etc. A single buggy or incomplete release path across many pods creates a larger window for split-brain or delayed failover.</li>
+<li><strong>Injected startup gate</strong> has a different risk profile: once the init container exits, nothing renews the lease. It is not runtime singleton enforcement and must not be documented as one.</li>
+</ul>
+<p>The injected path does not inherently have worse fencing <em>mechanics</em> (it reuses the same client and token), but it has more places where those mechanics must be applied correctly with less operational visibility. This risk is real and is one of the main reasons the path is positioned as a fallback rather than the default.</p>
+<h3 id="active-system-selection-controlled-failover">Active System Selection &amp; Controlled Failover</h3>
+<p>Not all "failover" is the same. There is an important distinction between <em>automatic recovery after failure</em> and <em>deliberate, externally driven handoff</em>.</p>
+<ul>
+<li><strong>Direct integration</strong> gives the application full control. It can implement whatever selection or handoff logic it wants (including external signals), at the cost of embedding that logic in every participating binary.</li>
+<li><strong>Operator-as-holder</strong> is designed around automatic recovery: the first operator that can acquire the lease after the previous holder dies or releases wins. There is currently no first-class mechanism for an external system or human to say "I want cluster B to become active now, force cluster A to release."</li>
+<li><strong>Injected runtime singleton</strong> is the place to add the second model. In v1, it should only claim first-to-acquire behavior unless a concrete release-and-select protocol is implemented. External automation, another controller, or a human operator may later select a particular standby instance (or cluster) and cause the current holder to release cleanly so the chosen candidate can acquire.</li>
+</ul>
+<p>If your use case requires the ability to <em>choose</em> the active system rather than just waiting for failover, the injected path needs the runtime singleton mode plus a first-class selection protocol. Until that protocol exists, direct integration is the only path with application-specific selection logic.</p>
+<h3 id="decision-guidance">Decision Guidance</h3>
+<p>Use the following as a starting point (not a rigid rule):</p>
+<ul>
+<li>Choose <strong>Operator-as-holder</strong> by default for cross-cluster singleton or active/standby Deployments and StatefulSets where the image can remain untouched.</li>
+<li>Choose <strong>Direct integration</strong> when the owning team wants (and is capable of) tight control over holder identity, renewal strategy, and fencing.</li>
+<li>Choose the <strong>injected startup gate</strong> when startup should wait for Berth lease availability but no runtime singleton guarantee is required.</li>
+<li>Choose the <strong>injected runtime singleton</strong> when the image is immutable (legacy, vendor, third-party) and exactly one pod candidate should run behind a continuously renewed Berth lease.</li>
+</ul>
+<p>The comparison table earlier in this section and the parent Linear tickets provide additional context for edge cases.</p>
+<h2 id="injected-modes">Injected Modes</h2>
+<p>The injected helper path is split into two modes with different guarantees.
+They share the same webhook and helper binary, but they must not be described
+as interchangeable.</p>
+<h3 id="startup-gate">Startup Gate</h3>
+<p>Startup gate mode injects an init container only.</p>
+<p>Lifecycle:</p>
+<ol>
+<li>The init container calls <code>Acquire</code> for the configured lease.</li>
+<li>If the acquire succeeds, the init container exits 0.</li>
+<li>Kubernetes starts the main containers.</li>
+<li>No Berth component remains in the pod to renew or release the lease.</li>
+</ol>
+<p>Guarantee:</p>
+<ul>
+<li>The main containers do not start until the configured lease is available at
+  pod startup time.</li>
+<li>The lease may expire after the init container exits.</li>
+<li>This mode does not provide runtime singleton enforcement.</li>
+</ul>
+<p>Use cases:</p>
+<ul>
+<li>Startup ordering.</li>
+<li>Short-lived jobs where acquiring before start is enough.</li>
+<li>Legacy workloads where a brief admission gate is useful but ongoing Berth
+  coordination is intentionally out of scope.</li>
+</ul>
+<p>Holder identity:</p>
+<ul>
+<li>Startup gate may use a workload-level identity by default because it is only
+  proving startup admission.</li>
+<li>If multiple pods share the same holder identity, they can all pass the gate
+  through same-holder renewal semantics. That is acceptable only because this
+  mode does not claim singleton runtime behavior.</li>
+</ul>
+<h3 id="runtime-singleton">Runtime Singleton</h3>
+<p>Runtime singleton mode injects both an init container and a sidecar.</p>
+<p>The sidecar is injected as a <strong>native sidecar</strong> (an init container with
+<code>restartPolicy: Always</code>) so it starts before the main containers, runs
+alongside them, and — critically — does not block Job/CronJob completion.</p>
+<p>Lifecycle:</p>
+<ol>
+<li>The init container calls <code>Acquire</code>, writes the fencing token and holder
+   identity to a shared volume, and writes the health marker so the main
+   container's injected liveness probe passes.</li>
+<li>The sidecar starts before the main containers and continuously calls <code>Renew</code>
+   using the holder identity and fencing token.</li>
+<li><strong>If renew reports the lease is lost, the sidecar actively stops the main
+   container</strong> using the configured enforcement mechanism (see "Active
+   Enforcement" below), keeps it stopped (marker held red / repeated signal),
+   and attempts to re-<code>Acquire</code>. The main container is only allowed to run
+   again once the sidecar re-acquires.</li>
+<li>On graceful shutdown, the sidecar performs a best-effort <code>Release</code>.</li>
+</ol>
+<h4 id="active-enforcement-v1">Active Enforcement (v1)</h4>
+<p>Because the target image cannot be modified, the helper cannot rely on the
+application to react to lease loss. The sidecar enforces the at-most-once
+guarantee at the pod level. Two mechanisms are supported, selected by the
+<code>berth.skaphos.io/enforce</code> annotation:</p>
+<ul>
+<li><strong><code>probe</code> (default)</strong> — The webhook injects an <code>exec</code> liveness probe on each
+  main container (<code>cat /berth/healthy</code>) backed by a shared <code>emptyDir</code> volume.
+  The sidecar writes the marker on acquire and removes it on lease loss; the
+  kubelet then kills the container. The sidecar keeps the marker absent until it
+  re-acquires, so a kubelet-restarted container stays gated (init containers do
+  <strong>not</strong> re-run on a same-pod container restart — see "Restart Re-Gating").
+  Native, preserves container isolation, no extra RBAC.</li>
+<li><strong><code>signal</code></strong> — The webhook sets <code>shareProcessNamespace: true</code>; the sidecar
+  finds the main process and sends <code>SIGTERM</code> then <code>SIGKILL</code>, re-signalling on
+  every restart until it re-acquires. More immediate, but every container in the
+  pod can see and signal every other one (weaker isolation) and PID-1 signal
+  semantics vary by image. Reserved for cases where probe injection is not
+  viable (no shell in the image, or a liveness probe is already in use).</li>
+</ul>
+<p>Both are <strong>best-effort within a bounded window</strong>: there is a detection +
+kill latency between lease loss and the main container actually stopping. This
+strengthens at-most-once at the process level but does <strong>not</strong> replace the
+fencing token, which remains the real boundary for any downstream resource that
+must reject a stale holder.</p>
+<h4 id="restart-re-gating">Restart Re-Gating</h4>
+<p>A kubelet container restart (from a failed probe or a signal kill) does <strong>not</strong>
+re-run completed init containers. The sidecar is therefore responsible for
+keeping the main container gated after it stops it: it must hold the probe
+marker absent (or keep re-signalling) until it has re-acquired the lease, at
+which point it restores the marker and lets the main container run. This turns
+"lease lost" into a controlled crashloop rather than an unguarded restart.</p>
+<p>Guarantee:</p>
+<ul>
+<li>At most one candidate holder runs its main container at a time, subject to the
+  store's linearizability, the TTL window, and the enforcement detection+kill
+  latency.</li>
+<li>Runtime enforcement lasts only while the sidecar is running and renewing. If
+  the sidecar itself dies, the native-sidecar <code>restartPolicy: Always</code> restarts
+  it; until it is back and has re-confirmed the lease, the marker stays red.</li>
+<li>Strong end-to-end fencing for downstream systems still requires token-aware
+  behavior on those systems; pod-level enforcement bounds, but does not
+  eliminate, the overlap window.</li>
+</ul>
+<p>Use cases:</p>
+<ul>
+<li>Legacy/vendor singleton pods where the application image cannot embed Berth
+  client logic.</li>
+<li>A future active/warm handoff flow, once the explicit selection protocol is
+  designed and implemented.</li>
+</ul>
+<p>Holder identity:</p>
+<ul>
+<li>Runtime singleton must use a unique candidate identity by default. For Pods,
+  the default should include namespace, owner reference lineage where
+  discoverable, pod name, and cluster identity when available.</li>
+<li>Workload-level holder identities are dangerous in this mode. With Berth's
+  current same-holder acquire semantics, multiple pods sharing a holder
+  identity can all renew the same lease and all become active.</li>
+<li>Workload-level or cluster-level holder identities may be allowed later only
+  with additional protocol support that prevents multiple pods from passing the
+  gate under the same holder.</li>
+</ul>
+<h2 id="proposed-label-annotation-contract-v1">Proposed Label / Annotation Contract (v1)</h2>
+<p>This section defines a precise, spec-like contract for the labels and annotations used to opt Pods into the injected <code>berth-acquire</code> path.</p>
+<p>This contract is the v1 opt-in surface chosen <strong>in lieu of a CRD</strong> — see
+<a href="../../adr/0002-label-annotation-opt-in-over-crd/">ADR-0002</a> and the Decision
+Record below.</p>
+<p>All keys live under the <code>berth.skaphos.io/</code> prefix.</p>
+<h3 id="label-keys-selection-intent">Label Keys (Selection &amp; Intent)</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Required</th>
+<th>Valid Values (v1)</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>berth.skaphos.io/inject</code></td>
+<td>string</td>
+<td>Yes</td>
+<td><code>acquire</code></td>
+<td>Opt-in marker. The webhook will only consider Pods whose pod template labels are copied onto the created Pod.</td>
+</tr>
+</tbody>
+</table>
+<p>Future label (not in v1): <code>berth.skaphos.io/workload-type</code>
+(<code>singleton</code> | <code>active-warm</code>).</p>
+<p><strong>Webhook behavior on invalid <code>inject</code> label value</strong>: Skip mutation (do not fail the Pod).</p>
+<h3 id="annotation-keys-behavior-configuration">Annotation Keys (Behavior &amp; Configuration)</h3>
+<p>All annotations are optional unless marked required.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Format / Constraints</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>berth.skaphos.io/lease-name</code></td>
+<td>string</td>
+<td><strong>Yes</strong></td>
+<td>—</td>
+<td>Non-empty DNS label-compatible string</td>
+<td>Name of the Berth API lease to acquire.</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/lease-namespace</code></td>
+<td>string</td>
+<td>No</td>
+<td>Pod's own namespace</td>
+<td>Valid namespace name</td>
+<td>Namespace of the Berth API lease.</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/mode</code></td>
+<td>string</td>
+<td>No</td>
+<td><code>runtime-singleton</code></td>
+<td><code>startup-gate</code> | <code>runtime-singleton</code></td>
+<td>Selects the injected helper mode.</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/holder-identity</code></td>
+<td>string</td>
+<td>No</td>
+<td>Mode-specific default</td>
+<td>Non-empty string</td>
+<td>Identity used for Acquire/Renew/Release. See "Holder Identity Defaulting".</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/ttl-seconds</code></td>
+<td>int32</td>
+<td>No</td>
+<td>Chart/helper default</td>
+<td>&gt; 0</td>
+<td>TTL used for Acquire/Renew calls.</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/heartbeat-interval-seconds</code></td>
+<td>int32</td>
+<td>No</td>
+<td>Derived from TTL</td>
+<td>&gt; 0 and &lt; TTL</td>
+<td>Runtime singleton renew interval. Ignored by startup gate after init exits.</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/release-on-shutdown</code></td>
+<td>string</td>
+<td>No</td>
+<td><code>true</code> in runtime singleton, <code>false</code> in startup gate</td>
+<td><code>true</code> | <code>false</code></td>
+<td>Whether the sidecar should attempt a best-effort Release on SIGTERM / graceful shutdown.</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/enforce</code></td>
+<td>string</td>
+<td>No</td>
+<td><code>probe</code></td>
+<td><code>probe</code> | <code>signal</code></td>
+<td>Runtime singleton only. How the sidecar stops the main container on lease loss. <code>probe</code>: injected exec liveness probe + shared health marker (kubelet kills). <code>signal</code>: <code>shareProcessNamespace</code> + SIGTERM/SIGKILL. Ignored by startup gate.</td>
+</tr>
+<tr>
+<td><code>berth.skaphos.io/enforce-grace-seconds</code></td>
+<td>int32</td>
+<td>No</td>
+<td>Derived from pod <code>terminationGracePeriodSeconds</code></td>
+<td>≥ 0</td>
+<td><code>signal</code> mode only. Seconds between SIGTERM and SIGKILL to the main process.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="auth-api-server-discovery-dual-support">Auth / API Server Discovery (Dual Support)</h4>
+<p>The contract deliberately does <strong>not</strong> define a single mandated way to reach the Berth API server. Two supported models exist in v1:</p>
+<ul>
+<li><strong>Direct to central Berth API server</strong>: The helper expects standard Berth client configuration (API URL, credentials, CA bundle) to be present in the environment or via well-known file paths. The user (or platform) is responsible for populating this (via Secret, ConfigMap, projected volumes, etc.).</li>
+<li><strong>Via local broker</strong>: When a local OIDC / token broker is deployed alongside the Berth operator in the cluster, the helper may obtain tokens and routing information through that local component instead of talking directly to the central API.</li>
+</ul>
+<p><strong>Guidance</strong>:
+- Use the local broker path when the platform wants to own auth surface and reduce secret distribution to workloads.
+- Use direct central when teams need full control or the local broker is not present / not trusted for this workload.</p>
+<p>The helper must support both modes. Exact environment variables, file paths, and token acquisition mechanisms for each mode will be defined during implementation of SKA-438.</p>
+<h3 id="holder-identity-defaulting">Holder Identity Defaulting</h3>
+<p>Holder identity defaults are mode-specific because Berth's current acquire
+semantics renew a lease when the incoming holder matches the current holder.
+That behavior is useful for a long-lived holder, but unsafe if multiple pods
+share the same holder identity in runtime singleton mode.</p>
+<p>The first segment is the <strong>tenant-owning root</strong> — the cluster identity when
+configured, otherwise the pod namespace — and is separated from the rest of the
+hierarchy by <code>/</code>, with the remaining segments joined by <code>:</code>. This is required
+for holder authorization (SKA-446): the API server admits a holder only when it
+equals the caller's tenant or is scoped under <code>"&lt;tenant&gt;/"</code>, so a purely
+<code>:</code>-joined holder is rejected <code>403</code> on any authenticated backend. Deployments
+therefore set the tenant (static-key id or OIDC claim) equal to that root
+segment — e.g. key id == <code>--cluster-id</code>.</p>
+<p><strong>Startup gate default (v1)</strong>:
+- Derive from the owning controller of the Pod when available:
+  <code>namespace</code> + <code>kind</code> + <code>name</code>.
+- Example: <code>prod/deployment:checkout-service</code>.
+- This may allow multiple pods from the same workload to pass startup if they
+  share the holder identity. That is acceptable only because startup gate does
+  not provide runtime singleton behavior.</p>
+<p><strong>Runtime singleton default (v1)</strong>:
+- Derive a unique candidate identity from cluster identity, namespace, owner
+  reference lineage where discoverable, and pod name.
+- Example: <code>east/prod:deployment:checkout-service:pod:checkout-service-7f6c9b9d8d-j4n8x</code>
+  (tenant <code>east</code> owns it).
+- If cluster identity is not configured, the webhook or helper must still
+  include pod identity so replicas do not share a holder by accident, and the
+  namespace becomes the <code>/</code>-rooted owner.</p>
+<p><strong>Override behavior</strong>:
+- If the <code>berth.skaphos.io/holder-identity</code> annotation is present on the Pod
+  template, it <strong>completely replaces</strong> the default.
+- Overrides in runtime singleton mode are advanced usage. A shared holder
+  identity can defeat singleton enforcement unless another mechanism prevents
+  multiple pods from passing the gate.</p>
+<p>This design intentionally does not make workload-level holder identity the
+runtime singleton default.</p>
+<h3 id="validation-error-behavior-webhook">Validation &amp; Error Behavior (Webhook)</h3>
+<p>The webhook must enforce the following in v1:</p>
+<ul>
+<li>If <code>berth.skaphos.io/inject=acquire</code> is present but <code>berth.skaphos.io/lease-name</code> is missing or empty → <strong>Fail the Pod</strong> (or configurable failure policy).</li>
+<li>Unknown values for <code>berth.skaphos.io/mode</code> → reject the Pod in fail-closed mode, or skip mutation only when the Helm-configured failure policy is explicitly <code>Ignore</code>.</li>
+<li>Unknown values for <code>berth.skaphos.io/enforce</code> → reject the Pod (same fail-policy handling as <code>mode</code>).</li>
+<li><code>enforce=probe</code> assumes the main container image can run the marker check (a shell or a static check binary the webhook injects via the shared volume). The webhook <strong>cannot</strong> introspect image contents at admission, so it cannot reject a shell-less image; it must document that a probe that can never pass will crashloop the main container, and recommend <code>enforce=signal</code> for such images. Injecting a small static check binary onto the shared volume (so the probe does not depend on a shell in the target image) is the preferred way to keep <code>probe</code> viable for distroless/scratch images and should be the default helper behavior.</li>
+<li><code>enforce=signal</code> requires <code>shareProcessNamespace: true</code>; the webhook sets it and must reject the Pod if a conflicting explicit <code>shareProcessNamespace: false</code> is already set rather than silently overriding it.</li>
+<li>Negative or zero <code>berth.skaphos.io/ttl-seconds</code> / <code>berth.skaphos.io/heartbeat-interval-seconds</code> → reject the Pod.</li>
+<li>Runtime singleton mode with an explicitly shared holder identity should warn
+  through events/logs and may be rejected once the exact validation rule is
+  defined.</li>
+<li>The webhook should never mutate Pods belonging to the Berth control plane itself.</li>
+</ul>
+<p>More detailed validation rules and failure policy configuration (per-namespace or via webhook configuration) will be defined as part of the webhook implementation (SKA-439).</p>
+<p>The exact final set of keys, value formats, and validation rules will be locked during the design review of this document and the implementation of the helper and webhook.</p>
+<h2 id="webhook-design">Webhook Design</h2>
+<ul>
+<li>Mutates created Pods whose labels include the opt-in label. Standard
+  workload controllers copy <code>spec.template.metadata.labels</code> onto created Pods.
+  The opt-in label/annotations must therefore live on the pod template:</li>
+<li>Deployment / StatefulSet / DaemonSet / Job: <code>spec.template.metadata</code>.</li>
+<li><strong>CronJob</strong>: <code>spec.jobTemplate.spec.template.metadata</code> (two levels deeper —
+    a common mislabeling trap; call it out in docs and examples).</li>
+<li>Never mutates objects in the Berth control-plane namespaces.</li>
+<li>Idempotent: re-mutation of an already-injected pod is a no-op or safe update.</li>
+<li>Failure policy: configurable (Fail vs. Ignore) via Helm values.</li>
+<li>Object and namespace selectors supported for blast-radius control.</li>
+</ul>
+<p>The webhook will inject:
+- Startup gate: init container image + command/args.
+- Runtime singleton: init container plus a <strong>native sidecar</strong> (init container
+  with <code>restartPolicy: Always</code>) so Jobs/CronJobs can still complete.
+- A shared <code>emptyDir</code> volume (<code>/berth</code>) for the fencing token, holder identity,
+  and the health marker.
+- <code>enforce=probe</code>: an injected <code>exec</code> liveness probe on each main container, plus
+  a static check binary on the shared volume so the probe does not require a
+  shell in the target image.
+- <code>enforce=signal</code>: <code>shareProcessNamespace: true</code> on the pod spec.
+- Environment variables and volume mounts for auth/config.
+- Any required service account token or projected volumes.</p>
+<h2 id="helper-binary-berth-acquire-lifecycle">Helper Binary (<code>berth-acquire</code>) Lifecycle</h2>
+<p><strong>Startup gate mode</strong>:
+- Blocks until successful <code>Acquire</code>.
+- Exits 0 so the main container can start.
+- Does not renew the lease after exit.
+- Does not release the lease on pod shutdown because no helper process remains.
+- On failure (policy dependent): crash or exit non-zero.</p>
+<p><strong>Runtime singleton mode</strong>:
+- Init container blocks until successful <code>Acquire</code>, then writes the fencing
+  token, holder identity, and health marker to the shared volume.
+- Sidecar performs continuous heartbeats while the main container runs.
+- If <code>Renew</code> reports lease loss, the sidecar <strong>enforces</strong> per <code>enforce</code>: removes
+  the marker (<code>probe</code>) or signals the main process (<code>signal</code>), records a clear
+  log/event, keeps the main container stopped, and retries <code>Acquire</code>. It
+  restores the marker / stops signalling only after re-acquiring. (See
+  "Restart Re-Gating".)
+- The sidecar reuses the same reacquire-after-expiry logic the operator uses;
+  see SKA-436 for the failover-after-TTL-expiry bug this must not reintroduce.
+- On SIGTERM / shutdown: best-effort <code>Release</code>.</p>
+<p><strong>Explicit Release for Controlled Failover</strong>:
+- Runtime singleton mode is the only injected mode where controlled failover
+  can make sense.
+- The helper may later support being told to release the lease so another
+  candidate can acquire.
+- The current Berth API requires <code>holder</code> plus <code>fencingToken</code> to release a
+  lease. Any external release/selection design must define how automation
+  learns those values without weakening fencing semantics.
+- The design must define the exact mechanism for "I am the chosen active
+  system" signaling to a standby before claiming deliberate active system
+  selection as a v1 behavior.</p>
+<p>Deeper coupling (the helper influencing pod readiness, traffic steering, or
+<code>BerthLease</code> target actions) is deferred.</p>
+<h2 id="configuration-discovery-gitops-friendly">Configuration Discovery (GitOps Friendly)</h2>
+<p>Preferred patterns (in priority order):
+1. Projected volumes / mounted Secrets/ConfigMaps (recommended for GitOps).
+2. Downward API + well-known paths.
+3. Annotation values (less preferred for secrets).
+4. Environment variables injected by the webhook from chart defaults.</p>
+<p>The helper reuses the existing Berth Go client auth stack (static token, token file, OIDC broker output, TLS CA).</p>
+<h2 id="workload-examples">Workload Examples</h2>
+<h3 id="deployment-runtime-singleton-legacy-cross-cluster-singleton">Deployment — runtime singleton (legacy cross-cluster singleton)</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Deployment</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">checkout-service</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">  </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">checkout-service</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/inject</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acquire</span><span class="w">        </span><span class="c1"># opt-in (copied onto Pods)</span>
+<span class="w">      </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/lease-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">checkout-singleton</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runtime-singleton</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/enforce</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">probe</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/ttl-seconds</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30&quot;</span>
+<span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">app</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vendor/checkout:1.4.2</span><span class="w">   </span><span class="c1"># unmodifiable image</span>
+</code></pre></div>
+<h3 id="statefulset-runtime-singleton">StatefulSet — runtime singleton</h3>
+<p>Identical opt-in on <code>spec.template.metadata</code>. Holder identity defaults to a
+unique per-pod value, so the stable StatefulSet pod name is folded into the
+identity; only one ordinal runs behind the lease at a time.</p>
+<h3 id="job-startup-gate-recommended-for-run-to-completion">Job — startup gate (recommended for run-to-completion)</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">batch/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Job</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/inject</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acquire</span>
+<span class="w">      </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/lease-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nightly-export</span>
+<span class="w">        </span><span class="nt">berth.skaphos.io/mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">startup-gate</span><span class="w">     </span><span class="c1"># gate start; let the Job run/complete</span>
+<span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span>
+<span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">export</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vendor/export:2</span>
+</code></pre></div>
+<p>Runtime singleton on a Job is allowed (native sidecar lets the Job complete),
+but startup-gate is usually the right fit: the Job should run to completion once
+it has won the lease, not be killed mid-run on a transient renew blip.</p>
+<h3 id="cronjob-note-the-deeper-label-path">CronJob — note the deeper label path</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">batch/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CronJob</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
+<span class="w">  </span><span class="nt">jobTemplate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">metadata</span><span class="p">:</span><span class="w">                                </span><span class="c1"># &lt;-- spec.jobTemplate.spec.template.metadata</span>
+<span class="w">          </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">berth.skaphos.io/inject</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acquire</span>
+<span class="w">          </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">berth.skaphos.io/lease-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hourly-rollup</span>
+<span class="w">            </span><span class="nt">berth.skaphos.io/mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">startup-gate</span>
+<span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span>
+<span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rollup</span>
+<span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vendor/rollup:7</span>
+</code></pre></div>
+<h3 id="resulting-mutated-pod-runtime-singleton-enforceprobe">Resulting mutated Pod (runtime singleton, <code>enforce=probe</code>)</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">volumes</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">berth-state</span>
+<span class="w">      </span><span class="nt">emptyDir</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">initContainers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">berth-acquire</span><span class="w">            </span><span class="c1"># blocking init: the &quot;hold&quot;</span>
+<span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/skaphos/berth-acquire:&lt;tag&gt;</span>
+<span class="w">      </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;acquire&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;--lease=checkout-singleton&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;--ttl=30s&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">volumeMounts</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">berth-state</span><span class="p p-Indicator">,</span><span class="nt"> mountPath</span><span class="p">:</span><span class="w"> </span><span class="nv">/berth</span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">berth-sidecar</span><span class="w">            </span><span class="c1"># native sidecar: renew + enforce</span>
+<span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/skaphos/berth-acquire:&lt;tag&gt;</span>
+<span class="w">      </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
+<span class="w">      </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;renew&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;--lease=checkout-singleton&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;--enforce=probe&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">volumeMounts</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">berth-state</span><span class="p p-Indicator">,</span><span class="nt"> mountPath</span><span class="p">:</span><span class="w"> </span><span class="nv">/berth</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">app</span>
+<span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vendor/checkout:1.4.2</span>
+<span class="w">      </span><span class="nt">livenessProbe</span><span class="p">:</span><span class="w">                 </span><span class="c1"># injected: kubelet kills on lease loss</span>
+<span class="w">        </span><span class="nt">exec</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/berth/check&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;/berth/healthy&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">        </span><span class="nt">failureThreshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">      </span><span class="nt">volumeMounts</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">berth-state</span><span class="p p-Indicator">,</span><span class="nt"> mountPath</span><span class="p">:</span><span class="w"> </span><span class="nv">/berth</span><span class="p p-Indicator">,</span><span class="nt"> readOnly</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>(With <code>enforce=signal</code>, drop the injected probe, set
+<code>spec.shareProcessNamespace: true</code>, and the sidecar signals the main PID.)</p>
+<h2 id="decision-record-labelsannotations-vs-wrapper-crd">Decision Record: Labels/Annotations vs. Wrapper CRD</h2>
+<blockquote>
+<p>Recorded as <a href="../../adr/0002-label-annotation-opt-in-over-crd/">ADR-0002</a>. The
+"Proposed Label / Annotation Contract" section above is the concrete opt-in
+surface chosen here in lieu of a CRD.</p>
+</blockquote>
+<p><strong>Decision (v1): use the label/annotation contract on the pod template; do not
+introduce a wrapper CRD yet.</strong></p>
+<p>Rationale:</p>
+<ul>
+<li>The mutation boundary is a Pod; labels/annotations on the pod template are the
+  native Kubernetes way to opt in and are copied onto Pods by every standard
+  workload controller. A CRD would add a second control loop competing with the
+  workload controller for no v1 benefit.</li>
+<li>The injected path deliberately does <strong>not</strong> depend on <code>BerthLease</code>; adding a
+  new CRD here would re-introduce a control-plane object on a path whose whole
+  point is "no extra objects, just gate the pod."</li>
+<li>GitOps users already template labels/annotations; no new API to learn.</li>
+</ul>
+<p>Revisit a wrapper CRD when (and only when) any of these become true:</p>
+<ul>
+<li>The contract needs validation/defaulting richer than a webhook on annotations
+  can express cleanly.</li>
+<li>We add a first-class "active system selection" primitive (see Open Questions)
+  that benefits from its own spec/status.</li>
+<li>Users need a queryable, status-bearing object ("which pod holds lease X?")
+  that the Pod + events cannot satisfy.</li>
+</ul>
+<p>This is recorded as a decision, not a non-goal: the CRD is deferred with
+explicit re-open criteria, and may be extracted into an ADR if pursued.</p>
+<h2 id="operational-considerations">Operational Considerations</h2>
+<ul>
+<li><strong>Rolling updates stall up to one TTL (runtime singleton).</strong> With unique
+  per-pod holder identity, a new rollout pod cannot acquire until the outgoing
+  pod's lease frees. Graceful termination releases it (<code>release-on-shutdown:
+  true</code>), but <code>SIGKILL</code> / OOM / node drain do not — the new pod then blocks at
+  its init "hold" for up to the TTL. Keep TTL modest (e.g. 15–30s) for workloads
+  that roll often, and document the expected stall.</li>
+<li><strong>Failover RTO ≈ TTL + reacquire interval</strong>, matching the operator path. The
+  sidecar's reacquire-after-expiry path is the same logic SKA-436 fixed for the
+  operator; SKA-438 must carry that behavior (and a regression test) so a lost
+  holder is actually succeeded.</li>
+<li><strong>More holders than the operator path.</strong> Every opted-in replica is a potential
+  holder, so the enforcement code (kill + re-gate + release) runs in many more
+  places with less operational visibility than one operator per cluster. This is
+  the central reason the path remains a fallback.</li>
+</ul>
+<h2 id="security-safety-considerations">Security &amp; Safety Considerations</h2>
+<ul>
+<li>Webhook must not grant excessive permissions to injected pods.</li>
+<li>Runtime singleton holder identity is per-candidate by default — this
+  increases the number of potential holders compared with operator-as-holder.</li>
+<li>Startup gate mode does not provide runtime singleton enforcement after the
+  init container exits.</li>
+<li><code>enforce=signal</code> requires <code>shareProcessNamespace: true</code>, which lets every
+  container in the pod see and signal every other container's processes and
+  read <code>/proc</code>. Prefer <code>enforce=probe</code> (kubelet does the kill, isolation
+  preserved); reserve <code>signal</code> for images where the probe cannot run.</li>
+<li>Enforcement is bounded best-effort: a detection+kill window exists between
+  lease loss and the main container stopping. Fencing token usage remains
+  critical for safe release on deletion/shutdown.</li>
+<li>The design must document the larger split-brain window compared with the operator-as-holder path and recommended mitigations.</li>
+</ul>
+<h2 id="observability">Observability</h2>
+<ul>
+<li>The helper should emit structured logs and (optionally) metrics around acquire/renew/release/failover events.</li>
+<li>Users must be able to answer "which pod currently holds lease X?" when using this path.</li>
+<li>Events on the Pod and helper logs are required signals. Events on
+  <code>BerthLease</code> remain useful when a CRD participates in the workflow, but the
+  injected helper talks to the Berth API lease model directly.</li>
+</ul>
+<h2 id="open-questions-future-work">Open Questions &amp; Future Work</h2>
+<ul>
+<li>Exact shape of the "active system selection" primitive (annotation? separate API? lease status update?).</li>
+<li>Whether the helper should expose a readiness endpoint or file that the main container can use.</li>
+<li>Richer workload integration beyond scale (readiness gates, traffic routing).</li>
+<li>CRD wrapper in a later phase.</li>
+<li>Multi-lease pods and complex holder-identity strategies.</li>
+</ul>
+<h2 id="decision-records">Decision Records</h2>
+<p>The architecturally significant decisions in this design are recorded as ADRs
+(immutable once accepted; supersede rather than edit):</p>
+<ul>
+<li><a href="../../adr/0001-pod-level-gating-for-injected-singletons/">ADR-0001</a> — pod-level
+  gating, not <code>BerthLease</code> scale actions.</li>
+<li><a href="../../adr/0002-label-annotation-opt-in-over-crd/">ADR-0002</a> — label/annotation
+  opt-in via a mutating webhook, in lieu of a wrapper CRD.</li>
+<li><a href="../../adr/0003-sidecar-runtime-enforcement-by-container-kill/">ADR-0003</a> —
+  enforce at-most-once by killing the main container; <code>probe</code> default, <code>signal</code>
+  opt-in.</li>
+</ul>
+<h2 id="references">References</h2>
+<ul>
+<li>Linear: SKA-268, SKA-271, SKA-274, SKA-437 (and children 438–441)</li>
+<li><code>api/v1alpha1/types.go</code> — <code>BerthLease</code>, <code>LeaseAction</code>, <code>ScaleAction</code></li>
+<li><code>docs/architecture.md</code> — current failure and workload action behavior</li>
+<li>Existing Berth Go client auth and lease package</li>
+</ul>
+<hr />
+<p><strong>Resolved in this revision</strong>:
+- Active enforcement (sidecar kills the main container on lease loss) is now a
+  v1 behavior of runtime singleton, via <code>enforce=probe</code> (default) / <code>signal</code>.
+- Activation model clarified: pod-level gating, not <code>AcquireAction</code>/
+  <code>ReleaseAction</code> scaling — parent tickets need their AC corrected to match.
+- Added workload examples, mutated pod spec, and the labels-vs-CRD decision.</p>
+<p><strong>Still open</strong>:
+- Review with team and lock the final key/value set.
+- Flesh out the explicit external "active system selection" failover mechanism
+  (still future; see Open Questions).
+- Decide on final home for the comparison matrix (here vs. user docs in SKA-441).
+- Confirm the static probe-check binary approach for distroless/scratch images.</p>
+<p>This document will be updated as the design progresses. Major decisions may be extracted into separate ADRs in <code>docs/adr/</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1308 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Distributed lease coordination for Kubernetes multi-cluster workloads.">
+      
+      
+      
+        <link rel="canonical" href="https://skaphos.github.io/berth/0.3.1/concepts/">
+      
+      
+        <link rel="prev" href="../getting-started/">
+      
+      
+        <link rel="next" href="../architecture/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Concepts - Berth</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#concepts" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Berth
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Concepts
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Berth
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem-berth-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem Berth solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#leases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Leases
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#holder-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Holder identity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ttl-heartbeat-and-failover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TTL, heartbeat, and failover
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fencing-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fencing tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lease-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lease semantics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connecting-a-lease-to-a-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connecting a lease to a workload
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Connecting a lease to a workload">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#declarative-berthlease-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declarative: BerthLease + operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-integration-go-client-or-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct integration: Go client or injection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#topologies-and-storage-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Topologies and storage backends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication-and-authorization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication and authorization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workload Gating (Injection)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api-versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Versioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem-berth-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem Berth solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#leases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Leases
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#holder-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Holder identity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ttl-heartbeat-and-failover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TTL, heartbeat, and failover
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fencing-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fencing tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lease-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lease semantics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#connecting-a-lease-to-a-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connecting a lease to a workload
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Connecting a lease to a workload">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#declarative-berthlease-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declarative: BerthLease + operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-integration-go-client-or-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct integration: Go client or injection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#topologies-and-storage-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Topologies and storage backends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication-and-authorization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication and authorization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/skaphos/berth/edit/main/docs/concepts.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="concepts">Concepts</h1>
+<p>This page builds the mental model behind Berth: what a lease is, who can hold
+one, how holders keep (or lose) it, and the two ways you wire a lease to a
+workload. It is the "why it behaves that way" companion to the
+<a href="../getting-started/">Getting Started</a> tutorial and the
+<a href="../architecture/">Architecture</a> reference.</p>
+<h2 id="the-problem-berth-solves">The problem Berth solves</h2>
+<p>Kubernetes <code>coordination.k8s.io/Lease</code> objects are <strong>cluster-local</strong>. Two
+identical workloads in two different clusters cannot see each other's native
+leases, so neither can decide "only one of us should be active right now." That
+is exactly the situation when you run the same job in multiple clusters for
+availability but need <em>at most one</em> of them doing the work — a singleton
+consumer, a leader-only batch job, a cron that must not double-fire.</p>
+<p>Berth adds a <strong>central lease surface</strong> that every participating cluster talks to,
+so they share one authoritative answer to "who may act?"</p>
+<h2 id="leases">Leases</h2>
+<p>A <strong>lease</strong> is a named, time-bounded, single-holder claim. It is identified by a
+<strong>namespace</strong> and a <strong>name</strong> (for example <code>pipeline/ingest-worker</code>), and at any
+moment it has at most one holder.</p>
+<p>The two segments have a required shape, checked on every lease request: the
+namespace must be an RFC 1123 <strong>DNS label</strong> (lowercase alphanumerics and <code>-</code>,
+at most 63 characters — no dots), the name an RFC 1123 <strong>DNS subdomain</strong>
+(dots allowed), and the dot-joined pair at most 253 characters. This mirrors
+how Kubernetes names namespaces, and it is a safety rule, not a style rule:
+it guarantees two distinct keys can never collide into one stored object in
+any backend, so no tenant can address another tenant's lease by crafting an
+ambiguous key. Requests with malformed segments are rejected with <code>400</code> and a
+message naming the offending field.</p>
+<p>A lease's record tracks:</p>
+<ul>
+<li>the <strong>holder identity</strong> — who currently owns it,</li>
+<li>a <strong>TTL</strong> — how long the claim survives without renewal,</li>
+<li>acquisition and last-renewal timestamps,</li>
+<li>a monotonic <strong>fencing token</strong>.</li>
+</ul>
+<p>The authoritative copy lives in the central API server's store, not in any one
+cluster. Clusters don't coordinate with each other directly; they each talk to
+the API server, which arbitrates.</p>
+<div class="admonition note">
+<p class="admonition-title">What a lease is <em>not</em></p>
+<p>A lease is not a scheduler, a queue, or a lock you <code>Lock()</code>/<code>Unlock()</code>
+synchronously. It is a <em>claim with an expiry</em>. Holders must keep renewing it,
+and if they stop, it lapses. Berth decides <strong>who may act</strong>, never <strong>when work
+is created</strong>.</p>
+</div>
+<h2 id="holder-identity">Holder identity</h2>
+<p>The <strong>holder identity</strong> is the string that owns the lease. Whoever presents the
+matching identity (and a valid fencing token) may renew or release it.</p>
+<p>How the identity is chosen depends on how you use Berth:</p>
+<ul>
+<li><strong>Operator as holder (declarative).</strong> Each <code>berth-operator</code> competes on behalf
+  of its cluster. Its identity comes from the <code>--cluster-id</code> flag when set,
+  otherwise from the <code>BerthLease</code>'s <code>spec.holderIdentity</code>. This is why you give
+  east and west <em>distinct</em> <code>--cluster-id</code>s but apply the <em>same</em> <code>BerthLease</code> to
+  both — same lease name, different contenders.</li>
+<li><strong>Direct integration.</strong> Code using the <a href="https://github.com/skaphos/berth/tree/main/pkg/client">Go client</a> or the
+  injected <code>berth-acquire</code> helper supplies its own holder string (for injected
+  pods, typically derived from the pod/workload identity).</li>
+</ul>
+<p>A caller may only act as a holder its tenant owns — authorization rejects
+acquiring or renewing under a holder string that belongs to another tenant, so a
+holder cannot impersonate another after that holder's lease expires. See
+<a href="../architecture/#authorization">Architecture → Authorization</a>.</p>
+<h2 id="ttl-heartbeat-and-failover">TTL, heartbeat, and failover</h2>
+<p>Two durations govern a lease's lifetime:</p>
+<ul>
+<li><strong>TTL</strong> (<code>ttlSeconds</code>) — how long the claim lives without a renewal. If the
+  holder goes silent for longer than the TTL, the lease is considered expired and
+  becomes available to others.</li>
+<li><strong>Heartbeat</strong> (<code>heartbeatIntervalSeconds</code>) — how often the holder renews. The
+  heartbeat must be comfortably shorter than the TTL so a renewal or two can be
+  lost without losing the lease.</li>
+</ul>
+<p>A standby that does <em>not</em> hold the lease keeps retrying acquisition on an
+interval of <strong><code>min(heartbeat, ttl/3)</code></strong>. So worst-case failover time is bounded
+by roughly <strong>TTL + the standby's reacquire interval</strong>:</p>
+<div class="highlight"><pre><span></span><code>holder stops renewing ──▶ TTL elapses ──▶ standby&#39;s next acquire wins
+        t=0                  t≈TTL              t≈TTL + reacquire
+</code></pre></div>
+<p>With <code>ttlSeconds: 15</code> and <code>heartbeatIntervalSeconds: 5</code>, takeover lands in about
+25 seconds. Lower the TTL for faster failover at the cost of more renewal traffic
+and less tolerance for transient API-server blips; raise it for the opposite
+trade-off.</p>
+<p>TTL expiry is enforced <strong>lazily</strong> — it is checked during the next acquire or
+renew, so correctness never depends on a background sweep running on time.</p>
+<h2 id="fencing-tokens">Fencing tokens</h2>
+<p>Every lease carries a <strong>fencing token</strong>: a monotonically increasing integer that
+<strong>bumps on each fresh acquisition</strong> (after a release or an expiry) and <strong>stays
+constant across renewals by the same holder</strong>. Clients must send the token on
+renew and release.</p>
+<p>This is the guard against a <em>stale holder</em> — one that lost the lease (say, after
+a network partition) but doesn't know it yet. Its token is now behind the
+current one, so the API server rejects its renew/release calls.</p>
+<p>Monotonicity holds across the <strong>entire life of the key</strong>, not just one
+holder's tenure: releasing a lease (or having it garbage-collected after
+expiry) leaves a small <strong>tombstone</strong> record behind that preserves the
+highest token ever issued, and the next acquisition always goes strictly
+past it. A token value, once issued for a key, is never issued again. That
+is what makes the downstream guidance below sound — a downstream can keep
+only the highest token it has seen and reject anything at or below it.</p>
+<p>The token is a 32-bit counter with a hard ceiling that refuses to wrap, so a
+reused token can never silently authorize a stale write. Because the counter
+now survives release and garbage collection, the ceiling is cumulative over
+the key's lifetime — still ~2.1 billion holder transitions, unreachable at
+any realistic failover rate.</p>
+<div class="admonition warning">
+<p class="admonition-title">Fencing protects the lease, not your downstream</p>
+<p>Berth rejects stale lease operations by token, but it cannot fence <em>your</em>
+side effects. If a brief <a href="../architecture/#failure-behavior">split-brain</a>
+window matters for, say, writes to a shared database, your workload needs to
+carry the fencing token through to that downstream system and have the
+downstream reject stale tokens too.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Tombstones and out-of-band deletion</p>
+<p>Tombstones are how the token high-water mark survives: Berth never
+deletes a lease record, it only clears the holder. One O(1) record per
+distinct key ever used stays in the backing store. Deleting a record out
+of band (a SQL <code>DELETE</code>, <code>kubectl delete lease</code> in the coordination
+namespace) resets that key's token history and forfeits the
+never-reused guarantee for it — don't do it while anything downstream
+still compares tokens for that key.</p>
+</div>
+<h2 id="lease-semantics">Lease semantics</h2>
+<p><code>spec.semantics</code> selects the lease-window behavior:</p>
+<ul>
+<li><strong><code>at-most-once</code></strong> — the implemented exclusive-holder mode. One holder at a
+  time; this is what you want for "never run two copies."</li>
+<li><strong><code>at-least-once</code></strong> — accepted by the schema but <strong>currently behaves the same
+  as <code>at-most-once</code></strong> (exclusive holder) until the central manager implements
+  distinct at-least-once windows. Don't rely on at-least-once semantics yet.</li>
+</ul>
+<h2 id="connecting-a-lease-to-a-workload">Connecting a lease to a workload</h2>
+<p>Holding a lease is only useful if something <em>happens</em> when you win or lose it.
+There are two ways to wire that up.</p>
+<h3 id="declarative-berthlease-operator">Declarative: <code>BerthLease</code> + operator</h3>
+<p>A <code>BerthLease</code> custom resource ties a lease to a target workload and an action
+for each transition:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec.target</code></td>
+<td>The workload to act on, in the same namespace as the <code>BerthLease</code>.</td>
+</tr>
+<tr>
+<td><code>spec.acquireAction</code></td>
+<td>Applied when this cluster <strong>wins</strong> the lease.</td>
+</tr>
+<tr>
+<td><code>spec.releaseAction</code></td>
+<td>Applied when this cluster <strong>loses</strong> or never had it.</td>
+</tr>
+</tbody>
+</table>
+<p>Each action is one of:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Effect</th>
+<th>Typical target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scale</code></td>
+<td>Patches the target's scale subresource (replica count).</td>
+<td><code>Deployment</code>, <code>StatefulSet</code>, <code>ReplicaSet</code></td>
+</tr>
+<tr>
+<td><code>suspend</code></td>
+<td>Patches the target's <code>spec.suspend</code>.</td>
+<td><code>CronJob</code></td>
+</tr>
+</tbody>
+</table>
+<p>The operator reconciles the loop for you: acquire/renew, apply <code>acquireAction</code>
+when held and <code>releaseAction</code> when not, and on deletion do a best-effort release.
+This is the path the <a href="../getting-started/">Getting Started</a> tutorial uses.</p>
+<h3 id="direct-integration-go-client-or-injection">Direct integration: Go client or injection</h3>
+<p>When you'd rather drive the lease yourself, or you can't model the workload as a
+single scalable target:</p>
+<ul>
+<li><strong><a href="https://github.com/skaphos/berth/tree/main/pkg/client">Go client</a></strong> (<code>pkg/client</code>) — call acquire/renew/release
+  from your own code and gate behavior on the result. You own the heartbeat loop
+  and the fencing token.</li>
+<li><strong>Injected <code>berth-acquire</code> helper</strong> — for workloads whose image you can't
+  change. An admission webhook injects an init container that blocks pod startup
+  until it holds the lease, and (optionally) a sidecar that enforces loss at
+  runtime. See <a href="../workload-gating-injection/">Workload gating via injection</a>.</li>
+</ul>
+<p>Injection gates <strong>at the pod level from inside</strong>, whereas operator-as-holder
+gates <strong>by scaling from outside</strong>. Injection creates more potential holders, so
+its split-brain surface is larger — it's a deliberate fallback for unmodifiable
+images, not the default.</p>
+<h2 id="topologies-and-storage-backends">Topologies and storage backends</h2>
+<p>Where the authoritative lease state lives determines which deployment shape you
+pick. Choose the backend by topology — not the other way around:</p>
+<table>
+<thead>
+<tr>
+<th>Topology</th>
+<th>Backend</th>
+<th>Lease state lives in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cross-cluster coordination plane</strong> — one central API server arbitrates across tenant clusters.</td>
+<td><code>k8s</code></td>
+<td><code>coordination.k8s.io/Lease</code> objects in a coordination cluster namespace.</td>
+</tr>
+<tr>
+<td><strong>Runner-local HA</strong> — Berth runs inside the runner cluster, multiple API-server replicas.</td>
+<td><code>sql</code> (Postgres or MariaDB/MySQL)</td>
+<td>Shared SQL database, via ACID compare-and-swap.</td>
+</tr>
+<tr>
+<td><strong>Runner-local edge / dev</strong> — single API-server replica.</td>
+<td><code>sql</code> (SQLite) or <code>mem</code></td>
+<td>Local SQLite file, or in-memory (ephemeral, lost on restart).</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>k8s</code> backend keeps state Kubernetes-native; the <code>sql</code> backend scales API
+server replicas horizontally on Postgres/MariaDB. SQLite is durable but
+single-writer (one replica only); <code>mem</code> is for development and tests. Details and
+flags: <a href="../architecture/#storage-backends">Architecture → Storage Backends</a> and
+the <a href="../reference/configuration/">Configuration reference</a>.</p>
+<h2 id="authentication-and-authorization">Authentication and authorization</h2>
+<p>The central lease endpoints are authenticated. Berth supports:</p>
+<ul>
+<li><strong><code>static-keys</code></strong> — bearer tokens checked against a file of <code>key-id:sha256</code>
+  hashes (the default for the <code>k8s</code> and <code>sql</code> backends).</li>
+<li><strong><code>oidc</code></strong> — JWT bearer tokens validated against an issuer; an optional
+  OIDC broker sidecar fetches and rotates the operator's token.</li>
+<li><strong><code>none</code></strong> — no auth; development only, and the server warns loudly.</li>
+</ul>
+<p>Authentication establishes <em>who</em> you are; <strong>authorization</strong> then checks <em>what</em>
+you may touch — chiefly that the <code>holder</code> you act as belongs to your tenant. Full
+contract: <a href="../architecture/#authorization">Architecture → Authorization</a> and the
+auth flags in the <a href="../reference/configuration/">Configuration reference</a>.</p>
+<h2 id="where-to-go-next">Where to go next</h2>
+<ul>
+<li><strong>Do it</strong> — <a href="../getting-started/">Getting Started</a> walks the whole loop on a
+  local three-cluster topology.</li>
+<li><strong>Reason about runtime and failure</strong> — <a href="../architecture/">Architecture</a>.</li>
+<li><strong>Look up flags and values</strong> — <a href="../reference/configuration/">Configuration reference</a>.</li>
+<li><strong>Gate an unmodifiable image</strong> — <a href="../workload-gating-injection/">Workload gating via injection</a>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
