@@ -14,7 +14,7 @@ import (
 // stalls (overload, half-open connection, load-balancer blackhole) blocks
 // the caller indefinitely — which wedges the sidecar's renew loop and
 // defeats the failover-after-expiry guarantee, since the loop can only
-// enforce at-most-once once the in-flight call returns.
+// enforce at-most-once after the in-flight call returns.
 const DefaultTimeout = 10 * time.Second
 
 // Client communicates with the Berth API server over HTTP. A zero-value
