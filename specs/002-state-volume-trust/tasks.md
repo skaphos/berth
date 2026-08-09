@@ -98,7 +98,7 @@ renewing normally it never fails, at any point in the cycle.
 - [X] T025 [P] [US2] Test that the init container's acquire leaves a fresh marker so a just-started pod is never killed for a missing first renewal, in `internal/acquire/acquire_test.go`
 - [X] T026 [P] [US2] **(G4)** Test the `Indeterminate` verdict — an unreadable marker fails closed rather than passing — in `internal/acquire/state_test.go`
 - [X] T027 [P] [US2] **(G3)** Test that `check` runs correctly with no environment and no config present, asserting the FR-010 dependency-free constraint that would otherwise erode silently, in `cmd/berth-acquire/main_test.go`
-- [ ] T028 [US2] **(G2) — DEFERRED, see note below.** End-to-end test in `test/e2e/` asserting that with the sidecar stopped, the workload is killed roughly one TTL later with no sidecar action, and that the probe failure event reports **stale** with the observed age (SC-002, FR-011a)
+- [X] T028 [US2] **(G2)** End-to-end test in `test/e2e/` asserting that with the sidecar stopped, the workload is killed roughly one TTL later with no sidecar action, and that the probe failure event reports **stale** with the observed age (SC-002, FR-011a) — `deadsidecar_test.go`, passing in 22s against the three-cluster kind topology
 
 ### Implementation for User Story 2
 
@@ -142,7 +142,7 @@ upgrading and see enforcement firing afterwards.
 - [X] T043 Verify every new regression test fails against pre-fix code by stashing only the implementation files and re-running, as done for #97 — a test that passes before the fix proves nothing (FR-011)
 - [X] T044 Run the full gates from the repository root: `go -C tools tool task test`, `go test -race ./internal/webhook/... ./internal/acquire/...`, `task lint`, `task verify-generated`
 - [X] T045 [P] Confirm the docs build clean with `mkdocs build --strict`, since docs CI gates on it
-- [ ] T046 [P] **Partially done — logic verified, live cross-check outstanding.** Cross-check the T039 inventory recipe against actual admission behavior in a scratch cluster — a recipe that disagrees with the webhook is worse than none. The `jq` was run against synthetic pod JSON covering every row of the admission decision table (writable at another path, read-only, ephemeral writable, non-gated pod, injector-owned container) and selected exactly the two shapes the webhook rejects. What remains is confirming it against a real cluster's output, which needs a kind cluster
+- [X] T046 [P] Cross-check the T039 inventory recipe against actual admission behavior in a scratch cluster — a recipe that disagrees with the webhook is worse than none. Verified twice: against synthetic pod JSON covering every row of the admission decision table, and against the live kind topology, where the shapes it selects are exactly the ones admission refuses
 - [X] T047 Confirm exactly one correctly-sized `deploy/helm/berth-operator/Chart.yaml` bump is present for the release being cut; `task lint` will not catch a missed or doubled bump
 
 ---
@@ -221,28 +221,36 @@ docs must not claim otherwise until US2 lands.
   No release-ordering requirement; only a pinned-stale `injection.helper.image`
   could produce the failing combination. Contract updated accordingly.
 
-### T028 deferral (the dead-sidecar e2e)
+### Verified against a live cluster
 
-Not written, deliberately, rather than written blind.
+T012 and T028 were briefly deferred on the mistaken belief that no cluster was
+available. The repo ships one: `task e2e-up` brings up a three-kind-cluster
+topology, `task e2e` runs the tagged suite against it, `task e2e-all` does the
+whole cycle. Both tests are written and passing.
 
-The assertion requires *stopping the sidecar* on a running pod. The e2e harness
-builds a `ctrlclient` with no exec support, and the workload fixture image is
-`registry.k8s.io/pause` — no shell — so `kubectl exec`-style approaches are
-unavailable without new plumbing. The alternatives considered (patching the
-sidecar's container image to force a crash-loop; scaling the API server to zero)
-either need machinery that cannot be validated without a live cluster, or
-exercise the *absent*-marker path rather than the *stale* one, since the #97 fix
-makes a live sidecar self-fence past expiry.
+Two findings from actually running it, neither of which unit tests could have
+produced:
 
-An e2e test that compiles but asserts the wrong path is worse than none: it
-manufactures confidence. The freshness logic itself is covered by unit tests at
-the predicate and CLI levels (T019–T027), and T012 proves the webhook half is
-genuinely served by a real API server.
+- **The `pods/ephemeralcontainers` rule was verified by demonstration, not
+  reasoning.** With the shipped `operations: ["CREATE", "UPDATE"]`, a
+  `kubectl patch --subresource=ephemeralcontainers` carrying a writable
+  `berth-state` mount is refused. Reverting the *live* webhook config to
+  `["CREATE"]` and repeating the patch **admits it**, with the container
+  keeping its writable mount — confirming the original CREATE-only
+  registration was a real bypass and not a theoretical one.
+- **The stale-marker path was observed end to end.** Repointing the sidecar's
+  image at an unpullable tag stops it without needing exec (the helper image
+  is distroless and has no shell). The workload is then killed by the kubelet
+  with:
 
-**To pick this up**: add exec support to the harness (client-go `rest.Config` +
-`remotecommand`), switch the fixture to an image with a shell, then stop the
-sidecar and assert the workload's `restartCount` increases within roughly one
-TTL with a probe event naming *stale*.
+  ```
+  Liveness probe failed: health marker stale: /berth/healthy not refreshed
+  for 16s (limit 15s); the lease sidecar is not renewing
+  ```
+
+  The injected probe command was confirmed as
+  `["/berth/check","check","/berth/healthy","--max-age","15s"]`, and the app
+  container's `restartCount` rose while `berth-sidecar` stayed down.
 
 ### Notes
 
