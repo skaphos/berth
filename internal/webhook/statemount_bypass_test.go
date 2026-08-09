@@ -94,8 +94,8 @@ func TestInjectedHelpersKeepTheirExemptionOnAnInjectedPod(t *testing.T) {
 		t.Fatalf("initial inject: %v", err)
 	}
 
-	// Re-admission of the injected pod (the shape the ephemeral path sees).
-	if err := testInjector().Default(context.Background(), pod); err != nil {
+	// Re-admission on the ephemeral path, where the helpers really exist.
+	if err := testInjector().Default(ephemeralCtx("prod"), pod); err != nil {
 		t.Fatalf("an already-injected pod must still admit: %v", err)
 	}
 }

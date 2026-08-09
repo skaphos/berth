@@ -181,10 +181,16 @@ func NewPodInjector(cfg InjectorConfig) *PodInjector {
 // the JSON patch.
 func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	// On create the object's namespace is often empty; the authoritative
-	// value is on the admission request.
+	// value is on the admission request. The request is also what tells us
+	// which admission path we are on, which the pod itself cannot be trusted
+	// to say.
 	ns := pod.Namespace
-	if req, err := admission.RequestFromContext(ctx); err == nil && req.Namespace != "" {
-		ns = req.Namespace
+	var subresource string
+	if req, err := admission.RequestFromContext(ctx); err == nil {
+		if req.Namespace != "" {
+			ns = req.Namespace
+		}
+		subresource = req.SubResource
 	}
 
 	if i.isControlPlane(ns) {
@@ -193,17 +199,34 @@ func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	if pod.Labels[LabelInject] != InjectValueAcquire {
 		return nil
 	}
-	// The state volume is reserved. This runs *before* the already-injected
-	// short-circuit on purpose: an ephemeral container is attached to a pod
-	// that has already been injected, so a check placed after the
-	// short-circuit would never see a kubectl-debug request at all.
-	alreadyInjected := pod.Annotations[AnnInjected] == "true"
-	if err := i.checkStateVolumeMounts(pod, alreadyInjected); err != nil {
+
+	// Whether this pod has already been through injection is decided by the
+	// admission path, never by the pod's own annotations.
+	//
+	// It used to be read from berth.skaphos.io/injected, which is data the
+	// submitter controls: setting it to "true" on create short-circuited the
+	// whole function, so the pod was admitted with no init container, no
+	// sidecar, no state volume, and no probe — ungated, while still carrying
+	// the opt-in label. That defeated enforcement far more cheaply than any
+	// volume trick (#143).
+	//
+	// The subresource is not forgeable: only a write to
+	// pods/ephemeralcontainers carries it, and that request cannot create a
+	// pod. The annotation is still set by mutate as an observable marker; it
+	// is simply no longer trusted for control flow.
+	onEphemeralPath := subresource == subresourceEphemeralContainers
+
+	// The state volume is reserved. This runs on both paths — on create so a
+	// workload cannot declare a writable mount, and on the ephemeral path so
+	// kubectl debug cannot attach one to a running gated pod.
+	if err := i.checkStateVolumeMounts(pod, onEphemeralPath); err != nil {
 		return err
 	}
 
-	if alreadyInjected {
-		return nil // already injected; idempotent no-op
+	if onEphemeralPath {
+		// Attaching a debug container never re-injects; the pod was mutated
+		// when it was created. Validation above is the whole job here.
+		return nil
 	}
 
 	r, err := i.resolve(pod, ns)

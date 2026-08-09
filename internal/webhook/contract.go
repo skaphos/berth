@@ -30,8 +30,16 @@ const (
 	// terminate co-located sidecars on lease loss.
 	AnnSignalTarget = "berth.skaphos.io/signal-target"
 
-	// AnnInjected is set on a Pod once it has been mutated, so re-admission
-	// of an already-injected Pod is a no-op (idempotency).
+	// AnnInjected is set on a Pod once it has been mutated. It is an
+	// observable marker for humans and tooling — "this pod went through the
+	// injector" — and nothing more.
+	//
+	// It MUST NOT be used to decide whether to inject. It is submitter-
+	// controlled: a workload can set it on create, and treating that as proof
+	// of prior injection admitted ungated pods that still carried the opt-in
+	// label (#143). Which admission path a request arrived on is read from
+	// the AdmissionRequest's subresource instead, which cannot be forged by
+	// the object under review.
 	AnnInjected = "berth.skaphos.io/injected"
 )
 
@@ -47,6 +55,12 @@ const (
 	AuthTokenVolume    = "berth-auth-token"
 	AuthCABundleVolume = "berth-auth-ca"
 )
+
+// subresourceEphemeralContainers is the AdmissionRequest subresource for a
+// kubectl-debug style attachment. It is the trustworthy signal that a pod
+// already exists and has been injected, as distinct from the pod's own
+// annotations.
+const subresourceEphemeralContainers = "ephemeralcontainers"
 
 // RejectReason identifies why admission refused a pod. It is both the
 // classification carried in the error and the metric label, so the

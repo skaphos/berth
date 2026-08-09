@@ -5,8 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/skaphos/berth/internal/acquire"
 )
@@ -32,6 +34,19 @@ func optInPod(ns string, ann map[string]string) *corev1.Pod {
 			Containers: []corev1.Container{{Name: "app", Image: "vendor/app:1"}},
 		},
 	}
+}
+
+// ephemeralCtx builds the admission context the API server supplies for a
+// write to the pods/ephemeralcontainers subresource — the kubectl-debug
+// path. Which admission path a request is on is read from here rather than
+// from the pod, so tests that exercise that path must supply it too.
+func ephemeralCtx(ns string) context.Context {
+	return admission.NewContextWithRequest(context.Background(), admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Namespace:   ns,
+			SubResource: subresourceEphemeralContainers,
+		},
+	})
 }
 
 func findContainer(cs []corev1.Container, name string) *corev1.Container {
@@ -252,7 +267,10 @@ func TestInjectSignalRequiresTarget(t *testing.T) {
 	}
 }
 
-func TestInjectIdempotent(t *testing.T) {
+// Re-admission is no longer distinguished by the injected annotation but by
+// the admission path: only a write to pods/ephemeralcontainers reaches an
+// existing pod, and that path never mutates.
+func TestInjectDoesNotReinjectOnTheEphemeralPath(t *testing.T) {
 	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
 	inj := testInjector()
 	if err := inj.Default(context.Background(), pod); err != nil {
@@ -261,14 +279,42 @@ func TestInjectIdempotent(t *testing.T) {
 	initCount := len(pod.Spec.InitContainers)
 	volCount := len(pod.Spec.Volumes)
 
-	if err := inj.Default(context.Background(), pod); err != nil {
-		t.Fatalf("second Default: %v", err)
+	if err := inj.Default(ephemeralCtx("prod"), pod); err != nil {
+		t.Fatalf("attaching a debug container must not fail: %v", err)
 	}
 	if len(pod.Spec.InitContainers) != initCount {
 		t.Errorf("re-injection added init containers: %d -> %d", initCount, len(pod.Spec.InitContainers))
 	}
 	if len(pod.Spec.Volumes) != volCount {
 		t.Errorf("re-injection added volumes: %d -> %d", volCount, len(pod.Spec.Volumes))
+	}
+}
+
+// #143: the injected annotation is submitter-controlled. Setting it on a
+// create request used to short-circuit the whole injector, admitting a pod
+// with no sidecar, no probe, and no state volume while it still carried the
+// opt-in label — ungated, and looking gated to anything reading labels.
+func TestSubmitterCannotSkipInjectionWithTheInjectedAnnotation(t *testing.T) {
+	pod := optInPod("prod", map[string]string{
+		AnnLeaseName: "checkout",
+		AnnInjected:  "true", // claiming to have been injected already
+	})
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	if findContainer(pod.Spec.InitContainers, InitContainerName) == nil {
+		t.Error("the pod must still be injected: the annotation is not proof of prior injection")
+	}
+	if findContainer(pod.Spec.InitContainers, SidecarContainerName) == nil {
+		t.Error("runtime-singleton must still get its sidecar")
+	}
+	if !hasVolume(pod, VolumeName) {
+		t.Error("the state volume must still be added")
+	}
+	if app := findContainer(pod.Spec.Containers, "app"); app.LivenessProbe == nil {
+		t.Error("probe enforcement must still be wired")
 	}
 }
 
@@ -426,7 +472,7 @@ func TestInjectRejectsWritableStateMountOnEphemeralContainer(t *testing.T) {
 		},
 	})
 
-	err := testInjector().Default(context.Background(), pod)
+	err := testInjector().Default(ephemeralCtx("prod"), pod)
 	if err == nil {
 		t.Fatal("an ephemeral container must not obtain a writable state mount on a running gated pod")
 	}
@@ -448,7 +494,7 @@ func TestInjectAllowsReadOnlyEphemeralStateMount(t *testing.T) {
 		},
 	})
 
-	if err := testInjector().Default(context.Background(), pod); err != nil {
+	if err := testInjector().Default(ephemeralCtx("prod"), pod); err != nil {
 		t.Fatalf("read-only debugging must stay possible: %v", err)
 	}
 }
@@ -469,7 +515,7 @@ func TestInjectRejectsWritableEphemeralStateMountAtStateDir(t *testing.T) {
 		},
 	})
 
-	if err := testInjector().Default(context.Background(), pod); err == nil {
+	if err := testInjector().Default(ephemeralCtx("prod"), pod); err == nil {
 		t.Fatal("a writable ephemeral mount at the state dir is not repaired, so it must be rejected")
 	}
 }

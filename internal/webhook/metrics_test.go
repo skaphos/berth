@@ -30,7 +30,7 @@ func TestRejectionCounterRecordsReasonAndPath(t *testing.T) {
 			VolumeMounts: []corev1.VolumeMount{{Name: VolumeName, MountPath: "/rw"}},
 		},
 	})
-	if err := testInjector().Default(context.Background(), running); err == nil {
+	if err := testInjector().Default(ephemeralCtx("prod"), running); err == nil {
 		t.Fatal("expected the ephemeral writable mount to be rejected")
 	}
 
