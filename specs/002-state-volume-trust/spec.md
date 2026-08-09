@@ -81,6 +81,18 @@ Ordering is therefore normative, not stylistic: **US1 before US2**.
   gap: inject a freshness-only liveness probe in `signal` mode as a
   dead-sidecar net, where the pod admits one.
 
+### Session 2026-08-09
+
+Raised by the analysis pass over spec, plan, and tasks.
+
+- Q: US1 is a security control on a webhook whose chart default is
+  `failurePolicy: Ignore`, so it fails open. How should this change resolve
+  it? → A: Flip the chart default to `Fail`, accepting that a webhook outage
+  blocks pod creation for pods matching the selector.
+- Q: How should the `signal`-mode watchdog container be sequenced? → A: Ship
+  the tier-1 probe in this unit and track the watchdog as a follow-up; the
+  residual gap is documented in the interim rather than left silent.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A writable state volume cannot subvert enforcement (Priority: P1) — #96
@@ -274,6 +286,12 @@ verify the upgrade note exists in the release documentation.
   `operations: ["CREATE"]` on `resources: ["pods"]`; it MUST also intercept
   the `pods/ephemeralcontainers` subresource, so an ephemeral container
   attached to a running gated pod cannot mount the state volume writably.
+- **FR-001b**: The rule MUST NOT fail open. The gating webhook's shipped chart
+  default MUST be `failurePolicy: Fail`, so a webhook outage cannot admit a pod
+  the rule would reject. This is a deliberate availability trade: while the
+  webhook is unreachable, pod creation is blocked for pods matching the
+  selector. Documentation MUST state that consequence plainly, and the upgrade
+  notes MUST call it out as a behavior change for existing installations.
 - **FR-002**: The rejection MUST name the offending container, volume, and
   mount path, and MUST state the accepted resolutions. There is no annotation,
   label, or configuration value that permits the rejected shape — the decision
@@ -313,9 +331,11 @@ verify the upgrade note exists in the release documentation.
   not pretend otherwise. `preflight` steers users to `signal` precisely when a
   container already defines its own `livenessProbe`
   (`internal/webhook/inject.go:247-249`), and Kubernetes permits only one per
-  container. For those pods the plan MUST either identify a mechanism that
-  does not consume the liveness slot, or record the residual gap as a stated
-  limitation — it MUST NOT be left silent. (Constitution IX)
+  container. **Resolved 2026-08-09**: this unit ships the tier-1 probe only.
+  For pods whose liveness slot is occupied, the residual gap MUST be recorded
+  as a stated limitation in user-facing docs, and MUST be tracked as a
+  follow-up issue for the watchdog-container mechanism (research.md R2) rather
+  than closed. It MUST NOT be left silent. (Constitution IX)
 - **FR-011**: Regression tests MUST cover the #96 bypass (including the
   verifier-replacement variant) and the #98 stale-marker window, and MUST fail
   against the pre-fix behavior.
@@ -414,6 +434,10 @@ verify the upgrade note exists in the release documentation.
   mount rule applies to both modes. The US2 freshness rule was initially
   scoped to `probe`; per the 2026-08-08 clarification it extends to `signal`
   as a dead-sidecar backstop (FR-010a), bounded by the injectability limit in
-  FR-010b. Signal-mode coverage is therefore expected to be partial in this
-  unit of work, and whatever remains uncovered must be stated in the docs
+  FR-010b. Signal-mode coverage is therefore partial in this unit of work —
+  tier-1 probe only — with the remainder documented and tracked as a follow-up
   rather than left implied.
+- The gating webhook becomes a hard dependency for pod creation in gated
+  namespaces once `failurePolicy: Fail` is the default (FR-001b). Operators
+  upgrading from a release that defaulted to `Ignore` inherit that change, so
+  it is an upgrade-notes item, not only a values reference change.

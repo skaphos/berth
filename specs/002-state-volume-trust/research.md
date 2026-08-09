@@ -68,11 +68,16 @@ mean the majority of signal-mode pods keep #98 in full. The watchdog is
 independent of the sidecar's process, which is the whole point — a backstop
 sharing the sidecar's fate is not a backstop.
 
-**This is the plan's most consequential proposal and is flagged for the plan
-review gate.** It adds a container to signal-mode pods. If that cost is
-unacceptable, the fallback is tier 1 only, plus an explicit documented
-limitation per FR-010b — which is a smaller change and still an improvement
-over today.
+**Sequencing decided 2026-08-09**: **tier 1 ships in this unit; tier 2 (the
+watchdog) is tracked as a follow-up issue.** The reasoning is scope, not
+doubt: the watchdog is a new injected container with its own resource,
+pod-spec, and security-review surface, and bundling it into a defect fix would
+make this change materially harder to review and to roll back.
+
+Until the watchdog lands, pods whose liveness slot is occupied keep the #98
+gap. That is not left implied — FR-010b requires it be stated in user-facing
+docs and tracked, so the follow-up is a scheduled commitment rather than an
+aspiration.
 
 **Alternatives considered**:
 - *A liveness probe on the sidecar container itself.* Rejected as insufficient.
@@ -134,34 +139,40 @@ default is `failurePolicy: Ignore`
 (`deploy/helm/berth-operator/values.yaml:157`). While the webhook is
 unavailable, offending pods admit unenforced.
 
-**Decision**: **Do not change the default in this unit of work.** Instead:
+**Decision (revised 2026-08-09, after the analysis pass raised this as
+CRITICAL)**: **Flip the shipped chart default to `failurePolicy: Fail`**
+(FR-001b), and document the consequence in the upgrade notes.
 
-1. Document the dependency explicitly — US1's guarantee holds only while the
-   webhook is reachable, and operators who want it unconditionally must set
-   `failurePolicy: Fail`.
-2. Add a pointed cross-reference to **#103**, which is exactly this question,
-   so the two are not resolved independently.
+**Rationale**: A security control that fails open is not a control. Leaving
+`Ignore` meant US1's guarantee silently lapsed for the duration of any webhook
+outage — precisely the "safety depends on availability" shape Principle X
+rules out. Once the webhook carries an at-most-once control rather than a
+convenience mutation, the availability bias has to move.
 
-**Rationale**: Flipping to `Fail` means a webhook outage blocks pod creation in
-scope — a real availability trade, and one that belongs to the operator, not
-to this spec. It is also separable: the mechanism US1 introduces is identical
-under either policy. Constitution VII prefers read-only degradation over
-blindness, and `Ignore` is the failure mode aligned with that; the tension
-with Principle X is genuine, which is why it is documented rather than
-silently resolved.
+The cost is real and accepted: while the webhook is unreachable, pod creation
+is blocked for pods matching the selector, making the operator a hard
+dependency in gated namespaces. Constitution VII is still satisfied — the
+system degrades toward *refusing writes*, not toward blindness; lease
+inventory, holders, and status stay readable throughout.
 
-**Raised for the maintainer at the plan gate**, since it materially bounds
-what US1 delivers, and reasonable people would want `Fail` once the webhook
-carries an at-most-once control.
+This is upgrade-visible for installations currently on `Ignore`, so it belongs
+in upgrade notes rather than only in a values reference.
 
 **Alternatives considered**:
-- *Flip to `Fail` here.* Rejected as out of scope and as a larger operational
-  change than the defect fix warrants — but it is a legitimate choice if the
-  maintainer prefers it, and would be a one-line values change plus a chart
-  version bump.
-- *Say nothing.* Rejected. Shipping a security control while leaving its
-  fail-open default undocumented is precisely the silent divergence
+- *Keep `Ignore`, document, defer to #103.* The original decision here.
+  Rejected on 2026-08-09: it left a CRITICAL finding open going into
+  implementation and shipped a guarantee with a silent lapse mode.
+- *Split into a mutating webhook at `Ignore` plus a validating webhook at
+  `Fail`.* Superficially surgical, but rejected: both would carry the same
+  selector, so an outage blocks in-scope pod creation either way. It adds a
+  second webhook for no reduction in blast radius.
+- *Say nothing.* Rejected throughout. Shipping a security control while
+  leaving its failure posture undocumented is the silent divergence
   Constitution IX forbids.
+
+**Relationship to #103**: this change resolves the substance of that issue for
+the gating webhook. #103 should be updated or closed as part of US3's
+documentation work rather than left to drift out of sync.
 
 ---
 

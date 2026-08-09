@@ -4,6 +4,11 @@
 
 **Input**: spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md
 
+**Revised 2026-08-09** after the analysis pass: adds the `failurePolicy: Fail`
+flip (C1), end-to-end verification tasks (G1, G2), two missing verification
+tasks (G3, G4), and settles the `signal`-mode watchdog sequencing (R2 tier 2).
+Task IDs were renumbered to stay sequential in execution order.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]** — parallelizable: different files, no dependency on an incomplete task
@@ -16,15 +21,15 @@ covering test for every regression fix. This is not the optional-test case.
 ## Path Conventions
 
 Repository root is the Go module root. Key paths: `internal/webhook/`,
-`internal/acquire/`, `cmd/berth-acquire/`, `deploy/helm/berth-operator/`,
-`docs/`.
+`internal/acquire/`, `cmd/berth-acquire/`, `test/e2e/`,
+`deploy/helm/berth-operator/`, `docs/`.
 
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
 
 - [ ] T001 Confirm a green baseline before changes: run `go -C tools tool task test`, `lint`, and `verify-generated` from the repository root and record that all three pass
-- [ ] T002 [P] Resolve the R5 open item: determine whether `State.IsHealthy()` has any non-test callers, searching `internal/` and `cmd/`; if it has none, note that removing it satisfies FR-009 trivially and adjust T020
+- [ ] T002 [P] Resolve the R5 open item: determine whether `State.IsHealthy()` has any non-test callers, searching `internal/` and `cmd/`; if it has none, note that removing it satisfies FR-009 trivially and adjust T030
 - [ ] T003 [P] Resolve the check-CLI skew risk: confirm how the current Cobra command in `cmd/berth-acquire/main.go` behaves on an unknown flag, since an old `check` receiving `--max-age` must not fail argument parsing (see contracts/check-cli.md); if it errors, record helper-image-before-webhook as a release-ordering requirement
 
 ---
@@ -47,7 +52,8 @@ write the health marker or the `check` binary.
 **Independent test**: Submit pods and ephemeral containers across the
 admission decision table in contracts/admission.md and assert exactly the
 writable author-declared mounts are rejected, each naming container, volume,
-and mount path.
+and mount path — then confirm in a live cluster that an admitted workload
+cannot modify the marker or the verifier.
 
 ### Tests for User Story 1
 
@@ -57,16 +63,18 @@ and mount path.
 - [ ] T009 [P] [US1] Test that a writable mount arriving via the ephemeral-containers subresource is rejected and a read-only one admitted, in `internal/webhook/inject_test.go` — must fail pre-fix
 - [ ] T010 [P] [US1] Test that the existing behaviours are unchanged: a writable mount at exactly `StateDir` is admitted and forced read-only, and a different volume at `StateDir` is still rejected, in `internal/webhook/inject_test.go`
 - [ ] T011 [P] [US1] Test both enforce modes (`probe` and `signal`) against the mount rule, in `internal/webhook/inject_test.go` — the rule is mode-independent
+- [ ] T012 [US1] **(G1)** End-to-end test in `test/e2e/` asserting that inside an *admitted* workload container, both `touch /berth/healthy` and overwriting `/berth/check` fail — admission tests prove the spec is rejected, this proves the runtime property the feature actually claims
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Implement mount classification in `preflight` in `internal/webhook/inject.go`: reject when the mount targets the state volume, is not read-only, and is not injector-owned, per data-model.md
-- [ ] T013 [US1] Implement the rejection message in `internal/webhook/inject.go` naming container, volume, and mount path, stating why and giving the resolutions, with no implication that an opt-out exists (FR-002)
-- [ ] T014 [US1] Apply the rule to the ephemeral-containers admission path in `internal/webhook/inject.go`, with wording that makes clear the running pod is healthy and the debug request was refused
-- [ ] T015 [US1] Register `pods/ephemeralcontainers` (`CREATE`) in `deploy/helm/berth-operator/templates/mutatingwebhookconfiguration.yaml` alongside the existing `pods` rule
-- [ ] T016 [US1] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` — minor, since this is additive admission behavior (FR-014)
+- [ ] T013 [US1] Implement mount classification in `preflight` in `internal/webhook/inject.go`: reject when the mount targets the state volume, is not read-only, and is not injector-owned, per data-model.md
+- [ ] T014 [US1] Implement the rejection message in `internal/webhook/inject.go` naming container, volume, and mount path, stating why and giving the resolutions, with no implication that an opt-out exists (FR-002)
+- [ ] T015 [US1] Apply the rule to the ephemeral-containers admission path in `internal/webhook/inject.go`, with wording that makes clear the running pod is healthy and the debug request was refused
+- [ ] T016 [US1] Register `pods/ephemeralcontainers` (`CREATE`) in `deploy/helm/berth-operator/templates/mutatingwebhookconfiguration.yaml` alongside the existing `pods` rule
+- [ ] T017 [US1] **(C1)** Change the shipped default to `failurePolicy: Fail` in `deploy/helm/berth-operator/values.yaml` and update the surrounding comment to state the trade — a webhook outage blocks pod creation for pods matching the selector (FR-001b)
+- [ ] T018 [US1] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` — **minor**, since T016 and T017 change chart behavior additively and by default (FR-014)
 
-**Checkpoint**: The bypass is closed. US2 is meaningless before this point, because `check` is only trustworthy once the volume is.
+**Checkpoint**: The bypass is closed and cannot lapse during a webhook outage. US2 is meaningless before this point, because `check` is only trustworthy once the volume is.
 
 ---
 
@@ -76,30 +84,33 @@ and mount path.
 own death.
 
 **Independent test**: With the sidecar stopped, the check begins failing once
-the marker is one TTL old; with the sidecar renewing normally it never fails,
-at any point in the cycle.
+the marker is one TTL old and the kubelet kills the workload; with the sidecar
+renewing normally it never fails, at any point in the cycle.
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Test the freshness boundary in `internal/acquire/state_test.go`: `age == bound` healthy, `age > bound` stale, absent distinguished from stale — must fail pre-fix
-- [ ] T018 [P] [US2] Test that `State.IsHealthy()` and the `check` subcommand return the same verdict across an age table including the boundary, in `internal/acquire/state_test.go` (FR-009)
-- [ ] T019 [P] [US2] Test that a holder renewing successfully never trips the bound, across heartbeats from the TTL/3 default to just under the TTL, in `internal/acquire/renew_test.go` (FR-007, SC-003)
-- [ ] T020 [P] [US2] Test that freshness does not depend on cross-container clock agreement, in `internal/acquire/state_test.go` (FR-008)
-- [ ] T021 [P] [US2] Test that `check` exits 0/1 with the correct distinct stderr reason per contracts/check-cli.md, in `cmd/berth-acquire/main_test.go` (FR-011a)
-- [ ] T022 [P] [US2] Test that `check` without `--max-age` preserves presence-only behavior, in `cmd/berth-acquire/main_test.go` — the compatibility row from contracts/check-cli.md
-- [ ] T023 [P] [US2] Test that the init container's acquire leaves a fresh marker so a just-started pod is never killed for a missing first renewal, in `internal/acquire/acquire_test.go`
+- [ ] T019 [P] [US2] Test the freshness boundary in `internal/acquire/state_test.go`: `age == bound` healthy, `age > bound` stale, absent distinguished from stale — must fail pre-fix
+- [ ] T020 [P] [US2] Test that `State.IsHealthy()` and the `check` subcommand return the same verdict across an age table including the boundary, in `internal/acquire/state_test.go` (FR-009)
+- [ ] T021 [P] [US2] Test that a holder renewing successfully never trips the bound, across heartbeats from the TTL/3 default to just under the TTL, in `internal/acquire/renew_test.go` (FR-007, SC-003)
+- [ ] T022 [P] [US2] Test that freshness does not depend on cross-container clock agreement, in `internal/acquire/state_test.go` (FR-008)
+- [ ] T023 [P] [US2] Test that `check` exits 0/1 with the correct distinct stderr reason per contracts/check-cli.md, in `cmd/berth-acquire/main_test.go` (FR-011a)
+- [ ] T024 [P] [US2] Test that `check` without `--max-age` preserves presence-only behavior, in `cmd/berth-acquire/main_test.go` — the compatibility row from contracts/check-cli.md
+- [ ] T025 [P] [US2] Test that the init container's acquire leaves a fresh marker so a just-started pod is never killed for a missing first renewal, in `internal/acquire/acquire_test.go`
+- [ ] T026 [P] [US2] **(G4)** Test the `Indeterminate` verdict — an unreadable marker fails closed rather than passing — in `internal/acquire/state_test.go`
+- [ ] T027 [P] [US2] **(G3)** Test that `check` runs correctly with no environment and no config present, asserting the FR-010 dependency-free constraint that would otherwise erode silently, in `cmd/berth-acquire/main_test.go`
+- [ ] T028 [US2] **(G2)** End-to-end test in `test/e2e/` asserting that with the sidecar stopped, the workload is killed roughly one TTL later with no sidecar action, and that the probe failure event reports **stale** with the observed age (SC-002, FR-011a)
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Add `--max-age` to the `check` subcommand in `cmd/berth-acquire/main.go`, calling the shared predicate and emitting the distinct reasons; absent flag preserves today's behavior
-- [ ] T025 [US2] Rewire `State.IsHealthy()` in `internal/acquire/state.go` onto the shared predicate — or remove it if T002 found no non-test callers
-- [ ] T026 [US2] Template `--max-age` into the injected probe command in `internal/webhook/inject.go`, resolved from the pod's TTL (R1)
-- [ ] T027 [US2] Inject the freshness-only backstop probe for `enforce: signal` where the main container's liveness slot is free, in `internal/webhook/inject.go` (FR-010a, tier 1 of R2)
-- [ ] T028 [US2] Implement the `signal`-mode watchdog for pods whose liveness slot is occupied — **GATED on approval of R2 tier 2 at the plan review**; if declined, skip and complete T029 instead
-- [ ] T029 [US2] If T028 is declined, record the residual `signal`-mode gap as a stated limitation in `docs/workload-gating-injection.md` (FR-010b) — this task is mandatory unless T028 ships
-- [ ] T030 [US2] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` if the probe templating changed chart output (FR-014)
+- [ ] T029 [US2] Add `--max-age` to the `check` subcommand in `cmd/berth-acquire/main.go`, calling the shared predicate and emitting the distinct reasons; absent flag preserves today's behavior
+- [ ] T030 [US2] Rewire `State.IsHealthy()` in `internal/acquire/state.go` onto the shared predicate — or remove it if T002 found no non-test callers
+- [ ] T031 [US2] Template `--max-age` into the injected probe command in `internal/webhook/inject.go`, resolved from the pod's TTL (R1)
+- [ ] T032 [US2] Inject the freshness-only backstop probe for `enforce: signal` where the main container's liveness slot is free, in `internal/webhook/inject.go` (FR-010a, tier 1 of R2)
+- [ ] T033 [US2] Record the residual `signal`-mode gap — pods whose liveness slot is occupied keep the #98 exposure — as a stated limitation in `docs/workload-gating-injection.md` (FR-010b). **Mandatory**, not conditional: tier 2 is deferred, so this is the only thing standing between users and a silent gap
+- [ ] T034 [US2] Open a tracked follow-up issue for the R2 tier-2 watchdog container, referencing FR-010b and this spec, so the deferred coverage is a scheduled commitment rather than an aspiration
+- [ ] T035 [US2] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` **only if US2 ships as a separate release from US1** — under the incremental strategy below it does; if US1 and US2 are batched into one release, T018's bump covers both and this task is a no-op (FR-014)
 
-**Checkpoint**: A dead sidecar now stops its workload within one TTL.
+**Checkpoint**: A dead sidecar now stops its workload within one TTL, in `probe` mode and in `signal` mode where the liveness slot is free.
 
 ---
 
@@ -113,26 +124,26 @@ upgrading and see enforcement firing afterwards.
 
 ### Tests for User Story 3
 
-- [ ] T031 [P] [US3] Test the rejection counter increments per rejection with reason and admission-path labels and no pod/namespace labels, in `internal/webhook/inject_test.go` (FR-011b, R6)
+- [ ] T036 [P] [US3] Test the rejection counter increments per rejection with reason and admission-path labels and no pod/namespace labels, in `internal/webhook/inject_test.go` (FR-011b, R6)
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Register the rejection `CounterVec` on the operator's metrics registry, confirming first whether to extend `internal/metrics/metrics.go` or register locally in the operator (R6 notes the existing package serves the apiserver)
-- [ ] T033 [P] [US3] Document the reserved state volume and the freshness rule in `docs/workload-gating-injection.md` (FR-012)
-- [ ] T034 [P] [US3] Write upgrade notes marking the change breaking, including the `kubectl`/`jq` inventory recipe runnable against an un-upgraded cluster, in `docs/operations/` (FR-012a)
-- [ ] T035 [P] [US3] Document the `failurePolicy: Ignore` dependency — US1 holds only while the webhook is reachable — and cross-reference issue #103, in `docs/workload-gating-injection.md` (R4)
-- [ ] T036 [US3] Write `docs/adr/0004-state-volume-is-reserved.md` superseding ADR-0003's trust model, and mark ADR-0003 superseded rather than editing it (FR-013)
-- [ ] T037 [P] [US3] Update `docs/architecture.md` and `docs/code-map.md` if the component descriptions no longer match
+- [ ] T037 [US3] Register the rejection `CounterVec` on the operator's metrics registry, confirming first whether to extend `internal/metrics/metrics.go` or register locally in the operator — R6 notes the existing package serves the apiserver, so this is a decision to make before writing, not while writing
+- [ ] T038 [P] [US3] Document the reserved state volume and the freshness rule in `docs/workload-gating-injection.md` (FR-012)
+- [ ] T039 [P] [US3] Write upgrade notes in `docs/operations/` covering **both** breaking changes — rejected pod shapes, and the `failurePolicy` default moving from `Ignore` to `Fail` — including the `kubectl`/`jq` inventory recipe runnable against an un-upgraded cluster (FR-012a, FR-001b)
+- [ ] T040 [P] [US3] Document the new failure posture in `docs/workload-gating-injection.md`: the guarantee now holds unconditionally, at the cost of the operator being a hard dependency for pod creation in gated namespaces; update or close issue #103, which this change resolves for the gating webhook (R4)
+- [ ] T041 [US3] Write `docs/adr/0004-state-volume-is-reserved.md` superseding ADR-0003's trust model, and mark ADR-0003 superseded rather than editing it (FR-013)
+- [ ] T042 [P] [US3] Update `docs/architecture.md` and `docs/code-map.md` if the component descriptions no longer match
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T038 Verify every new regression test fails against pre-fix code by stashing only the implementation files and re-running, as done for #97 — a test that passes before the fix proves nothing (FR-011)
-- [ ] T039 Run the full gates from the repository root: `go -C tools tool task test`, `go test -race ./internal/webhook/... ./internal/acquire/...`, `task lint`, `task verify-generated`
-- [ ] T040 [P] Confirm the docs build clean with `mkdocs build --strict`, since docs CI gates on it
-- [ ] T041 [P] Cross-check the T034 inventory recipe against actual admission behavior in a scratch cluster — a recipe that disagrees with the webhook is worse than none
-- [ ] T042 Confirm the `deploy/helm/berth-operator/Chart.yaml` bump is present and correctly sized; `task lint` will not catch a missed bump
+- [ ] T043 Verify every new regression test fails against pre-fix code by stashing only the implementation files and re-running, as done for #97 — a test that passes before the fix proves nothing (FR-011)
+- [ ] T044 Run the full gates from the repository root: `go -C tools tool task test`, `go test -race ./internal/webhook/... ./internal/acquire/...`, `task lint`, `task verify-generated`
+- [ ] T045 [P] Confirm the docs build clean with `mkdocs build --strict`, since docs CI gates on it
+- [ ] T046 [P] Cross-check the T039 inventory recipe against actual admission behavior in a scratch cluster — a recipe that disagrees with the webhook is worse than none
+- [ ] T047 Confirm exactly one correctly-sized `deploy/helm/berth-operator/Chart.yaml` bump is present for the release being cut; `task lint` will not catch a missed or doubled bump
 
 ---
 
@@ -140,11 +151,11 @@ upgrading and see enforcement firing afterwards.
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: no dependencies — start immediately. T002 and T003 are investigations whose answers change T025 and release ordering, so run them early.
+- **Setup (Phase 1)**: no dependencies — start immediately. T002 and T003 are investigations whose answers change T030 and release ordering, so run them early.
 - **Foundational (Phase 2)**: depends on Setup. Blocks all user stories.
 - **User Story 1 (Phase 3)**: depends on Phase 2. **Blocks US2** — see below.
 - **User Story 2 (Phase 4)**: depends on Phase 2 and **on US1**.
-- **User Story 3 (Phase 5)**: depends on Phase 2; T031/T032 depend on US1's rejection path existing.
+- **User Story 3 (Phase 5)**: depends on Phase 2; T036/T037 depend on US1's rejection path existing.
 - **Polish (Phase 6)**: depends on all shipped stories.
 
 ### The US1 → US2 dependency is real
@@ -159,9 +170,9 @@ US2 across people as if they were independent.**
 
 - Phase 1: T002 and T003 together.
 - Phase 2: T004 and T005 together — different packages.
-- Phase 3: T006–T011 together (all test cases, same file but independent cases; coordinate if one person).
-- Phase 4: T017–T023 together across `internal/acquire` and `cmd/berth-acquire`.
-- Phase 5: T033, T034, T035, T037 together — all documentation, different files.
+- Phase 3: T006–T011 together (all admission cases). T012 is e2e and runs after the implementation tasks.
+- Phase 4: T019–T027 together across `internal/acquire` and `cmd/berth-acquire`. T028 is e2e and runs after implementation.
+- Phase 5: T038, T039, T040, T042 together — all documentation, different files.
 
 ## Parallel Example: User Story 1
 
@@ -173,6 +184,8 @@ T008  injector-owned helper mounts       -> admit
 T009  ephemeral subresource              -> reject / admit
 T010  writable at StateDir               -> admit, forced read-only
 T011  both enforce modes                 -> rule is mode-independent
+# Then, after T013-T018 land:
+T012  e2e: workload cannot write marker or replace check
 ```
 
 ## Implementation Strategy
@@ -180,23 +193,32 @@ T011  both enforce modes                 -> rule is mode-independent
 ### MVP (User Story 1 only)
 
 Phases 1 → 2 → 3. This alone closes the security defect and is independently
-shippable: the volume becomes reserved, the verifier becomes untamperable, and
-the bypass in #96 is gone. #98 remains open, which is honest — the marker is
-still presence-only, and the docs must not claim otherwise until US2 lands.
+shippable: the volume becomes reserved, the verifier becomes untamperable, the
+rule no longer lapses during a webhook outage, and the bypass in #96 is gone.
+#98 remains open, which is honest — the marker is still presence-only, and the
+docs must not claim otherwise until US2 lands.
 
 ### Incremental Delivery
 
 1. **US1** — closes #96. Ship it.
-2. **US2** — closes #98. Only meaningful after US1.
+2. **US2** — closes #98 for `probe` and for `signal` where the liveness slot is
+   free. Only meaningful after US1.
 3. **US3** — makes the breaking change survivable. Ship *with* US1, not after
-   it: T033/T034/T035 are what stop the upgrade surprising people, so treating
-   them as follow-up work would land the breakage without the guidance.
+   it: T038/T039/T040 are what stop the upgrade surprising people, so treating
+   them as follow-up work would land two breaking changes without guidance.
 
 ### Notes
 
-- T028 is gated on the plan review of R2 tier 2 (the watchdog container). T029
-  is its fallback and is mandatory if T028 does not ship — the residual gap
-  must not be left silent (FR-010b, Constitution IX).
-- The fail-open `failurePolicy` finding (R4) is deliberately not a code task.
-  It is documented by T035 and raised for the maintainer; changing the default
-  belongs to #103.
+- **T017 is a cluster-behavior change, not a values tweak.** Flipping
+  `failurePolicy` to `Fail` makes the operator a hard dependency for pod
+  creation in gated namespaces. It is grouped with US1 because a control that
+  fails open is not a control, but it needs its own line in the upgrade notes
+  (T039) and its own reviewer attention.
+- **T033 and T034 are a pair.** Tier 2 of R2 is deferred, so the documented
+  limitation and the tracked follow-up together are what keep the deferral
+  honest. Neither is optional.
+- Analysis findings deliberately left open: FR-011b's "labelled enough"
+  phrasing (pinned concretely in R6 and data-model.md), and the
+  "workload-authored" versus "author-declared" terminology drift between
+  plan.md and the other artifacts. Both are wording-level and do not affect
+  execution.

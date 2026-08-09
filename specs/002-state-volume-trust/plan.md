@@ -64,15 +64,19 @@ one new ADR.
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
+*Status after the 2026-08-09 analysis pass: all gates pass. The one open gate
+finding (fail-open enforcement) was resolved by decision, not by
+reinterpretation — see below.*
+
 | Principle | Assessment |
 |---|---|
 | I. Explicit State Over Implicit Behavior | **Pass.** Today "the workload must not write the state volume" is an undocumented assumption; this makes it a declared, enforced rule. |
 | III. Deterministic, Reconstructible Operation | **Pass.** Admission is a pure function of the pod spec; freshness is a pure function of mtime and TTL. |
 | IV. Kubernetes-Native, Never Obscured | **Pass.** Uses admission and probes directly; adds no external orchestration. |
 | VI. Explainable Reconciliation, Evidence-Grade Audit | **Pass, and load-bearing.** FR-011a/011b exist because "liveness probe failed" alone cannot distinguish an expected failover from a dead-sidecar incident. |
-| VII. Read-Only Degradation Over Blindness | **⚠ See gate finding below.** |
+| VII. Read-Only Degradation Over Blindness | **Pass, with an accepted trade.** `failurePolicy: Fail` biases admission toward refusal during a webhook outage. Inspection paths (lease inventory, holders, status) are unaffected, so the system still degrades toward read-only rather than blindness. |
 | IX. Technical Precision, Honest Scope | **Pass.** FR-010b requires the residual signal-mode gap be stated, not implied. |
-| X. Coordination Safety Is Non-Negotiable | **⚠ See gate finding below.** Regression tests that fail pre-fix are mandated by FR-011. |
+| X. Coordination Safety Is Non-Negotiable | **Pass.** With FR-001b the control no longer depends on webhook availability. Regression tests that fail pre-fix are mandated by FR-011. |
 
 ### Gate finding: the security control is fail-open
 
@@ -95,10 +99,17 @@ as **#103** — but it becomes materially more important once the webhook is
 carrying an at-most-once security control rather than only a convenience
 mutation.
 
-**This gate does not block Phase 0**, because the resolution is a decision for
-the maintainer rather than a design question, and it is separable from the
-mechanism. It is carried into Complexity Tracking and raised in the completion
-report. Options are analysed in [research.md](./research.md) (R4).
+**Resolved 2026-08-09 — gate now passes.** The maintainer's decision is to flip
+the shipped default to `failurePolicy: Fail` (FR-001b). US1 therefore holds
+unconditionally rather than only while the webhook is reachable, which is what
+Principle X requires of a safety control.
+
+The cost is accepted explicitly: while the webhook is unreachable, pod creation
+is blocked for pods matching the selector, making the operator a hard
+dependency in gated namespaces. That is an upgrade-visible behavior change for
+installations currently defaulting to `Ignore`, and is called out in the
+upgrade notes rather than buried in a values reference. Analysis in
+[research.md](./research.md) (R4).
 
 ### Post-Design Re-Check (after Phase 1)
 
@@ -176,5 +187,5 @@ keeps `cmd/*` thin per the constitution's engineering constraints.
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|--------------------------------------|
 | Two health-test implementations remain (`State.IsHealthy` and the `check` subcommand) | `check` must run in a distroless main container with no config (FR-010); `IsHealthy` runs in the sidecar with full config available | Collapsing them into one call site was rejected: the probe path must stay dependency-free, so the shared piece is the freshness *predicate*, not the caller. FR-009 requires they cannot disagree — enforced by a shared function plus a test asserting agreement. |
-| Security control remains fail-open by default (`failurePolicy: Ignore`) | Pre-existing chart default (#103); changing it makes a webhook outage block all pod creation in scope | Flipping to `Fail` unilaterally was rejected as out of scope for this spec and a materially larger operational change. Carried as a gate finding for the maintainer — see R4. |
-| `signal`-mode backstop coverage is partial | A container has one `livenessProbe` slot and `preflight` routes users to `signal` exactly when it is taken | Overwriting a user's own probe was rejected outright — silently replacing a workload's health check is a worse defect than the one being fixed. See R2 for the alternative that closes the remainder. |
+| Webhook becomes a hard dependency for pod creation in gated namespaces (`failurePolicy: Fail`) | A security control that fails open is not a control; Principle X forbids depending on availability for safety | Keeping `Ignore` was rejected on 2026-08-09: it left a CRITICAL analysis finding open and shipped an at-most-once guarantee that silently lapses during an outage. A split mutating/validating webhook was also rejected — both would carry the same selector, so it adds moving parts without reducing blast radius. |
+| `signal`-mode backstop coverage is partial in this unit | A container has one `livenessProbe` slot and `preflight` routes users to `signal` exactly when it is taken | Overwriting a user's own probe was rejected outright — silently replacing a workload's health check is a worse defect than the one being fixed. The watchdog mechanism (R2 tier 2) closes the remainder but adds an injected container, so it is sequenced as a tracked follow-up rather than dropped. |

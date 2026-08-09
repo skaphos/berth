@@ -61,18 +61,33 @@ For the ephemeral path, the message must additionally make clear the running
 pod is healthy and the *debug request* was refused — an operator reading it
 should not conclude their workload is failing.
 
-## Failure policy dependency
+## Failure policy
 
-This contract holds **only while the webhook is reachable**. The shipped chart
-default is `failurePolicy: Ignore`
-(`deploy/helm/berth-operator/values.yaml:157`), so during a webhook outage
-every row above degrades to "admit". Operators requiring the guarantee
-unconditionally must set `failurePolicy: Fail` and accept that an outage blocks
-pod creation in scope. See R4 and issue #103.
+This contract holds **unconditionally**, including while the webhook is
+unreachable. The shipped chart default becomes `failurePolicy: Fail`
+(FR-001b), so an outage cannot admit a pod the table above would reject.
+
+The trade is explicit: while the webhook is unreachable, **pod creation is
+blocked** for pods matching the selector. The operator is a hard dependency for
+pod creation in gated namespaces. This is the intended posture for a control
+whose job is at-most-once — a rule that lapses during an outage is not a rule —
+but it is a genuine availability cost and operators must be told, not
+surprised.
+
+Inspection is unaffected: lease inventory, holders, and status stay readable
+throughout an outage, so the system degrades toward refusing writes rather than
+toward blindness.
 
 ## Compatibility
 
-Breaking. Rows 3 and 6 admit today and will not after upgrade, with no opt-out
-and no grace period, including on re-admission events such as eviction and
-rescheduling. The pre-upgrade inventory recipe (FR-012a) exists so operators
-can find affected workloads before installing.
+Breaking, in two separate ways. Both need calling out in upgrade notes.
+
+1. **Rejected pod shapes.** Rows 3 and 6 admit today and will not after
+   upgrade, with no opt-out and no grace period, including on re-admission
+   events such as eviction and rescheduling. The pre-upgrade inventory recipe
+   (FR-012a) exists so operators can find affected workloads before installing.
+2. **Failure posture.** Installations currently defaulting to
+   `failurePolicy: Ignore` inherit `Fail` on upgrade. A webhook outage that
+   previously degraded silently will now block pod creation. This is a behavior
+   change for the *cluster*, not only for the workloads in row 1 — it deserves
+   its own line in the upgrade notes rather than a footnote in a values table.
