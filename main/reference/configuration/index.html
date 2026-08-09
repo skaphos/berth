@@ -1147,7 +1147,32 @@ than corrupting lease state.</p>
 <tr>
 <td><code>--injection-helper-api-key-file</code></td>
 <td>empty</td>
-<td>Token-file path passed to injected helpers (mounted into the workload Pod by the platform).</td>
+<td>Path the injected helpers read the bearer token from, inside the workload Pod. Set together with <code>--injection-helper-api-key-secret</code>.</td>
+</tr>
+<tr>
+<td><code>--injection-helper-api-key-secret</code></td>
+<td>empty</td>
+<td>Secret <strong>in each opted-in workload's namespace</strong> that the webhook mounts at <code>--injection-helper-api-key-file</code>. Set together with it.</td>
+</tr>
+<tr>
+<td><code>--injection-helper-api-key-secret-key</code></td>
+<td><code>token</code></td>
+<td>Data key within that Secret holding the token.</td>
+</tr>
+<tr>
+<td><code>--injection-helper-ca-bundle-file</code></td>
+<td>empty</td>
+<td>Path the injected helpers read the API server CA from. Only needed when TLS is not satisfied by system trust. Set together with <code>--injection-helper-ca-bundle-configmap</code>.</td>
+</tr>
+<tr>
+<td><code>--injection-helper-ca-bundle-configmap</code></td>
+<td>empty</td>
+<td>ConfigMap in each opted-in workload's namespace that the webhook mounts at <code>--injection-helper-ca-bundle-file</code>. Set together with it.</td>
+</tr>
+<tr>
+<td><code>--injection-helper-ca-bundle-key</code></td>
+<td><code>ca.crt</code></td>
+<td>Data key within that ConfigMap holding the CA bundle.</td>
 </tr>
 <tr>
 <td><code>--injection-state-dir</code></td>
@@ -1363,7 +1388,7 @@ a repository variable or secret.</p>
 <tr>
 <td><code>berth-operator</code></td>
 <td><code>injection.helper.*</code></td>
-<td>Injected helper image, pull policy, token-file path, and shared <code>stateDir</code> (must be absolute).</td>
+<td>Injected helper image and pull policy; the bearer-token pair (<code>apiKeyFile</code> + <code>apiKeySecret</code>) and CA pair (<code>caBundleFile</code> + <code>caBundleConfigMap</code>) the webhook mounts into the helper containers; and the shared <code>stateDir</code> (must be absolute). See <a href="../../workload-gating-injection/#authenticating-injected-pods">Authenticating injected Pods</a>.</td>
 </tr>
 <tr>
 <td><code>berth-operator</code></td>
