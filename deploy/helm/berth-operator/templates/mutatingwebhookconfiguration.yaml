@@ -29,14 +29,24 @@ webhooks:
       caBundle: {{ $tls.caBundle }}
       {{- end }}
     rules:
-      {{- /* pods/ephemeralcontainers is a second admission path: kubectl
-             debug attaches a container to an already-running pod and can
-             mount volumes the pod already declares. Without this rule the
-             reserved-state-volume check never sees such a request. */}}
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE"]
-        resources: ["pods", "pods/ephemeralcontainers"]
+        resources: ["pods"]
+        scope: Namespaced
+      {{- /* pods/ephemeralcontainers is a second admission path: kubectl
+             debug attaches a container to an already-running pod and can
+             mount volumes the pod already declares, which would otherwise
+             hand a workload write access to the reserved state volume.
+
+             It is a separate rule because the operation differs: the
+             subresource is written with an UPDATE (kubectl debug PATCHes
+             it), so a CREATE-only registration would never fire for debug
+             attachments. */}}
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods/ephemeralcontainers"]
         scope: Namespaced
     {{- /* Never mutate the Berth control plane. Combined with any
            user-supplied namespaceSelector matchExpressions. */ -}}

@@ -197,11 +197,12 @@ func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	// short-circuit on purpose: an ephemeral container is attached to a pod
 	// that has already been injected, so a check placed after the
 	// short-circuit would never see a kubectl-debug request at all.
-	if err := i.checkStateVolumeMounts(pod); err != nil {
+	alreadyInjected := pod.Annotations[AnnInjected] == "true"
+	if err := i.checkStateVolumeMounts(pod, alreadyInjected); err != nil {
 		return err
 	}
 
-	if pod.Annotations[AnnInjected] == "true" {
+	if alreadyInjected {
 		return nil // already injected; idempotent no-op
 	}
 
@@ -233,21 +234,39 @@ func isInjectorOwnedContainer(name string) bool {
 // freshness-stamping the marker closes this — the thing that would check the
 // signature is in the same writable volume. The mount itself has to be
 // refused.
-func (i *PodInjector) checkStateVolumeMounts(pod *corev1.Pod) error {
-	// Containers present at creation. A writable mount at exactly StateDir
-	// is repaired by applyEnforcement rather than refused (see the admission
-	// contract), so it is not an error here.
+func (i *PodInjector) checkStateVolumeMounts(pod *corev1.Pod, alreadyInjected bool) error {
+	// The name-based exemption only makes sense once the injected helpers
+	// actually exist. On create every container in the spec was written by
+	// the pod's author, so exempting by name there would let them claim it
+	// simply by naming a container berth-sidecar — and startup-gate does not
+	// even reserve that name in preflight.
+	owned := func(name string) bool { return alreadyInjected && isInjectorOwnedContainer(name) }
+
+	// Containers present at creation. A writable mount at exactly StateDir is
+	// repaired to read-only rather than refused: it is the shape a
+	// well-meaning author most often writes and the intent is unambiguous.
+	//
+	// The repair happens here, not in applyEnforcement, because
+	// applyEnforcement only ever touched main containers under enforce:probe.
+	// That left two live bypasses — an author initContainer could write the
+	// marker and the check binary before the app started, and a signal-mode
+	// pod kept a writable StateDir mount because no repair ran for it.
 	for _, set := range [][]corev1.Container{pod.Spec.Containers, pod.Spec.InitContainers} {
 		for idx := range set {
 			c := &set[idx]
-			if isInjectorOwnedContainer(c.Name) {
+			if owned(c.Name) {
 				continue
 			}
-			for _, m := range c.VolumeMounts {
-				if m.Name != VolumeName || m.ReadOnly || m.MountPath == i.cfg.StateDir {
+			for mi := range c.VolumeMounts {
+				m := &c.VolumeMounts[mi]
+				if m.Name != VolumeName || m.ReadOnly {
 					continue
 				}
-				return i.rejectStateMount(ReasonWritableStateMount, c.Name, m)
+				if !alreadyInjected && m.MountPath == i.cfg.StateDir {
+					m.ReadOnly = true
+					continue
+				}
+				return i.rejectStateMount(ReasonWritableStateMount, c.Name, *m)
 			}
 		}
 	}
@@ -257,7 +276,7 @@ func (i *PodInjector) checkStateVolumeMounts(pod *corev1.Pod) error {
 	// a writable mount at StateDir must be refused along with the rest.
 	for idx := range pod.Spec.EphemeralContainers {
 		c := &pod.Spec.EphemeralContainers[idx]
-		if isInjectorOwnedContainer(c.Name) {
+		if owned(c.Name) {
 			continue
 		}
 		for _, m := range c.VolumeMounts {
