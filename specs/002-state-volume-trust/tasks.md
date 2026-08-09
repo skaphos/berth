@@ -141,8 +141,8 @@ upgrading and see enforcement firing afterwards.
 
 - [X] T043 Verify every new regression test fails against pre-fix code by stashing only the implementation files and re-running, as done for #97 — a test that passes before the fix proves nothing (FR-011)
 - [X] T044 Run the full gates from the repository root: `go -C tools tool task test`, `go test -race ./internal/webhook/... ./internal/acquire/...`, `task lint`, `task verify-generated`
-- [ ] T045 [P] Confirm the docs build clean with `mkdocs build --strict`, since docs CI gates on it
-- [ ] T046 [P] Cross-check the T039 inventory recipe against actual admission behavior in a scratch cluster — a recipe that disagrees with the webhook is worse than none
+- [X] T045 [P] Confirm the docs build clean with `mkdocs build --strict`, since docs CI gates on it
+- [ ] T046 [P] **Partially done — logic verified, live cross-check outstanding.** Cross-check the T039 inventory recipe against actual admission behavior in a scratch cluster — a recipe that disagrees with the webhook is worse than none. The `jq` was run against synthetic pod JSON covering every row of the admission decision table (writable at another path, read-only, ephemeral writable, non-gated pod, injector-owned container) and selected exactly the two shapes the webhook rejects. What remains is confirming it against a real cluster's output, which needs a kind cluster
 - [X] T047 Confirm exactly one correctly-sized `deploy/helm/berth-operator/Chart.yaml` bump is present for the release being cut; `task lint` will not catch a missed or doubled bump
 
 ---
