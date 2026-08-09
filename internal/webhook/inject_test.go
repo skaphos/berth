@@ -77,10 +77,18 @@ func TestInjectRuntimeSingletonProbe(t *testing.T) {
 		t.Fatal("probe mode should inject an exec liveness probe on the main container")
 	}
 	stateDir := acquire.DefaultStateDir
-	wantCmd := []string{stateDir + "/check", "check", stateDir + "/healthy"}
+	// The probe now carries the freshness bound (one lease TTL) so a dead
+	// sidecar cannot leave a stale marker passing forever (#98).
+	wantCmd := []string{stateDir + "/check", "check", stateDir + "/healthy", "--max-age", "30s"}
 	got := app.LivenessProbe.Exec.Command
-	if len(got) != 3 || got[0] != wantCmd[0] || got[1] != wantCmd[1] || got[2] != wantCmd[2] {
-		t.Errorf("probe command = %v, want %v", got, wantCmd)
+	if len(got) != len(wantCmd) {
+		t.Fatalf("probe command = %v, want %v", got, wantCmd)
+	}
+	for i := range wantCmd {
+		if got[i] != wantCmd[i] {
+			t.Errorf("probe command = %v, want %v", got, wantCmd)
+			break
+		}
 	}
 	if !containerHasMountAt(app, VolumeName, acquire.DefaultStateDir) {
 		t.Error("main container should mount the state volume for the probe")
@@ -134,8 +142,47 @@ func TestInjectSignalSharesProcessNamespace(t *testing.T) {
 	if pod.Spec.ShareProcessNamespace == nil || !*pod.Spec.ShareProcessNamespace {
 		t.Error("signal mode must set shareProcessNamespace=true")
 	}
-	if app := findContainer(pod.Spec.Containers, "app"); app.LivenessProbe != nil {
-		t.Error("signal mode must not inject a probe")
+
+	// Signal mode previously injected no probe at all, which left a dead
+	// sidecar unable to stop its workload — enforcement depended on the
+	// sidecar being alive to do the signalling (#98). It now gets a
+	// freshness-only backstop where the liveness slot is free; signalling
+	// remains the enforcement mechanism.
+	app := findContainer(pod.Spec.Containers, "app")
+	if app.LivenessProbe == nil {
+		t.Fatal("signal mode should get a freshness backstop probe when the liveness slot is free")
+	}
+	if !containerHasMountAt(app, VolumeName, acquire.DefaultStateDir) {
+		t.Error("the backstop probe needs a read-only state mount to read the marker")
+	}
+}
+
+// The backstop is not universally injectable: preflight steers users to
+// signal mode precisely when their container already defines a
+// livenessProbe, and Kubernetes allows one per container. Overwriting the
+// workload's own health check would be a worse defect than the gap.
+func TestInjectSignalDoesNotClobberAnExistingLivenessProbe(t *testing.T) {
+	pod := optInPod("prod", map[string]string{
+		AnnLeaseName:    "checkout",
+		AnnEnforce:      string(acquire.EnforceSignal),
+		AnnSignalTarget: "nginx",
+	})
+	own := &corev1.Probe{
+		ProbeHandler:  corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/bin/app-health"}}},
+		PeriodSeconds: 17,
+	}
+	pod.Spec.Containers[0].LivenessProbe = own
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	app := findContainer(pod.Spec.Containers, "app")
+	if app.LivenessProbe != own {
+		t.Fatal("the workload's own liveness probe must be left untouched")
+	}
+	if app.LivenessProbe.PeriodSeconds != 17 {
+		t.Error("the workload's probe settings must not be rewritten")
 	}
 }
 

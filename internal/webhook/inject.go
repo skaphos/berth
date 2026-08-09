@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -549,6 +550,27 @@ func (i *PodInjector) authVolumeMounts() ([]corev1.Volume, []corev1.VolumeMount)
 	return vols, mounts
 }
 
+// freshnessProbe builds the liveness probe that fails when the health
+// marker is absent *or* has not been refreshed within one lease TTL.
+//
+// The bound travels as a command-line argument rather than through
+// configuration because the probe runs inside the workload's container,
+// which may be distroless and has no Berth config of its own. The webhook
+// already knows the TTL here, so an argument costs nothing.
+func (i *PodInjector) freshnessProbe(r resolved) *corev1.Probe {
+	marker := i.cfg.StateDir + "/healthy"
+	check := i.cfg.StateDir + "/check"
+	maxAge := (time.Duration(r.ttlSeconds) * time.Second).String()
+
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{Command: []string{check, "check", marker, "--max-age", maxAge}},
+		},
+		PeriodSeconds:    2,
+		FailureThreshold: 1,
+	}
+}
+
 // applyEnforcement wires the runtime-singleton kill mechanism.
 func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
 	switch r.enforce {
@@ -556,19 +578,34 @@ func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
 		// shareProcessNamespace lets the sidecar signal the main process.
 		t := true
 		pod.Spec.ShareProcessNamespace = &t
-	default: // probe
-		marker := i.cfg.StateDir + "/healthy"
-		check := i.cfg.StateDir + "/check"
+
+		// Signal enforcement depends on a live sidecar to do the signalling,
+		// so a dead sidecar would otherwise leave the workload running
+		// unleased (#98). Add the freshness probe purely as a backstop —
+		// enforcement stays signal-driven.
+		//
+		// Only where the liveness slot is free. preflight routes users here
+		// precisely when a container already defines its own livenessProbe,
+		// and Kubernetes allows one per container; overwriting the
+		// workload's health check would be a worse defect than the one being
+		// fixed. Those pods keep the gap, which is documented rather than
+		// implied.
 		roMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir, ReadOnly: true}
 		for idx := range pod.Spec.Containers {
 			c := &pod.Spec.Containers[idx]
-			c.LivenessProbe = &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					Exec: &corev1.ExecAction{Command: []string{check, "check", marker}},
-				},
-				PeriodSeconds:    2,
-				FailureThreshold: 1,
+			if c.LivenessProbe != nil {
+				continue
 			}
+			c.LivenessProbe = i.freshnessProbe(r)
+			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
+				c.VolumeMounts = append(c.VolumeMounts, roMount)
+			}
+		}
+	default: // probe
+		roMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir, ReadOnly: true}
+		for idx := range pod.Spec.Containers {
+			c := &pod.Spec.Containers[idx]
+			c.LivenessProbe = i.freshnessProbe(r)
 			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
 				c.VolumeMounts = append(c.VolumeMounts, roMount)
 			} else {

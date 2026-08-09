@@ -63,7 +63,7 @@ cannot modify the marker or the verifier.
 - [X] T009 [P] [US1] Test that a writable mount arriving via the ephemeral-containers subresource is rejected and a read-only one admitted, in `internal/webhook/inject_test.go` — must fail pre-fix
 - [X] T010 [P] [US1] Test that the existing behaviours are unchanged: a writable mount at exactly `StateDir` is admitted and forced read-only, and a different volume at `StateDir` is still rejected, in `internal/webhook/inject_test.go`
 - [X] T011 [P] [US1] Test both enforce modes (`probe` and `signal`) against the mount rule, in `internal/webhook/inject_test.go` — the rule is mode-independent
-- [ ] T012 [US1] **(G1)** End-to-end test in `test/e2e/` asserting that inside an *admitted* workload container, both `touch /berth/healthy` and overwriting `/berth/check` fail — admission tests prove the spec is rejected, this proves the runtime property the feature actually claims
+- [X] T012 [US1] **(G1)** End-to-end test in `test/e2e/` asserting that inside an *admitted* workload container, both `touch /berth/healthy` and overwriting `/berth/check` fail — admission tests prove the spec is rejected, this proves the runtime property the feature actually claims
 
 ### Implementation for User Story 1
 
@@ -89,26 +89,26 @@ renewing normally it never fails, at any point in the cycle.
 
 ### Tests for User Story 2
 
-- [ ] T019 [P] [US2] Test the freshness boundary in `internal/acquire/state_test.go`: `age == bound` healthy, `age > bound` stale, absent distinguished from stale — must fail pre-fix
-- [ ] T020 [P] [US2] Test that `State.IsHealthy()` and the `check` subcommand return the same verdict across an age table including the boundary, in `internal/acquire/state_test.go` (FR-009)
-- [ ] T021 [P] [US2] Test that a holder renewing successfully never trips the bound, across heartbeats from the TTL/3 default to just under the TTL, in `internal/acquire/renew_test.go` (FR-007, SC-003)
-- [ ] T022 [P] [US2] Test that freshness does not depend on cross-container clock agreement, in `internal/acquire/state_test.go` (FR-008)
-- [ ] T023 [P] [US2] Test that `check` exits 0/1 with the correct distinct stderr reason per contracts/check-cli.md, in `cmd/berth-acquire/main_test.go` (FR-011a)
-- [ ] T024 [P] [US2] Test that `check` without `--max-age` preserves presence-only behavior, in `cmd/berth-acquire/main_test.go` — the compatibility row from contracts/check-cli.md
-- [ ] T025 [P] [US2] Test that the init container's acquire leaves a fresh marker so a just-started pod is never killed for a missing first renewal, in `internal/acquire/acquire_test.go`
-- [ ] T026 [P] [US2] **(G4)** Test the `Indeterminate` verdict — an unreadable marker fails closed rather than passing — in `internal/acquire/state_test.go`
-- [ ] T027 [P] [US2] **(G3)** Test that `check` runs correctly with no environment and no config present, asserting the FR-010 dependency-free constraint that would otherwise erode silently, in `cmd/berth-acquire/main_test.go`
+- [X] T019 [P] [US2] Test the freshness boundary in `internal/acquire/state_test.go`: `age == bound` healthy, `age > bound` stale, absent distinguished from stale — must fail pre-fix
+- [X] T020 [P] [US2] Test that `State.IsHealthy()` and the `check` subcommand return the same verdict across an age table including the boundary, in `internal/acquire/state_test.go` (FR-009)
+- [X] T021 [P] [US2] Test that a holder renewing successfully never trips the bound, across heartbeats from the TTL/3 default to just under the TTL, in `internal/acquire/renew_test.go` (FR-007, SC-003)
+- [X] T022 [P] [US2] Test that freshness does not depend on cross-container clock agreement, in `internal/acquire/state_test.go` (FR-008)
+- [X] T023 [P] [US2] Test that `check` exits 0/1 with the correct distinct stderr reason per contracts/check-cli.md, in `cmd/berth-acquire/main_test.go` (FR-011a)
+- [X] T024 [P] [US2] Test that `check` without `--max-age` preserves presence-only behavior, in `cmd/berth-acquire/main_test.go` — the compatibility row from contracts/check-cli.md
+- [X] T025 [P] [US2] Test that the init container's acquire leaves a fresh marker so a just-started pod is never killed for a missing first renewal, in `internal/acquire/acquire_test.go`
+- [X] T026 [P] [US2] **(G4)** Test the `Indeterminate` verdict — an unreadable marker fails closed rather than passing — in `internal/acquire/state_test.go`
+- [X] T027 [P] [US2] **(G3)** Test that `check` runs correctly with no environment and no config present, asserting the FR-010 dependency-free constraint that would otherwise erode silently, in `cmd/berth-acquire/main_test.go`
 - [ ] T028 [US2] **(G2)** End-to-end test in `test/e2e/` asserting that with the sidecar stopped, the workload is killed roughly one TTL later with no sidecar action, and that the probe failure event reports **stale** with the observed age (SC-002, FR-011a)
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Add `--max-age` to the `check` subcommand in `cmd/berth-acquire/main.go`, calling the shared predicate and emitting the distinct reasons; absent flag preserves today's behavior
-- [ ] T030 [US2] Rewire `State.IsHealthy()` in `internal/acquire/state.go` onto the shared predicate — or remove it if T002 found no non-test callers
-- [ ] T031 [US2] Template `--max-age` into the injected probe command in `internal/webhook/inject.go`, resolved from the pod's TTL (R1)
-- [ ] T032 [US2] Inject the freshness-only backstop probe for `enforce: signal` where the main container's liveness slot is free, in `internal/webhook/inject.go` (FR-010a, tier 1 of R2)
+- [X] T029 [US2] Add `--max-age` to the `check` subcommand in `cmd/berth-acquire/main.go`, calling the shared predicate and emitting the distinct reasons; absent flag preserves today's behavior
+- [X] T030 [US2] Rewire `State.IsHealthy()` in `internal/acquire/state.go` onto the shared predicate — or remove it if T002 found no non-test callers
+- [X] T031 [US2] Template `--max-age` into the injected probe command in `internal/webhook/inject.go`, resolved from the pod's TTL (R1)
+- [X] T032 [US2] Inject the freshness-only backstop probe for `enforce: signal` where the main container's liveness slot is free, in `internal/webhook/inject.go` (FR-010a, tier 1 of R2)
 - [ ] T033 [US2] Record the residual `signal`-mode gap — pods whose liveness slot is occupied keep the #98 exposure — as a stated limitation in `docs/workload-gating-injection.md` (FR-010b). **Mandatory**, not conditional: tier 2 is deferred, so this is the only thing standing between users and a silent gap
 - [ ] T034 [US2] Open a tracked follow-up issue for the R2 tier-2 watchdog container, referencing FR-010b and this spec, so the deferred coverage is a scheduled commitment rather than an aspiration
-- [ ] T035 [US2] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` **only if US2 ships as a separate release from US1** — under the incremental strategy below it does; if US1 and US2 are batched into one release, T018's bump covers both and this task is a no-op (FR-014)
+- [X] T035 [US2] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` **only if US2 ships as a separate release from US1** — under the incremental strategy below it does; if US1 and US2 are batched into one release, T018's bump covers both and this task is a no-op (FR-014)
 
 **Checkpoint**: A dead sidecar now stops its workload within one TTL, in `probe` mode and in `signal` mode where the liveness slot is free.
 
