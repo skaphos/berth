@@ -63,9 +63,11 @@ See [Operational caveats](#operational-caveats).
 
 3. **Auth for the injected helper.** Each injected Pod talks to the Berth API
    directly, so it needs a bearer token unless the API server runs with
-   `--auth-mode=none`. The chart sets the **path** the helper reads via
-   `injection.helper.apiKeyFile`; the **platform must mount a token at that
-   path** in the workload Pod (see [Authenticating injected Pods](#authenticating-injected-pods)).
+   `--auth-mode=none`. Configure `injection.helper.apiKeyFile` together with
+   `injection.helper.apiKeySecret` and the **webhook mounts the token into the
+   helper containers**. The Secret must exist in every namespace that runs an
+   opted-in workload (see
+   [Authenticating injected Pods](#authenticating-injected-pods)).
 
 ## Opt-in contract
 
@@ -328,36 +330,51 @@ spec:
 
 ## Authenticating injected Pods
 
-The injected helper inherits the API server URL, CA, and TLS settings from the
-operator, but the **bearer token must be present inside the workload Pod** at the
-`injection.helper.apiKeyFile` path. The webhook does not mount it for you (it
-cannot reach into arbitrary workload namespaces). Mount it yourself — for
-example from a Secret you manage in the workload namespace:
+The injected helper inherits the API server URL and TLS settings from the
+operator. The **webhook mounts the bearer token and CA bundle into the injected
+helper containers for you** — you do not mount them in the workload Pod
+template, and the workload's own containers never receive them.
+
+Configure the operator with the in-Pod path *and* the source object it should
+mount there. Each pair is set together or not at all; the operator refuses to
+start with only one half:
 
 ```yaml
-# in the workload pod template
-spec:
-  volumes:
-    - name: berth-token
-      secret:
-        secretName: berth-api-key      # data key: token
-  containers:
-    - name: app
-      volumeMounts:
-        - { name: berth-token, mountPath: /var/run/berth, readOnly: true }
+injection:
+  helper:
+    # Path the helper reads inside the workload Pod.
+    apiKeyFile: /var/run/berth/api-key
+    # Secret the webhook mounts at that path.
+    apiKeySecret:
+      name: berth-api-key
+      key: api-key            # default: token
+
+    # Only when TLS is not already satisfied by system trust.
+    caBundleFile: /var/run/berth-ca/ca.crt
+    caBundleConfigMap:
+      name: berth-ca
+      key: ca.crt
 ```
 
-with the operator installed using `injection.helper.apiKeyFile=/var/run/berth/token`.
-If the Berth API server runs with `--auth-mode=none`, no token is needed.
+If the Berth API server runs with `--auth-mode=none`, leave all four unset; no
+token is needed.
 
-> **Known limitation (SKA-444).** Today the webhook sets the
-> `BERTH_API_KEY_FILE` / `BERTH_CA_BUNDLE_FILE` environment variables on the
-> injected helper containers but does **not** yet mount the token / CA file into
-> them, so a Pod-template token mount reaches the workload container but not the
-> helper. Until that is fixed, injected pods can authenticate only against an
-> API server running `--auth-mode=none`, with TLS satisfied by system trust or
-> `injection`-inherited `insecure-skip-verify` (both env-only, no file). Token
-> and custom-CA auth for injected pods are tracked in SKA-444.
+> [!IMPORTANT]
+> **The Secret and ConfigMap must already exist in every namespace that runs an
+> opted-in workload.** The webhook mounts them by name from the Pod's own
+> namespace — it does not create or copy them, because it cannot safely
+> replicate credentials into arbitrary namespaces. A Pod whose namespace is
+> missing the Secret will fail to start with a mount error, which is a clearer
+> failure than the alternative but still a failure.
+>
+> Distributing that Secret is yours to arrange (an external secrets operator, a
+> namespace-provisioning controller, or whatever your platform already uses for
+> per-namespace credentials).
+
+The auth mounts are read-only and land only on the `berth-acquire` init
+container and the `berth-sidecar` sidecar. They are separate from the shared
+`berth-state` volume, which is reserved and read-only for workload containers
+— see [The state volume is reserved](#the-state-volume-is-reserved).
 
 ## Operational caveats
 
@@ -392,10 +409,12 @@ If the Berth API server runs with `--auth-mode=none`, no token is needed.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Opted-in Pod stuck in `Init` | Another candidate holds the lease (expected for a standby), or the helper can't reach/authenticate to the API server | Check `kubectl logs <pod> -c berth-acquire`; verify the token mount and API URL. |
+| Opted-in Pod stuck in `Init` | Another candidate holds the lease (expected for a standby), or the helper can't reach/authenticate to the API server | Check `kubectl logs <pod> -c berth-acquire`; verify the API URL, and that the token Secret named by `injection.helper.apiKeySecret` exists **in this Pod's namespace**. |
+| Opted-in Pod fails to start with a volume/mount error naming a Secret or ConfigMap | The token Secret or CA ConfigMap does not exist in the workload's namespace | The webhook mounts them by name from the Pod's own namespace and never copies them there; create the object in that namespace (see [Authenticating injected Pods](#authenticating-injected-pods)). |
 | Main container CrashLoopBackOff right after start (probe mode) | The injected `exec` probe can't run, or the marker is absent | Confirm the helper's static `check` binary is on the shared volume; for images where the probe can't run, switch to `berth.skaphos.io/enforce: signal`. |
 | Webhook never fires (no injection) | Label not on the **pod template**, CronJob label at the wrong depth, or the Pod is in a skipped namespace | Put the label on `spec.template.metadata` (CronJob: `spec.jobTemplate.spec.template.metadata`); the release and `injection.controlPlaneNamespaces` namespaces are never mutated. |
-| Pod create rejected with a webhook error | A reserved name/volume collision (`berth-acquire`/`berth-sidecar`/`berth-state`), an existing `livenessProbe` in probe mode, or a foreign volume already mounted at the state dir | Read the admission error — the webhook rejects these up front with a clear message; rename the conflicting resource or switch enforcement mode. |
+| Pod create rejected with a webhook error | A reserved name/volume collision (`berth-acquire`/`berth-sidecar`/`berth-state`), an existing `livenessProbe` in probe mode, a foreign volume already mounted at the state dir, or a **writable mount of the reserved `berth-state` volume** | Read the admission error — the webhook rejects these up front with a clear message naming the container, volume, and path; rename the conflicting resource, mark the mount `readOnly: true`, use a separate volume, or switch enforcement mode. |
+| `kubectl debug` refused on a healthy gated Pod | The debug container mounts `berth-state` writably | Attach with the mount marked `readOnly: true`, or without mounting `berth-state` at all — the Pod itself is unaffected. |
 | `x509`/TLS errors calling the webhook | `caBundle` doesn't match the serving cert | Use cert-manager (auto-injects the CA) or set `injection.webhook.tls.caBundle` to the serving CA. |
 | Multiple replicas all run | A shared `holder-identity` override in runtime-singleton | Remove the override; let the per-Pod identity default apply. |
 

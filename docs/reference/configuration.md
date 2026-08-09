@@ -88,7 +88,12 @@ than corrupting lease state.
 | `--enable-injection-webhook` | `false` | Serve the `berth-acquire` pod-injection mutating webhook from the operator. |
 | `--injection-helper-image` | empty | `berth-acquire` image stamped into opted-in Pods. Required when the webhook is enabled. |
 | `--injection-control-plane-namespaces` | `berth-system` | Comma-separated namespaces the webhook never mutates. |
-| `--injection-helper-api-key-file` | empty | Token-file path passed to injected helpers (mounted into the workload Pod by the platform). |
+| `--injection-helper-api-key-file` | empty | Path the injected helpers read the bearer token from, inside the workload Pod. Set together with `--injection-helper-api-key-secret`. |
+| `--injection-helper-api-key-secret` | empty | Secret **in each opted-in workload's namespace** that the webhook mounts at `--injection-helper-api-key-file`. Set together with it. |
+| `--injection-helper-api-key-secret-key` | `token` | Data key within that Secret holding the token. |
+| `--injection-helper-ca-bundle-file` | empty | Path the injected helpers read the API server CA from. Only needed when TLS is not satisfied by system trust. Set together with `--injection-helper-ca-bundle-configmap`. |
+| `--injection-helper-ca-bundle-configmap` | empty | ConfigMap in each opted-in workload's namespace that the webhook mounts at `--injection-helper-ca-bundle-file`. Set together with it. |
+| `--injection-helper-ca-bundle-key` | `ca.crt` | Data key within that ConfigMap holding the CA bundle. |
 | `--injection-state-dir` | `/berth` | Shared-volume mount path used by the injected init container and sidecar. Must be absolute. |
 | `--injection-default-mode` | `runtime-singleton` | Default `berth.skaphos.io/mode` for Pods that omit the annotation. |
 | `--injection-default-enforce` | `probe` | Default `berth.skaphos.io/enforce` for Pods that omit the annotation. |
@@ -149,7 +154,7 @@ a repository variable or secret.
 | `berth-operator` | `berth.tls.*` | CA bundle, server name, and development-only insecure mode. |
 | `berth-operator` | `sidecarBroker.*` | Optional OIDC broker sidecar configuration. |
 | `berth-operator` | `injection.enabled` | Serve the `berth-acquire` pod-injection webhook. Off by default. |
-| `berth-operator` | `injection.helper.*` | Injected helper image, pull policy, token-file path, and shared `stateDir` (must be absolute). |
+| `berth-operator` | `injection.helper.*` | Injected helper image and pull policy; the bearer-token pair (`apiKeyFile` + `apiKeySecret`) and CA pair (`caBundleFile` + `caBundleConfigMap`) the webhook mounts into the helper containers; and the shared `stateDir` (must be absolute). See [Authenticating injected Pods](../workload-gating-injection.md#authenticating-injected-pods). |
 | `berth-operator` | `injection.defaults.*` | Default `mode`, `enforce`, and `ttlSeconds` for Pods that omit the annotation. |
 | `berth-operator` | `injection.controlPlaneNamespaces` | Namespaces the webhook never mutates (the release namespace is always added). |
 | `berth-operator` | `injection.webhook.*` | `failurePolicy`, `timeoutSeconds`, service port, object/namespace selectors. |

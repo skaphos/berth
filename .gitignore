@@ -14,6 +14,8 @@ coverage*.out
 # Build artifacts
 .tmp/
 dist/
+# mkdocs output, produced by a local `mkdocs build` (CI publishes via mike)
+site/
 
 # IDE
 .idea/
