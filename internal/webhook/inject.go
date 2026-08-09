@@ -277,6 +277,7 @@ func (i *PodInjector) checkStateVolumeMounts(pod *corev1.Pod) error {
 // exists — there is none.
 func (i *PodInjector) rejectStateMount(reason RejectReason, container string, m corev1.VolumeMount) error {
 	if reason == ReasonWritableStateMountEphemeral {
+		recordRejection(reason, admissionPathEphemeralContainers)
 		return fmt.Errorf("cannot attach ephemeral container %q: it mounts the Berth state volume %q "+
 			"writably at %q. The pod itself is healthy — this debug request is refused. The state volume "+
 			"is reserved: write access would let a container forge the health marker and replace the "+
@@ -284,6 +285,7 @@ func (i *PodInjector) rejectStateMount(reason RejectReason, container string, m 
 			"readOnly: true, or without mounting %s",
 			container, m.Name, m.MountPath, VolumeName)
 	}
+	recordRejection(reason, admissionPathPods)
 	return fmt.Errorf("cannot inject: container %q mounts the Berth state volume %q writably at %q. "+
 		"The state volume is reserved: a writable mount lets the workload forge the health marker and "+
 		"replace the probe's check binary, defeating at-most-once enforcement. Either mark the mount "+

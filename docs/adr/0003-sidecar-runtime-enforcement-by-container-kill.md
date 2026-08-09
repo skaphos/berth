@@ -1,6 +1,7 @@
 # 3. Enforce at-most-once by killing the main container; probe default, signal opt-in
 
-- **Status**: accepted
+- **Status**: accepted — trust model amended by
+  [ADR-0004](0004-state-volume-is-a-trust-boundary.md)
 - **Date**: 2026-05-24
 - **Deciders**: Shawn Stratton
 - **Consulted**: Skaphos team

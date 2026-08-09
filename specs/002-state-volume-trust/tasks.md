@@ -98,7 +98,7 @@ renewing normally it never fails, at any point in the cycle.
 - [X] T025 [P] [US2] Test that the init container's acquire leaves a fresh marker so a just-started pod is never killed for a missing first renewal, in `internal/acquire/acquire_test.go`
 - [X] T026 [P] [US2] **(G4)** Test the `Indeterminate` verdict — an unreadable marker fails closed rather than passing — in `internal/acquire/state_test.go`
 - [X] T027 [P] [US2] **(G3)** Test that `check` runs correctly with no environment and no config present, asserting the FR-010 dependency-free constraint that would otherwise erode silently, in `cmd/berth-acquire/main_test.go`
-- [ ] T028 [US2] **(G2)** End-to-end test in `test/e2e/` asserting that with the sidecar stopped, the workload is killed roughly one TTL later with no sidecar action, and that the probe failure event reports **stale** with the observed age (SC-002, FR-011a)
+- [ ] T028 [US2] **(G2) — DEFERRED, see note below.** End-to-end test in `test/e2e/` asserting that with the sidecar stopped, the workload is killed roughly one TTL later with no sidecar action, and that the probe failure event reports **stale** with the observed age (SC-002, FR-011a)
 
 ### Implementation for User Story 2
 
@@ -106,8 +106,8 @@ renewing normally it never fails, at any point in the cycle.
 - [X] T030 [US2] Rewire `State.IsHealthy()` in `internal/acquire/state.go` onto the shared predicate — or remove it if T002 found no non-test callers
 - [X] T031 [US2] Template `--max-age` into the injected probe command in `internal/webhook/inject.go`, resolved from the pod's TTL (R1)
 - [X] T032 [US2] Inject the freshness-only backstop probe for `enforce: signal` where the main container's liveness slot is free, in `internal/webhook/inject.go` (FR-010a, tier 1 of R2)
-- [ ] T033 [US2] Record the residual `signal`-mode gap — pods whose liveness slot is occupied keep the #98 exposure — as a stated limitation in `docs/workload-gating-injection.md` (FR-010b). **Mandatory**, not conditional: tier 2 is deferred, so this is the only thing standing between users and a silent gap
-- [ ] T034 [US2] Open a tracked follow-up issue for the R2 tier-2 watchdog container, referencing FR-010b and this spec, so the deferred coverage is a scheduled commitment rather than an aspiration
+- [X] T033 [US2] Record the residual `signal`-mode gap — pods whose liveness slot is occupied keep the #98 exposure — as a stated limitation in `docs/workload-gating-injection.md` (FR-010b). **Mandatory**, not conditional: tier 2 is deferred, so this is the only thing standing between users and a silent gap
+- [X] T034 [US2] Open a tracked follow-up issue for the R2 tier-2 watchdog container, referencing FR-010b and this spec, so the deferred coverage is a scheduled commitment rather than an aspiration
 - [X] T035 [US2] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` **only if US2 ships as a separate release from US1** — under the incremental strategy below it does; if US1 and US2 are batched into one release, T018's bump covers both and this task is a no-op (FR-014)
 
 **Checkpoint**: A dead sidecar now stops its workload within one TTL, in `probe` mode and in `signal` mode where the liveness slot is free.
@@ -124,26 +124,26 @@ upgrading and see enforcement firing afterwards.
 
 ### Tests for User Story 3
 
-- [ ] T036 [P] [US3] Test the rejection counter increments per rejection with reason and admission-path labels and no pod/namespace labels, in `internal/webhook/inject_test.go` (FR-011b, R6)
+- [X] T036 [P] [US3] Test the rejection counter increments per rejection with reason and admission-path labels and no pod/namespace labels, in `internal/webhook/inject_test.go` (FR-011b, R6)
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Register the rejection `CounterVec` on the operator's metrics registry, confirming first whether to extend `internal/metrics/metrics.go` or register locally in the operator — R6 notes the existing package serves the apiserver, so this is a decision to make before writing, not while writing
-- [ ] T038 [P] [US3] Document the reserved state volume and the freshness rule in `docs/workload-gating-injection.md` (FR-012)
-- [ ] T039 [P] [US3] Write upgrade notes in `docs/operations/` covering **both** breaking changes — rejected pod shapes, and the `failurePolicy` default moving from `Ignore` to `Fail` — including the `kubectl`/`jq` inventory recipe runnable against an un-upgraded cluster (FR-012a, FR-001b)
-- [ ] T040 [P] [US3] Document the new failure posture in `docs/workload-gating-injection.md`: the guarantee now holds unconditionally, at the cost of the operator being a hard dependency for pod creation in gated namespaces; update or close issue #103, which this change resolves for the gating webhook (R4)
-- [ ] T041 [US3] Write `docs/adr/0004-state-volume-is-reserved.md` superseding ADR-0003's trust model, and mark ADR-0003 superseded rather than editing it (FR-013)
-- [ ] T042 [P] [US3] Update `docs/architecture.md` and `docs/code-map.md` if the component descriptions no longer match
+- [X] T037 [US3] Register the rejection `CounterVec` on the operator's metrics registry, confirming first whether to extend `internal/metrics/metrics.go` or register locally in the operator — R6 notes the existing package serves the apiserver, so this is a decision to make before writing, not while writing
+- [X] T038 [P] [US3] Document the reserved state volume and the freshness rule in `docs/workload-gating-injection.md` (FR-012)
+- [X] T039 [P] [US3] Write upgrade notes in `docs/operations/` covering **both** breaking changes — rejected pod shapes, and the `failurePolicy` default moving from `Ignore` to `Fail` — including the `kubectl`/`jq` inventory recipe runnable against an un-upgraded cluster (FR-012a, FR-001b)
+- [X] T040 [P] [US3] Document the new failure posture in `docs/workload-gating-injection.md`: the guarantee now holds unconditionally, at the cost of the operator being a hard dependency for pod creation in gated namespaces; update or close issue #103, which this change resolves for the gating webhook (R4)
+- [X] T041 [US3] Write `docs/adr/0004-state-volume-is-reserved.md` superseding ADR-0003's trust model, and mark ADR-0003 superseded rather than editing it (FR-013)
+- [X] T042 [P] [US3] Update `docs/architecture.md` and `docs/code-map.md` if the component descriptions no longer match
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T043 Verify every new regression test fails against pre-fix code by stashing only the implementation files and re-running, as done for #97 — a test that passes before the fix proves nothing (FR-011)
-- [ ] T044 Run the full gates from the repository root: `go -C tools tool task test`, `go test -race ./internal/webhook/... ./internal/acquire/...`, `task lint`, `task verify-generated`
+- [X] T043 Verify every new regression test fails against pre-fix code by stashing only the implementation files and re-running, as done for #97 — a test that passes before the fix proves nothing (FR-011)
+- [X] T044 Run the full gates from the repository root: `go -C tools tool task test`, `go test -race ./internal/webhook/... ./internal/acquire/...`, `task lint`, `task verify-generated`
 - [ ] T045 [P] Confirm the docs build clean with `mkdocs build --strict`, since docs CI gates on it
 - [ ] T046 [P] Cross-check the T039 inventory recipe against actual admission behavior in a scratch cluster — a recipe that disagrees with the webhook is worse than none
-- [ ] T047 Confirm exactly one correctly-sized `deploy/helm/berth-operator/Chart.yaml` bump is present for the release being cut; `task lint` will not catch a missed or doubled bump
+- [X] T047 Confirm exactly one correctly-sized `deploy/helm/berth-operator/Chart.yaml` bump is present for the release being cut; `task lint` will not catch a missed or doubled bump
 
 ---
 
@@ -220,6 +220,29 @@ docs must not claim otherwise until US2 lands.
   admission pass, so a pod's `check` binary and probe command always match.
   No release-ordering requirement; only a pinned-stale `injection.helper.image`
   could produce the failing combination. Contract updated accordingly.
+
+### T028 deferral (the dead-sidecar e2e)
+
+Not written, deliberately, rather than written blind.
+
+The assertion requires *stopping the sidecar* on a running pod. The e2e harness
+builds a `ctrlclient` with no exec support, and the workload fixture image is
+`registry.k8s.io/pause` — no shell — so `kubectl exec`-style approaches are
+unavailable without new plumbing. The alternatives considered (patching the
+sidecar's container image to force a crash-loop; scaling the API server to zero)
+either need machinery that cannot be validated without a live cluster, or
+exercise the *absent*-marker path rather than the *stale* one, since the #97 fix
+makes a live sidecar self-fence past expiry.
+
+An e2e test that compiles but asserts the wrong path is worse than none: it
+manufactures confidence. The freshness logic itself is covered by unit tests at
+the predicate and CLI levels (T019–T027), and T012 proves the webhook half is
+genuinely served by a real API server.
+
+**To pick this up**: add exec support to the harness (client-go `rest.Config` +
+`remotecommand`), switch the fixture to an image with a shell, then stop the
+sidecar and assert the workload's `restartCount` increases within roughly one
+TTL with a probe event naming *stale*.
 
 ### Notes
 

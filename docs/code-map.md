@@ -65,8 +65,9 @@ The fallback path that gates unmodifiable workloads on a lease by injecting the
 | `internal/acquire/acquire.go`, `renew.go` | Acquire-and-hold and the renew state machine with local-expiry enforcement (SKA-436 guarantee). |
 | `internal/acquire/enforce.go` | Probe-marker and signal enforcement of lease loss (ADR-0003). |
 | `internal/acquire/state.go` | Shared `/berth` state: token, holder, health marker, self-copied `check` binary. |
-| `internal/webhook/contract.go` | Opt-in label, annotation keys, and injected resource names. |
-| `internal/webhook/inject.go` | `PodInjector` (typed `CustomDefaulter`): opt-in guard, control-plane skip, idempotency, annotation resolve/validate, container/volume/probe/signal injection, and `InjectorConfig.Validate`. |
+| `internal/webhook/contract.go` | Opt-in label, annotation keys, injected resource names, and admission rejection reasons. |
+| `internal/webhook/inject.go` | `PodInjector` (typed `CustomDefaulter`): opt-in guard, control-plane skip, reserved-state-volume rule (ADR-0004), idempotency, annotation resolve/validate, container/volume/probe/signal injection, and `InjectorConfig.Validate`. |
+| `internal/webhook/metrics.go` | Counter of admissions refused by the reserved-state-volume rule, labelled by reason and admission path. |
 | `internal/webhook/setup.go` | Registers the Pod mutating webhook with the operator's manager. |
 | `deploy/helm/berth-operator` (`injection.*`) | `MutatingWebhookConfiguration`, webhook `Service`, cert-manager `Certificate`, and the deployment wiring (`templates/mutatingwebhookconfiguration.yaml`, `webhook-service.yaml`, `webhook-certificate.yaml`). |
 
