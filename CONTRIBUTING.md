@@ -50,8 +50,8 @@ change.
 
 ```text
 BREAKING CHANGE: Pods whose own containers mount the `berth-state` volume
-writably are now refused at admission, at any mount path, with no opt-out.
-Mark the mount `readOnly: true` or use a separate volume. See
+with write access are now refused at admission, at any mount path, with no
+opt-out. Mark the mount `readOnly: true` or use a separate volume. See
 docs/operations/upgrade-state-volume-trust.md for a recipe that finds affected
 workloads before upgrading.
 ```
