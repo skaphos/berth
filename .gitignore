@@ -29,7 +29,12 @@ Thumbs.db
 .gocache
 .cache/
 .sisyphus/
-.claude
+
+# Claude Code: local state stays out (settings.local.json, worktrees), but the
+# spec-kit skills are project tooling and are shared — they provide the
+# /speckit.* commands and are managed by `specify integration`.
+.claude/*
+!.claude/skills/
 
 # graphify — share graph outputs, ignore local state
 graphify-out/cache/
