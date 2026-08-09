@@ -5,8 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/skaphos/berth/internal/acquire"
 )
@@ -32,6 +34,19 @@ func optInPod(ns string, ann map[string]string) *corev1.Pod {
 			Containers: []corev1.Container{{Name: "app", Image: "vendor/app:1"}},
 		},
 	}
+}
+
+// ephemeralCtx builds the admission context the API server supplies for a
+// write to the pods/ephemeralcontainers subresource — the kubectl-debug
+// path. Which admission path a request is on is read from here rather than
+// from the pod, so tests that exercise that path must supply it too.
+func ephemeralCtx(ns string) context.Context {
+	return admission.NewContextWithRequest(context.Background(), admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Namespace:   ns,
+			SubResource: subresourceEphemeralContainers,
+		},
+	})
 }
 
 func findContainer(cs []corev1.Container, name string) *corev1.Container {
@@ -77,10 +92,18 @@ func TestInjectRuntimeSingletonProbe(t *testing.T) {
 		t.Fatal("probe mode should inject an exec liveness probe on the main container")
 	}
 	stateDir := acquire.DefaultStateDir
-	wantCmd := []string{stateDir + "/check", "check", stateDir + "/healthy"}
+	// The probe now carries the freshness bound (one lease TTL) so a dead
+	// sidecar cannot leave a stale marker passing forever (#98).
+	wantCmd := []string{stateDir + "/check", "check", stateDir + "/healthy", "--max-age", "30s"}
 	got := app.LivenessProbe.Exec.Command
-	if len(got) != 3 || got[0] != wantCmd[0] || got[1] != wantCmd[1] || got[2] != wantCmd[2] {
-		t.Errorf("probe command = %v, want %v", got, wantCmd)
+	if len(got) != len(wantCmd) {
+		t.Fatalf("probe command = %v, want %v", got, wantCmd)
+	}
+	for i := range wantCmd {
+		if got[i] != wantCmd[i] {
+			t.Errorf("probe command = %v, want %v", got, wantCmd)
+			break
+		}
 	}
 	if !containerHasMountAt(app, VolumeName, acquire.DefaultStateDir) {
 		t.Error("main container should mount the state volume for the probe")
@@ -134,8 +157,47 @@ func TestInjectSignalSharesProcessNamespace(t *testing.T) {
 	if pod.Spec.ShareProcessNamespace == nil || !*pod.Spec.ShareProcessNamespace {
 		t.Error("signal mode must set shareProcessNamespace=true")
 	}
-	if app := findContainer(pod.Spec.Containers, "app"); app.LivenessProbe != nil {
-		t.Error("signal mode must not inject a probe")
+
+	// Signal mode previously injected no probe at all, which left a dead
+	// sidecar unable to stop its workload — enforcement depended on the
+	// sidecar being alive to do the signalling (#98). It now gets a
+	// freshness-only backstop where the liveness slot is free; signalling
+	// remains the enforcement mechanism.
+	app := findContainer(pod.Spec.Containers, "app")
+	if app.LivenessProbe == nil {
+		t.Fatal("signal mode should get a freshness backstop probe when the liveness slot is free")
+	}
+	if !containerHasMountAt(app, VolumeName, acquire.DefaultStateDir) {
+		t.Error("the backstop probe needs a read-only state mount to read the marker")
+	}
+}
+
+// The backstop is not universally injectable: preflight steers users to
+// signal mode precisely when their container already defines a
+// livenessProbe, and Kubernetes allows one per container. Overwriting the
+// workload's own health check would be a worse defect than the gap.
+func TestInjectSignalDoesNotClobberAnExistingLivenessProbe(t *testing.T) {
+	pod := optInPod("prod", map[string]string{
+		AnnLeaseName:    "checkout",
+		AnnEnforce:      string(acquire.EnforceSignal),
+		AnnSignalTarget: "nginx",
+	})
+	own := &corev1.Probe{
+		ProbeHandler:  corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/bin/app-health"}}},
+		PeriodSeconds: 17,
+	}
+	pod.Spec.Containers[0].LivenessProbe = own
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	app := findContainer(pod.Spec.Containers, "app")
+	if app.LivenessProbe != own {
+		t.Fatal("the workload's own liveness probe must be left untouched")
+	}
+	if app.LivenessProbe.PeriodSeconds != 17 {
+		t.Error("the workload's probe settings must not be rewritten")
 	}
 }
 
@@ -205,7 +267,10 @@ func TestInjectSignalRequiresTarget(t *testing.T) {
 	}
 }
 
-func TestInjectIdempotent(t *testing.T) {
+// Re-admission is no longer distinguished by the injected annotation but by
+// the admission path: only a write to pods/ephemeralcontainers reaches an
+// existing pod, and that path never mutates.
+func TestInjectDoesNotReinjectOnTheEphemeralPath(t *testing.T) {
 	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
 	inj := testInjector()
 	if err := inj.Default(context.Background(), pod); err != nil {
@@ -214,14 +279,42 @@ func TestInjectIdempotent(t *testing.T) {
 	initCount := len(pod.Spec.InitContainers)
 	volCount := len(pod.Spec.Volumes)
 
-	if err := inj.Default(context.Background(), pod); err != nil {
-		t.Fatalf("second Default: %v", err)
+	if err := inj.Default(ephemeralCtx("prod"), pod); err != nil {
+		t.Fatalf("attaching a debug container must not fail: %v", err)
 	}
 	if len(pod.Spec.InitContainers) != initCount {
 		t.Errorf("re-injection added init containers: %d -> %d", initCount, len(pod.Spec.InitContainers))
 	}
 	if len(pod.Spec.Volumes) != volCount {
 		t.Errorf("re-injection added volumes: %d -> %d", volCount, len(pod.Spec.Volumes))
+	}
+}
+
+// #143: the injected annotation is submitter-controlled. Setting it on a
+// create request used to short-circuit the whole injector, admitting a pod
+// with no sidecar, no probe, and no state volume while it still carried the
+// opt-in label — ungated, and looking gated to anything reading labels.
+func TestSubmitterCannotSkipInjectionWithTheInjectedAnnotation(t *testing.T) {
+	pod := optInPod("prod", map[string]string{
+		AnnLeaseName: "checkout",
+		AnnInjected:  "true", // claiming to have been injected already
+	})
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	if findContainer(pod.Spec.InitContainers, InitContainerName) == nil {
+		t.Error("the pod must still be injected: the annotation is not proof of prior injection")
+	}
+	if findContainer(pod.Spec.InitContainers, SidecarContainerName) == nil {
+		t.Error("runtime-singleton must still get its sidecar")
+	}
+	if !hasVolume(pod, VolumeName) {
+		t.Error("the state volume must still be added")
+	}
+	if app := findContainer(pod.Spec.Containers, "app"); app.LivenessProbe == nil {
+		t.Error("probe enforcement must still be wired")
 	}
 }
 
@@ -304,4 +397,161 @@ func findEnvSource(c *corev1.Container, name string) *corev1.EnvVarSource {
 		}
 	}
 	return nil
+}
+
+// --- US1: the state volume is reserved (issue #96) ---------------------
+//
+// The probe's verifier (<StateDir>/check) lives inside the state volume,
+// so a workload with a writable mount can replace the verifier itself, not
+// merely forge the marker. Marker-signing schemes cannot close that; only
+// refusing the mount can.
+
+// mountedPod returns an opted-in pod whose "app" container carries mounts.
+func mountedPod(mounts ...corev1.VolumeMount) *corev1.Pod {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, mounts...)
+	return pod
+}
+
+func TestInjectRejectsWritableStateMountAtOtherPath(t *testing.T) {
+	pod := mountedPod(corev1.VolumeMount{Name: VolumeName, MountPath: "/rw"})
+
+	err := testInjector().Default(context.Background(), pod)
+	if err == nil {
+		t.Fatal("a writable mount of the state volume must be rejected: the workload could replace the check binary")
+	}
+	for _, want := range []string{"app", VolumeName, "/rw"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q must name %q so the owner knows what to fix", err, want)
+		}
+	}
+}
+
+func TestInjectAllowsReadOnlyStateMountAtOtherPath(t *testing.T) {
+	pod := mountedPod(corev1.VolumeMount{Name: VolumeName, MountPath: "/ro", ReadOnly: true})
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("read-only access is not a bypass and must stay allowed: %v", err)
+	}
+}
+
+func TestInjectAllowsInjectorOwnedWritableMounts(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	// The helpers must keep write access; the rule cannot key on "writable".
+	var sawWritable bool
+	for _, c := range pod.Spec.InitContainers {
+		if !isInjectorOwnedContainer(c.Name) {
+			continue
+		}
+		for _, m := range c.VolumeMounts {
+			if m.Name == VolumeName && !m.ReadOnly {
+				sawWritable = true
+			}
+		}
+	}
+	if !sawWritable {
+		t.Error("injected helpers must retain a writable state mount")
+	}
+}
+
+func TestInjectRejectsWritableStateMountOnEphemeralContainer(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("initial inject: %v", err)
+	}
+	// kubectl debug attaches to an already-injected, running pod.
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			Name:         "debugger",
+			Image:        "busybox",
+			VolumeMounts: []corev1.VolumeMount{{Name: VolumeName, MountPath: "/rw"}},
+		},
+	})
+
+	err := testInjector().Default(ephemeralCtx("prod"), pod)
+	if err == nil {
+		t.Fatal("an ephemeral container must not obtain a writable state mount on a running gated pod")
+	}
+	if !strings.Contains(err.Error(), "debugger") {
+		t.Errorf("error %q must name the offending ephemeral container", err)
+	}
+}
+
+func TestInjectAllowsReadOnlyEphemeralStateMount(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("initial inject: %v", err)
+	}
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			Name:         "debugger",
+			Image:        "busybox",
+			VolumeMounts: []corev1.VolumeMount{{Name: VolumeName, MountPath: "/ro", ReadOnly: true}},
+		},
+	})
+
+	if err := testInjector().Default(ephemeralCtx("prod"), pod); err != nil {
+		t.Fatalf("read-only debugging must stay possible: %v", err)
+	}
+}
+
+// An ephemeral container mounting at StateDir cannot be repaired, because
+// an already-injected pod is not mutated again — so unlike the create
+// path it must be refused outright.
+func TestInjectRejectsWritableEphemeralStateMountAtStateDir(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("initial inject: %v", err)
+	}
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			Name:         "debugger",
+			Image:        "busybox",
+			VolumeMounts: []corev1.VolumeMount{{Name: VolumeName, MountPath: acquire.DefaultStateDir}},
+		},
+	})
+
+	if err := testInjector().Default(ephemeralCtx("prod"), pod); err == nil {
+		t.Fatal("a writable ephemeral mount at the state dir is not repaired, so it must be rejected")
+	}
+}
+
+// Row 4 of the admission contract: an author's writable mount at exactly
+// the state dir is repaired rather than refused, preserving today's
+// behaviour for the shape people most often write by accident.
+func TestInjectStillRepairsWritableMountAtStateDir(t *testing.T) {
+	pod := mountedPod(corev1.VolumeMount{Name: VolumeName, MountPath: acquire.DefaultStateDir})
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("a writable mount at the state dir must still be repaired, not rejected: %v", err)
+	}
+	app := findContainer(pod.Spec.Containers, "app")
+	for _, m := range app.VolumeMounts {
+		if m.Name == VolumeName && !m.ReadOnly {
+			t.Error("the state mount must be forced read-only")
+		}
+	}
+}
+
+func TestStateMountRuleAppliesInBothEnforceModes(t *testing.T) {
+	for _, mode := range []acquire.Enforce{acquire.EnforceProbe, acquire.EnforceSignal} {
+		t.Run(string(mode), func(t *testing.T) {
+			pod := optInPod("prod", map[string]string{
+				AnnLeaseName:    "checkout",
+				AnnEnforce:      string(mode),
+				AnnSignalTarget: "app",
+			})
+			pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+				{Name: VolumeName, MountPath: "/rw"},
+			}
+
+			if err := testInjector().Default(context.Background(), pod); err == nil {
+				t.Fatalf("the mount rule is mode-independent; %s must reject too", mode)
+			}
+		})
+	}
 }

@@ -153,6 +153,66 @@ latency between lease loss and the container stopping. The **fencing token**
 remains the real boundary for any downstream resource that must reject a stale
 holder.
 
+### The state volume is reserved
+
+The shared `emptyDir` (`berth-state`) is not general-purpose scratch space. It
+holds the holder identity, the fencing token, the health marker — and the
+`check` binary the liveness probe execs. Because the *verifier* lives in the
+same volume it verifies, a workload with write access could replace `check`
+itself, not merely recreate the marker.
+
+Admission therefore **rejects any Pod whose own containers mount `berth-state`
+writably**, at any path, in either enforce mode. This applies to Pod creation
+and to ephemeral containers (`kubectl debug`) attached to a running gated Pod.
+
+- Read-only mounts are fine — read access is not a bypass.
+- The injected helper containers keep write access; they have to.
+- A writable mount at exactly the state dir is repaired to read-only on Pod
+  creation rather than refused, since that shape is unambiguous.
+- There is no annotation or value that permits the rejected shape.
+
+If a workload needs scratch space, give it its own volume.
+
+### Marker freshness
+
+The probe fails when the marker is **absent** *or* when it has not been
+refreshed within one lease TTL. Freshness matters because presence alone only
+detects enforcement the sidecar performs: if the sidecar is OOM-killed or
+crash-looping, nothing removes the marker, and the workload would keep passing
+liveness while its lease expired and a standby took over.
+
+The two failures are reported distinctly, because they mean different things:
+
+| Probe failure | Meaning |
+|---|---|
+| `health marker absent` | The sidecar removed it — the lease was lost. Expected failover. |
+| `health marker stale` | Nobody removed it and nobody refreshed it — the sidecar is dead or wedged. An incident. |
+
+The stale message reports the observed age and the bound it exceeded. Both
+surface on the Pod's probe-failure event.
+
+A correctly-renewing holder never trips this: validation requires the heartbeat
+to be strictly shorter than the TTL, so a healthy sidecar refreshes the marker
+well inside the bound.
+
+### Known limitation — `signal` mode and a dead sidecar
+
+`signal` enforcement is carried out by the sidecar, so a dead sidecar cannot
+signal anything. Where a main container defines **no** `livenessProbe` of its
+own, the webhook injects the freshness probe as a backstop and the behaviour
+matches `probe` mode.
+
+Where the container **already defines a `livenessProbe`**, it does not. A
+container may have only one, and overwriting the workload's own health check
+would be a worse failure than the gap. That case is exactly why `preflight`
+steers people to `signal` in the first place, so it is not rare.
+
+**For those Pods, a dead sidecar still leaves the workload running unleased.**
+If you need the guarantee unconditionally, use `enforce: probe` and let Berth
+own the liveness slot. Closing this for `signal` requires a separate watchdog
+mechanism, tracked in
+[#142](https://github.com/skaphos/berth/issues/142).
+
 ## Examples
 
 ### Deployment — runtime singleton (legacy cross-cluster singleton)
@@ -311,10 +371,22 @@ If the Berth API server runs with `--auth-mode=none`, no token is needed.
   holder, so the enforce/re-gate/release code runs in many more places than one
   operator per cluster. This is the central reason injection is a fallback.
 - **`startup-gate` provides no runtime guarantee** once the init container exits.
-- **`failurePolicy`.** The chart defaults the webhook to `Ignore` so an outage
-  cannot block unrelated Pod creation; because the object selector already scopes
-  admission to opted-in Pods, set `injection.webhook.failurePolicy=Fail` if you
-  want opted-in Pods to refuse to start while the webhook is unavailable.
+- **`failurePolicy` defaults to `Fail`.** The webhook enforces a safety rule,
+  not only a convenience mutation: it reserves the state volume so a workload
+  cannot forge the health marker or replace the probe's `check` binary. Under
+  `Ignore` that rule silently lapses for the duration of any webhook outage,
+  which is indistinguishable from not having it.
+
+  The cost is real and worth planning for: **while the webhook is unavailable,
+  opted-in Pods will not start.** The operator becomes a hard dependency for
+  Pod creation in gated namespaces. The namespace and object selectors scope
+  this to Pods opting into injection, and read paths — lease inventory,
+  holders, status — are unaffected.
+
+  Set `injection.webhook.failurePolicy=Ignore` only if you would rather a gated
+  workload start unprotected than not start at all. Note that this reverses the
+  guarantee: enforcement is then best-effort with respect to webhook
+  availability.
 
 ## Troubleshooting
 

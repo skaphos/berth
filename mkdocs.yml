@@ -38,3 +38,4 @@ nav:
       - Configuration: reference/configuration.md
   - Operations:
       - Scalability: operations/scalability.md
+      - "Upgrade: state-volume trust": operations/upgrade-state-volume-trust.md

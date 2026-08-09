@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -180,10 +181,16 @@ func NewPodInjector(cfg InjectorConfig) *PodInjector {
 // the JSON patch.
 func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	// On create the object's namespace is often empty; the authoritative
-	// value is on the admission request.
+	// value is on the admission request. The request is also what tells us
+	// which admission path we are on, which the pod itself cannot be trusted
+	// to say.
 	ns := pod.Namespace
-	if req, err := admission.RequestFromContext(ctx); err == nil && req.Namespace != "" {
-		ns = req.Namespace
+	var subresource string
+	if req, err := admission.RequestFromContext(ctx); err == nil {
+		if req.Namespace != "" {
+			ns = req.Namespace
+		}
+		subresource = req.SubResource
 	}
 
 	if i.isControlPlane(ns) {
@@ -192,8 +199,34 @@ func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	if pod.Labels[LabelInject] != InjectValueAcquire {
 		return nil
 	}
-	if pod.Annotations[AnnInjected] == "true" {
-		return nil // already injected; idempotent no-op
+
+	// Whether this pod has already been through injection is decided by the
+	// admission path, never by the pod's own annotations.
+	//
+	// It used to be read from berth.skaphos.io/injected, which is data the
+	// submitter controls: setting it to "true" on create short-circuited the
+	// whole function, so the pod was admitted with no init container, no
+	// sidecar, no state volume, and no probe — ungated, while still carrying
+	// the opt-in label. That defeated enforcement far more cheaply than any
+	// volume trick (#143).
+	//
+	// The subresource is not forgeable: only a write to
+	// pods/ephemeralcontainers carries it, and that request cannot create a
+	// pod. The annotation is still set by mutate as an observable marker; it
+	// is simply no longer trusted for control flow.
+	onEphemeralPath := subresource == subresourceEphemeralContainers
+
+	// The state volume is reserved. This runs on both paths — on create so a
+	// workload cannot declare a writable mount, and on the ephemeral path so
+	// kubectl debug cannot attach one to a running gated pod.
+	if err := i.checkStateVolumeMounts(pod, onEphemeralPath); err != nil {
+		return err
+	}
+
+	if onEphemeralPath {
+		// Attaching a debug container never re-injects; the pod was mutated
+		// when it was created. Validation above is the whole job here.
+		return nil
 	}
 
 	r, err := i.resolve(pod, ns)
@@ -205,6 +238,101 @@ func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	}
 	i.mutate(pod, r)
 	return nil
+}
+
+// isInjectorOwnedContainer reports whether a container is one the webhook
+// itself adds. Those must keep write access to the state volume, so the
+// rule below cannot simply key on "writable" — it has to distinguish the
+// injector's own mounts from ones the pod author declared.
+func isInjectorOwnedContainer(name string) bool {
+	return name == InitContainerName || name == SidecarContainerName
+}
+
+// checkStateVolumeMounts enforces the reserved state volume (#96).
+//
+// The health marker is only half of what lives there: the helper copies its
+// own executable to <StateDir>/check, and the kubelet execs that binary as
+// the liveness probe every two seconds. A workload with a writable mount can
+// therefore replace the *verifier*, which is why no amount of signing or
+// freshness-stamping the marker closes this — the thing that would check the
+// signature is in the same writable volume. The mount itself has to be
+// refused.
+func (i *PodInjector) checkStateVolumeMounts(pod *corev1.Pod, alreadyInjected bool) error {
+	// The name-based exemption only makes sense once the injected helpers
+	// actually exist. On create every container in the spec was written by
+	// the pod's author, so exempting by name there would let them claim it
+	// simply by naming a container berth-sidecar — and startup-gate does not
+	// even reserve that name in preflight.
+	owned := func(name string) bool { return alreadyInjected && isInjectorOwnedContainer(name) }
+
+	// Containers present at creation. A writable mount at exactly StateDir is
+	// repaired to read-only rather than refused: it is the shape a
+	// well-meaning author most often writes and the intent is unambiguous.
+	//
+	// The repair happens here, not in applyEnforcement, because
+	// applyEnforcement only ever touched main containers under enforce:probe.
+	// That left two live bypasses — an author initContainer could write the
+	// marker and the check binary before the app started, and a signal-mode
+	// pod kept a writable StateDir mount because no repair ran for it.
+	for _, set := range [][]corev1.Container{pod.Spec.Containers, pod.Spec.InitContainers} {
+		for idx := range set {
+			c := &set[idx]
+			if owned(c.Name) {
+				continue
+			}
+			for mi := range c.VolumeMounts {
+				m := &c.VolumeMounts[mi]
+				if m.Name != VolumeName || m.ReadOnly {
+					continue
+				}
+				if !alreadyInjected && m.MountPath == i.cfg.StateDir {
+					m.ReadOnly = true
+					continue
+				}
+				return i.rejectStateMount(ReasonWritableStateMount, c.Name, *m)
+			}
+		}
+	}
+
+	// Ephemeral containers arrive on an already-injected pod, which is never
+	// mutated again — so unlike the create path there is no repair step, and
+	// a writable mount at StateDir must be refused along with the rest.
+	for idx := range pod.Spec.EphemeralContainers {
+		c := &pod.Spec.EphemeralContainers[idx]
+		if owned(c.Name) {
+			continue
+		}
+		for _, m := range c.VolumeMounts {
+			if m.Name != VolumeName || m.ReadOnly {
+				continue
+			}
+			return i.rejectStateMount(ReasonWritableStateMountEphemeral, c.Name, m)
+		}
+	}
+
+	return nil
+}
+
+// rejectStateMount builds the admission error. It names the container,
+// volume, and path so the person who sees it can fix it without reading
+// Berth's source, and it states the resolutions without implying an opt-out
+// exists — there is none.
+func (i *PodInjector) rejectStateMount(reason RejectReason, container string, m corev1.VolumeMount) error {
+	if reason == ReasonWritableStateMountEphemeral {
+		recordRejection(reason, admissionPathEphemeralContainers)
+		return fmt.Errorf("cannot attach ephemeral container %q: it mounts the Berth state volume %q "+
+			"writably at %q. The pod itself is healthy — this debug request is refused. The state volume "+
+			"is reserved: write access would let a container forge the health marker and replace the "+
+			"probe's check binary, defeating at-most-once enforcement. Re-run with the mount marked "+
+			"readOnly: true, or without mounting %s",
+			container, m.Name, m.MountPath, VolumeName)
+	}
+	recordRejection(reason, admissionPathPods)
+	return fmt.Errorf("cannot inject: container %q mounts the Berth state volume %q writably at %q. "+
+		"The state volume is reserved: a writable mount lets the workload forge the health marker and "+
+		"replace the probe's check binary, defeating at-most-once enforcement. Either mark the mount "+
+		"readOnly: true, or use a separate volume for workload data",
+		container, m.Name, m.MountPath)
 }
 
 // preflight rejects pods the injector cannot safely mutate, so the failure
@@ -466,6 +594,27 @@ func (i *PodInjector) authVolumeMounts() ([]corev1.Volume, []corev1.VolumeMount)
 	return vols, mounts
 }
 
+// freshnessProbe builds the liveness probe that fails when the health
+// marker is absent *or* has not been refreshed within one lease TTL.
+//
+// The bound travels as a command-line argument rather than through
+// configuration because the probe runs inside the workload's container,
+// which may be distroless and has no Berth config of its own. The webhook
+// already knows the TTL here, so an argument costs nothing.
+func (i *PodInjector) freshnessProbe(r resolved) *corev1.Probe {
+	marker := i.cfg.StateDir + "/healthy"
+	check := i.cfg.StateDir + "/check"
+	maxAge := (time.Duration(r.ttlSeconds) * time.Second).String()
+
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{Command: []string{check, "check", marker, "--max-age", maxAge}},
+		},
+		PeriodSeconds:    2,
+		FailureThreshold: 1,
+	}
+}
+
 // applyEnforcement wires the runtime-singleton kill mechanism.
 func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
 	switch r.enforce {
@@ -473,19 +622,34 @@ func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
 		// shareProcessNamespace lets the sidecar signal the main process.
 		t := true
 		pod.Spec.ShareProcessNamespace = &t
-	default: // probe
-		marker := i.cfg.StateDir + "/healthy"
-		check := i.cfg.StateDir + "/check"
+
+		// Signal enforcement depends on a live sidecar to do the signalling,
+		// so a dead sidecar would otherwise leave the workload running
+		// unleased (#98). Add the freshness probe purely as a backstop —
+		// enforcement stays signal-driven.
+		//
+		// Only where the liveness slot is free. preflight routes users here
+		// precisely when a container already defines its own livenessProbe,
+		// and Kubernetes allows one per container; overwriting the
+		// workload's health check would be a worse defect than the one being
+		// fixed. Those pods keep the gap, which is documented rather than
+		// implied.
 		roMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir, ReadOnly: true}
 		for idx := range pod.Spec.Containers {
 			c := &pod.Spec.Containers[idx]
-			c.LivenessProbe = &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					Exec: &corev1.ExecAction{Command: []string{check, "check", marker}},
-				},
-				PeriodSeconds:    2,
-				FailureThreshold: 1,
+			if c.LivenessProbe != nil {
+				continue
 			}
+			c.LivenessProbe = i.freshnessProbe(r)
+			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
+				c.VolumeMounts = append(c.VolumeMounts, roMount)
+			}
+		}
+	default: // probe
+		roMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir, ReadOnly: true}
+		for idx := range pod.Spec.Containers {
+			c := &pod.Spec.Containers[idx]
+			c.LivenessProbe = i.freshnessProbe(r)
 			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
 				c.VolumeMounts = append(c.VolumeMounts, roMount)
 			} else {

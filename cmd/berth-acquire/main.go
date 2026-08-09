@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -25,6 +26,11 @@ import (
 
 	"github.com/skaphos/berth/internal/acquire"
 )
+
+// errUnhealthy signals a failed liveness check. It is deliberately terse:
+// the actionable explanation is written to the probe's output stream, and
+// this only drives the exit code.
+var errUnhealthy = errors.New("health check failed")
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Getenv, os.Stdout))
@@ -104,20 +110,35 @@ func run(args []string, getenv func(string) string, stdout io.Writer) int {
 		},
 	}
 
+	var checkMaxAge time.Duration
 	checkCmd := &cobra.Command{
 		Use:   "check [marker-path]",
-		Short: "Exit 0 if the health marker exists, 1 otherwise (liveness probe)",
+		Short: "Exit 0 if the health marker is present and fresh, 1 otherwise (liveness probe)",
 		Args:  cobra.MaximumNArgs(1),
 		// The probe runs in the main container, which may be distroless;
-		// keep this path free of config/client construction.
-		RunE: func(_ *cobra.Command, args []string) error {
+		// keep this path free of config/client construction. The freshness
+		// bound arrives as a flag rather than through configuration for
+		// exactly that reason — the webhook already knows the TTL when it
+		// builds the probe command.
+		RunE: func(cmd *cobra.Command, args []string) error {
 			path := markerPath(args, getenv, &f)
-			if _, err := os.Stat(path); err != nil {
-				return fmt.Errorf("health marker absent: %w", err)
+			res := acquire.EvaluateMarker(path, checkMaxAge)
+			if res.OK() {
+				return nil
 			}
-			return nil
+			// The kubelet surfaces this on the pod's probe-failure event,
+			// so it is an operator's only clue about why the workload was
+			// killed: marker removed (lease lost, expected failover) versus
+			// marker gone stale (sidecar dead, an incident).
+			// Best effort: if the probe's own output stream is broken there
+			// is nothing useful to do about it, and the exit code below is
+			// what actually gates the container.
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), res.Reason(path))
+			return errUnhealthy
 		},
 	}
+	checkCmd.Flags().DurationVar(&checkMaxAge, "max-age", 0,
+		"fail when the marker has not been refreshed within this duration (0 disables the freshness check)")
 
 	root.AddCommand(acquireCmd, renewCmd, checkCmd)
 

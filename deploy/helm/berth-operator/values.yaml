@@ -150,11 +150,19 @@ injection:
 
   webhook:
     # MutatingWebhookConfiguration behavior.
-    # failurePolicy=Ignore (default) keeps a webhook outage from blocking
-    # pod creation; because the objectSelector already scopes admission to
-    # opted-in pods, set Fail for strict singleton guarantees (opted-in
-    # pods will not start while the webhook is unavailable).
-    failurePolicy: Ignore
+    #
+    # failurePolicy=Fail (default) because this webhook enforces a safety
+    # rule, not only a convenience mutation: it reserves the Berth state
+    # volume so a workload cannot forge the health marker or replace the
+    # probe's check binary. Under Ignore that rule silently lapses for the
+    # duration of any webhook outage, which is the same as not having it.
+    #
+    # The trade is real: while the webhook is unavailable, opted-in pods
+    # will not start. The namespaceSelector and objectSelector scope that
+    # to pods opting into injection, and read paths (lease inventory,
+    # holders, status) are unaffected. Set Ignore only if you would rather
+    # a gated workload start unprotected than not start at all.
+    failurePolicy: Fail
     timeoutSeconds: 10
     # ClusterIP Service port fronting the controller-runtime webhook server
     # (container port 9443). Rarely needs changing.

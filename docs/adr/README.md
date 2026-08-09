@@ -19,7 +19,8 @@ the old one rather than editing it.
 |-----|-------|--------|
 | [0001](0001-pod-level-gating-for-injected-singletons.md) | Pod-level gating for injected singletons, not BerthLease scale actions | accepted |
 | [0002](0002-label-annotation-opt-in-over-crd.md) | Opt into injection via pod-template labels/annotations, not a wrapper CRD | accepted |
-| [0003](0003-sidecar-runtime-enforcement-by-container-kill.md) | Enforce at-most-once by killing the main container; probe default, signal opt-in | accepted |
+| [0003](0003-sidecar-runtime-enforcement-by-container-kill.md) | Enforce at-most-once by killing the main container; probe default, signal opt-in | accepted (trust model amended by ADR-0004) |
+| [0004](0004-state-volume-is-a-trust-boundary.md) | The shared state volume is a trust boundary, not shared scratch space | accepted |
 
 ADRs 0001–0003 are extracted from
 `docs/design/2026-05-workload-gating-injection-model.md` (SKA-437) and were
