@@ -9,7 +9,7 @@ import (
 	"github.com/skaphos/berth/pkg/client"
 )
 
-func newTestRenewer(t *testing.T, fc *fakeClient) (*Renewer, *State) {
+func newTestRenewer(t *testing.T, lc LeaseClient) (*Renewer, *State) {
 	t.Helper()
 	cfg := &Config{
 		LeaseName:    "checkout",
@@ -22,7 +22,136 @@ func newTestRenewer(t *testing.T, fc *fakeClient) (*Renewer, *State) {
 	}
 	cfg.ApplyDefaults()
 	state := NewState(t.TempDir())
-	return NewRenewer(cfg, fc, state, testLogger()), state
+	return NewRenewer(cfg, lc, state, testLogger()), state
+}
+
+// newHangingRenewer builds a Renewer whose lease calls never return, with
+// a short heartbeat so the per-tick bound is observable in test time.
+func newHangingRenewer(t *testing.T, heartbeat time.Duration) (*Renewer, *State, *hangingClient) {
+	t.Helper()
+	hc := newHangingClient()
+	r, state := newTestRenewer(t, hc)
+	r.cfg.HeartbeatInterval = heartbeat
+	return r, state, hc
+}
+
+// runBounded runs fn and reports whether it returned before limit. It
+// leaks the goroutine on timeout rather than blocking the suite forever —
+// which is the pre-fix behavior this guards against.
+func runBounded(t *testing.T, limit time.Duration, fn func()) bool {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(limit):
+		return false
+	}
+}
+
+func TestTickHeldBoundsHungRenewAndEnforcesPastExpiry(t *testing.T) {
+	const heartbeat = 50 * time.Millisecond
+	r, state, hc := newHangingRenewer(t, heartbeat)
+	r.held = true
+	// The lease already expired, so once the hung call returns the
+	// past-expiry branch must gate the container.
+	r.expiresAt = time.Now().Add(-time.Second)
+	if err := state.MarkHealthy(); err != nil {
+		t.Fatalf("MarkHealthy: %v", err)
+	}
+
+	// Background(), never canceled: pre-fix, Renew parks here forever.
+	if !runBounded(t, 5*time.Second, func() { r.tickHeld(context.Background()) }) {
+		t.Fatal("tickHeld did not return: a hung renew wedged the loop (issue #97)")
+	}
+
+	if hc.callCount() != 1 {
+		t.Errorf("renew calls = %d, want 1", hc.callCount())
+	}
+	if r.held {
+		t.Error("a renew hung past lease expiry must mark the lease lost")
+	}
+	if state.IsHealthy() {
+		t.Error("a renew hung past lease expiry must gate the main container")
+	}
+}
+
+func TestTickHeldHungRenewWithinTTLKeepsContainerRunning(t *testing.T) {
+	const heartbeat = 50 * time.Millisecond
+	r, state, _ := newHangingRenewer(t, heartbeat)
+	r.held = true
+	// Still comfortably inside the lease: a timed-out renew is transient,
+	// so the container keeps running until the expiry actually passes.
+	r.expiresAt = time.Now().Add(time.Minute)
+	if err := state.MarkHealthy(); err != nil {
+		t.Fatalf("MarkHealthy: %v", err)
+	}
+
+	if !runBounded(t, 5*time.Second, func() { r.tickHeld(context.Background()) }) {
+		t.Fatal("tickHeld did not return within the heartbeat bound")
+	}
+
+	if !r.held {
+		t.Error("a timed-out renew inside the TTL must not drop the lease")
+	}
+	if !state.IsHealthy() {
+		t.Error("a timed-out renew inside the TTL must not gate the container")
+	}
+}
+
+func TestTickReacquireBoundsHungAcquire(t *testing.T) {
+	const heartbeat = 50 * time.Millisecond
+	r, _, hc := newHangingRenewer(t, heartbeat)
+	r.held = false
+
+	if !runBounded(t, 5*time.Second, func() { r.tickReacquire(context.Background()) }) {
+		t.Fatal("tickReacquire did not return: a hung acquire wedged the loop")
+	}
+
+	if hc.callCount() != 1 {
+		t.Errorf("acquire calls = %d, want 1", hc.callCount())
+	}
+	if r.held {
+		t.Error("a hung acquire must not be read as a won lease")
+	}
+}
+
+// The loop must keep ticking through hung calls — one stall cannot stop
+// the sidecar from ever re-evaluating enforcement.
+func TestRunKeepsTickingThroughHungCalls(t *testing.T) {
+	const heartbeat = 30 * time.Millisecond
+	r, _, hc := newHangingRenewer(t, heartbeat)
+	r.cfg.ReleaseOnShutdown = new(bool) // false: shutdown must not block on a hung Release
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = r.Run(ctx)
+	}()
+
+	// Wait for three separate calls to start; pre-fix the first one never
+	// returns, so the second tick never issues a call.
+	for i := 0; i < 3; i++ {
+		select {
+		case <-hc.inCall:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("only %d lease calls started; the loop stopped ticking", hc.callCount())
+		}
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after context cancel")
+	}
 }
 
 func TestTickHeldRenewSuccessKeepsHealthy(t *testing.T) {

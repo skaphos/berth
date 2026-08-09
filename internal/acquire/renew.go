@@ -86,13 +86,30 @@ func (r *Renewer) Run(ctx context.Context) error {
 	}
 }
 
+// tickCtx bounds one lease RPC to a single heartbeat interval.
+//
+// The self-fence branches below only run once the call returns, so an
+// unbounded call is an enforcement outage: an API server that accepts a
+// connection and then stalls would park the loop inside the RPC while the
+// lease expires server-side and a standby takes over — two live holders,
+// for as long as the connection hangs. Bounding each call at the
+// heartbeat keeps the loop ticking, so expiry is always noticed within
+// one heartbeat of the truth. The deadline surfaces as a normal transient
+// error, which is exactly the case the past-expiry check already handles.
+func (r *Renewer) tickCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, r.cfg.HeartbeatInterval)
+}
+
 // tickHeld renews the lease we believe we hold. On a definitive loss
 // (server says held by another, or a conflict) it enforces immediately.
 // On a transient error it keeps the main container running only until the
 // last-known expiry; past that point it can no longer prove at-most-once,
 // so it enforces. This is the failover-after-expiry guarantee (SKA-436).
 func (r *Renewer) tickHeld(ctx context.Context) {
-	res, err := r.lc.Renew(ctx, r.cfg.LeaseNamespace, r.cfg.LeaseName, r.holder, r.token, r.cfg.TTL)
+	rpcCtx, cancel := r.tickCtx(ctx)
+	defer cancel()
+
+	res, err := r.lc.Renew(rpcCtx, r.cfg.LeaseNamespace, r.cfg.LeaseName, r.holder, r.token, r.cfg.TTL)
 	switch {
 	case errors.Is(err, client.ErrConflict):
 		r.log.Warn("renew conflict: lease lost")
@@ -125,7 +142,13 @@ func (r *Renewer) tickReacquire(ctx context.Context) {
 	if err := r.enforcer.Hold(ctx); err != nil {
 		r.log.Warn("re-enforce while gated failed", "error", err)
 	}
-	res, err := r.lc.Acquire(ctx, r.cfg.LeaseNamespace, r.cfg.LeaseName, r.holder, r.cfg.TTL)
+
+	// Bounded for the same reason as tickHeld: a hung Acquire would stop
+	// the loop re-enforcing the gate on a kubelet-restarted container.
+	rpcCtx, cancel := r.tickCtx(ctx)
+	defer cancel()
+
+	res, err := r.lc.Acquire(rpcCtx, r.cfg.LeaseNamespace, r.cfg.LeaseName, r.holder, r.cfg.TTL)
 	switch {
 	case err != nil:
 		r.log.Warn("reacquire failed", "error", err)

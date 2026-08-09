@@ -3,6 +3,7 @@ package client
 import (
 	"crypto/tls"
 	"net/http"
+	"time"
 )
 
 // Option configures a [Client].
@@ -31,11 +32,31 @@ func WithAPIKeyFunc(getter func() string) Option {
 
 // WithHTTPClient replaces the default HTTP client. If httpClient is nil,
 // the default is retained.
+//
+// A supplied client's own Timeout is left alone unless [WithTimeout] is
+// also given, in which case the explicit value wins.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) {
 		if httpClient != nil {
 			c.httpClient = httpClient
 		}
+	}
+}
+
+// WithTimeout bounds every request, overriding [DefaultTimeout]. It is
+// applied after all other options, so it takes effect regardless of
+// option order and also applies to a [WithHTTPClient] client.
+//
+// A zero or negative timeout disables the bound (net/http semantics),
+// leaving requests limited only by the caller's context. Callers that do
+// this are responsible for passing a context with a deadline; an
+// unbounded lease call can stall a renew loop indefinitely.
+func WithTimeout(d time.Duration) Option {
+	return func(c *Client) {
+		if d < 0 {
+			d = 0
+		}
+		c.timeout = &d
 	}
 }
 
