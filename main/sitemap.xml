@@ -45,11 +45,19 @@
          <lastmod>2026-08-09</lastmod>
     </url>
     <url>
+         <loc>https://skaphos.github.io/berth/main/adr/0004-state-volume-is-a-trust-boundary/</loc>
+         <lastmod>2026-08-09</lastmod>
+    </url>
+    <url>
          <loc>https://skaphos.github.io/berth/main/design/2026-05-workload-gating-injection-model/</loc>
          <lastmod>2026-08-09</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/operations/scalability/</loc>
+         <lastmod>2026-08-09</lastmod>
+    </url>
+    <url>
+         <loc>https://skaphos.github.io/berth/main/operations/upgrade-state-volume-trust/</loc>
          <lastmod>2026-08-09</lastmod>
     </url>
     <url>

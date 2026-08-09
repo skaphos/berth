@@ -741,6 +741,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/upgrade-state-volume-trust/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade: state-volume trust
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1078,11 +1106,15 @@ and points to the files most likely to matter when changing behavior.</p>
 </tr>
 <tr>
 <td><code>internal/webhook/contract.go</code></td>
-<td>Opt-in label, annotation keys, and injected resource names.</td>
+<td>Opt-in label, annotation keys, injected resource names, and admission rejection reasons.</td>
 </tr>
 <tr>
 <td><code>internal/webhook/inject.go</code></td>
-<td><code>PodInjector</code> (typed <code>CustomDefaulter</code>): opt-in guard, control-plane skip, idempotency, annotation resolve/validate, container/volume/probe/signal injection, and <code>InjectorConfig.Validate</code>.</td>
+<td><code>PodInjector</code> (typed <code>CustomDefaulter</code>): opt-in guard, control-plane skip, reserved-state-volume rule (ADR-0004), idempotency, annotation resolve/validate, container/volume/probe/signal injection, and <code>InjectorConfig.Validate</code>.</td>
+</tr>
+<tr>
+<td><code>internal/webhook/metrics.go</code></td>
+<td>Counter of admissions refused by the reserved-state-volume rule, labelled by reason and admission path.</td>
 </tr>
 <tr>
 <td><code>internal/webhook/setup.go</code></td>

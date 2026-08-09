@@ -10,26 +10,26 @@
       
       
       
-        <link rel="canonical" href="https://skaphos.github.io/berth/main/">
+        <link rel="canonical" href="https://skaphos.github.io/berth/main/operations/upgrade-state-volume-trust/">
       
       
+        <link rel="prev" href="../scalability/">
       
-        <link rel="next" href="getting-started/">
       
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>Berth</title>
+        <title>Upgrade: state-volume trust - Berth</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -48,7 +48,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#berth-documentation" class="md-skip">
+        <a href="#upgrade-notes-reserved-state-volume-and-marker-freshness" class="md-skip">
           Skip to content
         </a>
       
@@ -86,7 +86,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
+    <a href="../.." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Upgrade: state-volume trust
             
           </span>
         </div>
@@ -196,7 +196,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
+    <a href="../.." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -223,37 +223,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -269,70 +242,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#user-and-operator-docs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        User and Operator Docs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#process-docs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Process Docs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        References
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#publishing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Publishing
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -344,7 +253,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/" class="md-nav__link">
+      <a href="../../getting-started/" class="md-nav__link">
         
   
   
@@ -371,7 +280,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/" class="md-nav__link">
+      <a href="../../concepts/" class="md-nav__link">
         
   
   
@@ -398,7 +307,7 @@
   
   
     <li class="md-nav__item">
-      <a href="architecture/" class="md-nav__link">
+      <a href="../../architecture/" class="md-nav__link">
         
   
   
@@ -425,7 +334,7 @@
   
   
     <li class="md-nav__item">
-      <a href="workload-gating-injection/" class="md-nav__link">
+      <a href="../../workload-gating-injection/" class="md-nav__link">
         
   
   
@@ -452,7 +361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="code-map/" class="md-nav__link">
+      <a href="../../code-map/" class="md-nav__link">
         
   
   
@@ -531,7 +440,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/api/" class="md-nav__link">
+      <a href="../../reference/api/" class="md-nav__link">
         
   
   
@@ -559,7 +468,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/api-versioning/" class="md-nav__link">
+      <a href="../../reference/api-versioning/" class="md-nav__link">
         
   
   
@@ -587,7 +496,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/configuration/" class="md-nav__link">
+      <a href="../../reference/configuration/" class="md-nav__link">
         
   
   
@@ -619,8 +528,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -631,11 +542,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -656,7 +567,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -674,7 +585,7 @@
   
   
     <li class="md-nav__item">
-      <a href="operations/scalability/" class="md-nav__link">
+      <a href="../scalability/" class="md-nav__link">
         
   
   
@@ -699,10 +610,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="operations/upgrade-state-volume-trust/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade: state-volume trust
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -718,6 +656,98 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-change-1-the-state-volume-is-reserved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking change 1 — the state volume is reserved
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Breaking change 1 — the state volume is reserved">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#find-affected-workloads-before-upgrading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Find affected workloads before upgrading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixing-an-affected-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixing an affected workload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-change-2-failurepolicy-now-defaults-to-fail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking change 2 — failurePolicy now defaults to Fail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-breaking-the-liveness-probe-now-tests-freshness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the liveness probe now tests freshness
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verifying-after-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying after upgrade
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -757,10 +787,49 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#user-and-operator-docs" class="md-nav__link">
+  <a href="#breaking-change-1-the-state-volume-is-reserved" class="md-nav__link">
     <span class="md-ellipsis">
       
-        User and Operator Docs
+        Breaking change 1 — the state volume is reserved
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Breaking change 1 — the state volume is reserved">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#find-affected-workloads-before-upgrading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Find affected workloads before upgrading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixing-an-affected-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixing an affected workload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-change-2-failurepolicy-now-defaults-to-fail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking change 2 — failurePolicy now defaults to Fail
       
     </span>
   </a>
@@ -768,10 +837,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#process-docs" class="md-nav__link">
+  <a href="#non-breaking-the-liveness-probe-now-tests-freshness" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Process Docs
+        Non-breaking: the liveness probe now tests freshness
       
     </span>
   </a>
@@ -779,21 +848,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
+  <a href="#verifying-after-upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        References
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#publishing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Publishing
+        Verifying after upgrade
       
     </span>
   </a>
@@ -817,7 +875,7 @@
 
 
   
-    <a href="https://github.com/skaphos/berth/edit/main/docs/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/skaphos/berth/edit/main/docs/operations/upgrade-state-volume-trust.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -825,102 +883,95 @@
   
 
 
-<h1 id="berth-documentation">Berth Documentation</h1>
-<p>This directory is the portable Markdown source for Berth documentation.
-It is published with MkDocs Material and <code>mike</code> at
-<code>https://skaphos.github.io/berth/</code>.</p>
-<h2 id="user-and-operator-docs">User and Operator Docs</h2>
-<table>
-<thead>
-<tr>
-<th>Document</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="getting-started/">Getting started</a></td>
-<td>End-to-end tutorial: stand up a local three-cluster topology and watch a workload fail over between clusters.</td>
-</tr>
-<tr>
-<td><a href="concepts/">Concepts</a></td>
-<td>The mental model: leases, holder identity, TTL/heartbeat, fencing tokens, semantics, and topologies.</td>
-</tr>
-<tr>
-<td><a href="architecture/">Architecture</a></td>
-<td>System model, runtime shape, storage backends, and failure behavior.</td>
-</tr>
-<tr>
-<td><a href="workload-gating-injection/">Workload gating via injection</a></td>
-<td>Gate unmodifiable workloads on a lease with the injected <code>berth-acquire</code> helper.</td>
-</tr>
-<tr>
-<td><a href="reference/configuration/">Configuration reference</a></td>
-<td>API server, operator, broker, Helm values, and environment inputs.</td>
-</tr>
-<tr>
-<td><a href="reference/api/">API reference</a></td>
-<td>Generated CRD reference for <code>berth.skaphos.io/v1alpha1</code>.</td>
-</tr>
-<tr>
-<td><a href="reference/api-versioning/">API versioning</a></td>
-<td>CRD API versioning policy — maturity ladder, compatible vs. breaking schema changes, and deprecation windows. Mirror of the org standard.</td>
-</tr>
-<tr>
-<td><a href="code-map/">Code map</a></td>
-<td>Package and entrypoint tour for contributors.</td>
-</tr>
-<tr>
-<td><a href="operations/scalability/">Scalability and load testing</a></td>
-<td>Sizing model, target workload, and the phased load-testing plan.</td>
-</tr>
-<tr>
-<td><code>test/e2e/fixtures/README.md</code></td>
-<td>Local three-cluster test topology.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="process-docs">Process Docs</h2>
-<table>
-<thead>
-<tr>
-<th>Document</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>CONTRIBUTING.md</code></td>
-<td>Branch, commit, PR, and local validation expectations.</td>
-</tr>
-<tr>
-<td><code>RELEASE.md</code></td>
-<td>Release Please, tag publishing, artifacts, and required credentials.</td>
-</tr>
-<tr>
-<td><code>CHANGELOG.md</code></td>
-<td>Release Please managed release notes.</td>
-</tr>
-<tr>
-<td><code>AGENTS.md</code></td>
-<td>Repository-specific instructions for AI coding agents.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="references">References</h2>
-<p>The CRD reference is generated:</p>
-<div class="highlight"><pre><span></span><code>go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>docs:api-ref
+<h1 id="upgrade-notes-reserved-state-volume-and-marker-freshness">Upgrade notes: reserved state volume and marker freshness</h1>
+<p>This release changes injection behaviour in two ways that can stop workloads
+from starting. Read this before upgrading <code>berth-operator</code>.</p>
+<p>Both changes exist to close verified defects in <code>runtime-singleton</code>
+enforcement — a workload could subvert its own at-most-once guarantee, and a
+dead sidecar could leave a workload running unleased.</p>
+<h2 id="breaking-change-1-the-state-volume-is-reserved">Breaking change 1 — the state volume is reserved</h2>
+<p>Pods whose own containers mount the injected <code>berth-state</code> volume <strong>writably</strong>
+are now refused at admission, at any mount path, in either enforce mode. This
+applies to Pod creation and to ephemeral containers (<code>kubectl debug</code>).</p>
+<p>Previously such a Pod was admitted: the webhook simply added a read-only mount
+alongside the writable one. Because both mounts share a single <code>emptyDir</code>, the
+workload could still recreate the health marker after the sidecar removed it,
+and could replace the <code>check</code> binary the liveness probe execs.</p>
+<p><strong>There is no opt-out.</strong> A rejected Pod is rejected on every admission event,
+including re-admission after eviction or rescheduling.</p>
+<p>Read-only mounts remain allowed, and a writable mount at exactly the state dir
+is still repaired to read-only on Pod creation rather than refused.</p>
+<h3 id="find-affected-workloads-before-upgrading">Find affected workloads before upgrading</h3>
+<p>Run this against your <strong>un-upgraded</strong> cluster. It lists Pods that declare a
+writable mount of <code>berth-state</code> in a container the injector does not own:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
+<span class="s1">  .items[]</span>
+<span class="s1">  | select(.metadata.labels[&quot;berth.skaphos.io/inject&quot;] == &quot;acquire&quot;)</span>
+<span class="s1">  | . as $pod</span>
+<span class="s1">  | (.spec.containers + (.spec.initContainers // []) + (.spec.ephemeralContainers // []))[]</span>
+<span class="s1">  | select(.name != &quot;berth-acquire&quot; and .name != &quot;berth-sidecar&quot;)</span>
+<span class="s1">  | . as $c</span>
+<span class="s1">  | (.volumeMounts // [])[]</span>
+<span class="s1">  | select(.name == &quot;berth-state&quot; and (.readOnly != true))</span>
+<span class="s1">  | &quot;\($pod.metadata.namespace)/\($pod.metadata.name)\tcontainer=\($c.name)\tpath=\(.mountPath)&quot;</span>
+<span class="s1">&#39;</span>
 </code></pre></div>
-<p>Do not hand-edit <code>docs/reference/api.md</code>; update <code>api/v1alpha1</code> comments and
-regenerate it. The CLI reference target is still future work because the
-current Cobra lease commands are scaffolds.</p>
-<h2 id="publishing">Publishing</h2>
-<p><code>mkdocs.yml</code> defines the site navigation. <code>.github/workflows/docs.yml</code>
-publishes:</p>
+<p>Empty output means nothing in the cluster is affected.</p>
+<p>This is a best-effort inventory, not the enforcement path itself — the webhook
+is authoritative. Two caveats worth knowing:</p>
 <ul>
-<li><code>main</code> pushes as the <code>main</code> docs version.</li>
-<li><code>v*</code> tags as versioned docs, updating the <code>latest</code> alias.</li>
+<li>It inspects <strong>running Pods</strong>, so a workload that is scaled to zero, or a
+  CronJob that has not fired recently, will not appear. Check your Pod
+  templates too.</li>
+<li>A writable mount at exactly the state dir is listed but will <strong>not</strong> be
+  rejected; it is repaired. Treat those as informational.</li>
 </ul>
+<h3 id="fixing-an-affected-workload">Fixing an affected workload</h3>
+<p>Either mark the mount <code>readOnly: true</code>, or give the container its own volume
+for whatever data it was writing. The state volume has no supported use for
+workload data.</p>
+<h2 id="breaking-change-2-failurepolicy-now-defaults-to-fail">Breaking change 2 — <code>failurePolicy</code> now defaults to <code>Fail</code></h2>
+<p>The chart previously shipped <code>injection.webhook.failurePolicy: Ignore</code>.
+Installations that never overrode it will inherit <code>Fail</code> on upgrade.</p>
+<p><strong>What changes:</strong> while the webhook is unavailable, Pods matching the
+injection selectors will not be created. Before, they were created without
+injection — unprotected, but running.</p>
+<p>This is deliberate. The webhook now carries a safety rule, and a rule that
+lapses during an outage is not a rule. But it does make the operator a hard
+dependency for Pod creation in gated namespaces, which is worth knowing before
+it happens rather than during an incident.</p>
+<p>Inspection is unaffected: lease inventory, holders, and status stay readable
+throughout an outage.</p>
+<p>To keep the previous behaviour:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">injection</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">webhook</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">failurePolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Ignore</span>
+</code></pre></div>
+<p>Understand what that buys and costs: gated workloads keep starting during a
+webhook outage, but they start unprotected, and the reserved-volume rule does
+not apply to them.</p>
+<h2 id="non-breaking-the-liveness-probe-now-tests-freshness">Non-breaking: the liveness probe now tests freshness</h2>
+<p>The injected probe fails when the health marker is absent <strong>or</strong> has not been
+refreshed within one lease TTL. A correctly-renewing holder never trips it —
+validation already requires the heartbeat to be shorter than the TTL.</p>
+<p>No action is needed. Pods admitted before the upgrade keep their existing
+probe command and behaviour until they are recreated.</p>
+<p>The probe failure now says which condition failed, and a stale result reports
+the observed age and the bound. See
+<a href="../../workload-gating-injection/">Workload gating via injection</a> for what the
+two mean operationally.</p>
+<h2 id="verifying-after-upgrade">Verifying after upgrade</h2>
+<p>Confirm the webhook is registered for both admission paths:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>mutatingwebhookconfiguration<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>berth-operator<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[*].webhooks[*].rules[*].resources}&#39;</span>
+<span class="c1"># expect: [&quot;pods&quot;,&quot;pods/ephemeralcontainers&quot;]</span>
+</code></pre></div>
+<p>Watch for the rule firing across the fleet:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># on the operator&#39;s metrics endpoint</span>
+berth_webhook_admission_rejections_total<span class="o">{</span><span class="nv">reason</span><span class="o">=</span><span class="s2">&quot;writable_state_mount&quot;</span>,path<span class="o">=</span><span class="s2">&quot;pods&quot;</span><span class="o">}</span>
+</code></pre></div>
+<p>A non-zero, climbing counter after upgrade usually means a controller is
+retrying a Pod template you missed in the inventory step above.</p>
 
 
 
@@ -976,10 +1027,10 @@ publishes:</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

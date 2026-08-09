@@ -504,6 +504,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Enforcement (runtime-singleton)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-state-volume-is-reserved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The state volume is reserved
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#marker-freshness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Marker freshness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitation-signal-mode-and-a-dead-sidecar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitation — signal mode and a dead sidecar
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -880,6 +919,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/upgrade-state-volume-trust/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade: state-volume trust
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1021,6 +1088,45 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Enforcement (runtime-singleton)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-state-volume-is-reserved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The state volume is reserved
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#marker-freshness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Marker freshness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitation-signal-mode-and-a-dead-sidecar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitation — signal mode and a dead sidecar
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1399,6 +1505,67 @@ has no such cross-container reach.</p>
 latency between lease loss and the container stopping. The <strong>fencing token</strong>
 remains the real boundary for any downstream resource that must reject a stale
 holder.</p>
+<h3 id="the-state-volume-is-reserved">The state volume is reserved</h3>
+<p>The shared <code>emptyDir</code> (<code>berth-state</code>) is not general-purpose scratch space. It
+holds the holder identity, the fencing token, the health marker — and the
+<code>check</code> binary the liveness probe execs. Because the <em>verifier</em> lives in the
+same volume it verifies, a workload with write access could replace <code>check</code>
+itself, not merely recreate the marker.</p>
+<p>Admission therefore <strong>rejects any Pod whose own containers mount <code>berth-state</code>
+writably</strong>, at any path, in either enforce mode. This applies to Pod creation
+and to ephemeral containers (<code>kubectl debug</code>) attached to a running gated Pod.</p>
+<ul>
+<li>Read-only mounts are fine — read access is not a bypass.</li>
+<li>The injected helper containers keep write access; they have to.</li>
+<li>A writable mount at exactly the state dir is repaired to read-only on Pod
+  creation rather than refused, since that shape is unambiguous.</li>
+<li>There is no annotation or value that permits the rejected shape.</li>
+</ul>
+<p>If a workload needs scratch space, give it its own volume.</p>
+<h3 id="marker-freshness">Marker freshness</h3>
+<p>The probe fails when the marker is <strong>absent</strong> <em>or</em> when it has not been
+refreshed within one lease TTL. Freshness matters because presence alone only
+detects enforcement the sidecar performs: if the sidecar is OOM-killed or
+crash-looping, nothing removes the marker, and the workload would keep passing
+liveness while its lease expired and a standby took over.</p>
+<p>The two failures are reported distinctly, because they mean different things:</p>
+<table>
+<thead>
+<tr>
+<th>Probe failure</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>health marker absent</code></td>
+<td>The sidecar removed it — the lease was lost. Expected failover.</td>
+</tr>
+<tr>
+<td><code>health marker stale</code></td>
+<td>Nobody removed it and nobody refreshed it — the sidecar is dead or wedged. An incident.</td>
+</tr>
+</tbody>
+</table>
+<p>The stale message reports the observed age and the bound it exceeded. Both
+surface on the Pod's probe-failure event.</p>
+<p>A correctly-renewing holder never trips this: validation requires the heartbeat
+to be strictly shorter than the TTL, so a healthy sidecar refreshes the marker
+well inside the bound.</p>
+<h3 id="known-limitation-signal-mode-and-a-dead-sidecar">Known limitation — <code>signal</code> mode and a dead sidecar</h3>
+<p><code>signal</code> enforcement is carried out by the sidecar, so a dead sidecar cannot
+signal anything. Where a main container defines <strong>no</strong> <code>livenessProbe</code> of its
+own, the webhook injects the freshness probe as a backstop and the behaviour
+matches <code>probe</code> mode.</p>
+<p>Where the container <strong>already defines a <code>livenessProbe</code></strong>, it does not. A
+container may have only one, and overwriting the workload's own health check
+would be a worse failure than the gap. That case is exactly why <code>preflight</code>
+steers people to <code>signal</code> in the first place, so it is not rare.</p>
+<p><strong>For those Pods, a dead sidecar still leaves the workload running unleased.</strong>
+If you need the guarantee unconditionally, use <code>enforce: probe</code> and let Berth
+own the liveness slot. Closing this for <code>signal</code> requires a separate watchdog
+mechanism, tracked in
+<a href="https://github.com/skaphos/berth/issues/142">#142</a>.</p>
 <h2 id="examples">Examples</h2>
 <h3 id="deployment-runtime-singleton-legacy-cross-cluster-singleton">Deployment — runtime singleton (legacy cross-cluster singleton)</h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
@@ -1535,11 +1702,21 @@ and custom-CA auth for injected pods are tracked in SKA-444.</p>
   holder, so the enforce/re-gate/release code runs in many more places than one
   operator per cluster. This is the central reason injection is a fallback.</li>
 <li><strong><code>startup-gate</code> provides no runtime guarantee</strong> once the init container exits.</li>
-<li><strong><code>failurePolicy</code>.</strong> The chart defaults the webhook to <code>Ignore</code> so an outage
-  cannot block unrelated Pod creation; because the object selector already scopes
-  admission to opted-in Pods, set <code>injection.webhook.failurePolicy=Fail</code> if you
-  want opted-in Pods to refuse to start while the webhook is unavailable.</li>
+<li><strong><code>failurePolicy</code> defaults to <code>Fail</code>.</strong> The webhook enforces a safety rule,
+  not only a convenience mutation: it reserves the state volume so a workload
+  cannot forge the health marker or replace the probe's <code>check</code> binary. Under
+  <code>Ignore</code> that rule silently lapses for the duration of any webhook outage,
+  which is indistinguishable from not having it.</li>
 </ul>
+<p>The cost is real and worth planning for: <strong>while the webhook is unavailable,
+  opted-in Pods will not start.</strong> The operator becomes a hard dependency for
+  Pod creation in gated namespaces. The namespace and object selectors scope
+  this to Pods opting into injection, and read paths — lease inventory,
+  holders, status — are unaffected.</p>
+<p>Set <code>injection.webhook.failurePolicy=Ignore</code> only if you would rather a gated
+  workload start unprotected than not start at all. Note that this reverses the
+  guarantee: enforcement is then best-effort with respect to webhook
+  availability.</p>
 <h2 id="troubleshooting">Troubleshooting</h2>
 <table>
 <thead>

@@ -10,26 +10,24 @@
       
       
       
-        <link rel="canonical" href="https://skaphos.github.io/berth/main/">
+        <link rel="canonical" href="https://skaphos.github.io/berth/main/adr/0004-state-volume-is-a-trust-boundary/">
       
       
-      
-        <link rel="next" href="getting-started/">
       
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>Berth</title>
+        <title>4. The shared state volume is a trust boundary, not shared scratch space - Berth</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -48,7 +46,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -66,7 +64,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#berth-documentation" class="md-skip">
+        <a href="#4-the-shared-state-volume-is-a-trust-boundary-not-shared-scratch-space" class="md-skip">
           Skip to content
         </a>
       
@@ -86,7 +84,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
+    <a href="../.." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -106,7 +104,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              4. The shared state volume is a trust boundary, not shared scratch space
             
           </span>
         </div>
@@ -196,7 +194,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
+    <a href="../.." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -223,37 +221,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -269,70 +240,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#user-and-operator-docs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        User and Operator Docs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#process-docs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Process Docs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        References
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#publishing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Publishing
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -344,7 +251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/" class="md-nav__link">
+      <a href="../../getting-started/" class="md-nav__link">
         
   
   
@@ -371,7 +278,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/" class="md-nav__link">
+      <a href="../../concepts/" class="md-nav__link">
         
   
   
@@ -398,7 +305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="architecture/" class="md-nav__link">
+      <a href="../../architecture/" class="md-nav__link">
         
   
   
@@ -425,7 +332,7 @@
   
   
     <li class="md-nav__item">
-      <a href="workload-gating-injection/" class="md-nav__link">
+      <a href="../../workload-gating-injection/" class="md-nav__link">
         
   
   
@@ -452,7 +359,7 @@
   
   
     <li class="md-nav__item">
-      <a href="code-map/" class="md-nav__link">
+      <a href="../../code-map/" class="md-nav__link">
         
   
   
@@ -531,7 +438,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/api/" class="md-nav__link">
+      <a href="../../reference/api/" class="md-nav__link">
         
   
   
@@ -559,7 +466,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/api-versioning/" class="md-nav__link">
+      <a href="../../reference/api-versioning/" class="md-nav__link">
         
   
   
@@ -587,7 +494,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/configuration/" class="md-nav__link">
+      <a href="../../reference/configuration/" class="md-nav__link">
         
   
   
@@ -674,7 +581,7 @@
   
   
     <li class="md-nav__item">
-      <a href="operations/scalability/" class="md-nav__link">
+      <a href="../../operations/scalability/" class="md-nav__link">
         
   
   
@@ -702,7 +609,7 @@
   
   
     <li class="md-nav__item">
-      <a href="operations/upgrade-state-volume-trust/" class="md-nav__link">
+      <a href="../../operations/upgrade-state-volume-trust/" class="md-nav__link">
         
   
   
@@ -757,10 +664,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#user-and-operator-docs" class="md-nav__link">
+  <a href="#context-and-problem-statement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        User and Operator Docs
+        Context and Problem Statement
       
     </span>
   </a>
@@ -768,10 +675,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#process-docs" class="md-nav__link">
+  <a href="#decision-drivers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Process Docs
+        Decision Drivers
       
     </span>
   </a>
@@ -779,10 +686,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
+  <a href="#considered-options" class="md-nav__link">
     <span class="md-ellipsis">
       
-        References
+        Considered Options
       
     </span>
   </a>
@@ -790,10 +697,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#publishing" class="md-nav__link">
+  <a href="#decision-outcome" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Publishing
+        Decision Outcome
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision Outcome">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Links
       
     </span>
   </a>
@@ -817,7 +752,7 @@
 
 
   
-    <a href="https://github.com/skaphos/berth/edit/main/docs/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/skaphos/berth/edit/main/docs/adr/0004-state-volume-is-a-trust-boundary.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -825,101 +760,122 @@
   
 
 
-<h1 id="berth-documentation">Berth Documentation</h1>
-<p>This directory is the portable Markdown source for Berth documentation.
-It is published with MkDocs Material and <code>mike</code> at
-<code>https://skaphos.github.io/berth/</code>.</p>
-<h2 id="user-and-operator-docs">User and Operator Docs</h2>
-<table>
-<thead>
-<tr>
-<th>Document</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="getting-started/">Getting started</a></td>
-<td>End-to-end tutorial: stand up a local three-cluster topology and watch a workload fail over between clusters.</td>
-</tr>
-<tr>
-<td><a href="concepts/">Concepts</a></td>
-<td>The mental model: leases, holder identity, TTL/heartbeat, fencing tokens, semantics, and topologies.</td>
-</tr>
-<tr>
-<td><a href="architecture/">Architecture</a></td>
-<td>System model, runtime shape, storage backends, and failure behavior.</td>
-</tr>
-<tr>
-<td><a href="workload-gating-injection/">Workload gating via injection</a></td>
-<td>Gate unmodifiable workloads on a lease with the injected <code>berth-acquire</code> helper.</td>
-</tr>
-<tr>
-<td><a href="reference/configuration/">Configuration reference</a></td>
-<td>API server, operator, broker, Helm values, and environment inputs.</td>
-</tr>
-<tr>
-<td><a href="reference/api/">API reference</a></td>
-<td>Generated CRD reference for <code>berth.skaphos.io/v1alpha1</code>.</td>
-</tr>
-<tr>
-<td><a href="reference/api-versioning/">API versioning</a></td>
-<td>CRD API versioning policy — maturity ladder, compatible vs. breaking schema changes, and deprecation windows. Mirror of the org standard.</td>
-</tr>
-<tr>
-<td><a href="code-map/">Code map</a></td>
-<td>Package and entrypoint tour for contributors.</td>
-</tr>
-<tr>
-<td><a href="operations/scalability/">Scalability and load testing</a></td>
-<td>Sizing model, target workload, and the phased load-testing plan.</td>
-</tr>
-<tr>
-<td><code>test/e2e/fixtures/README.md</code></td>
-<td>Local three-cluster test topology.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="process-docs">Process Docs</h2>
-<table>
-<thead>
-<tr>
-<th>Document</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>CONTRIBUTING.md</code></td>
-<td>Branch, commit, PR, and local validation expectations.</td>
-</tr>
-<tr>
-<td><code>RELEASE.md</code></td>
-<td>Release Please, tag publishing, artifacts, and required credentials.</td>
-</tr>
-<tr>
-<td><code>CHANGELOG.md</code></td>
-<td>Release Please managed release notes.</td>
-</tr>
-<tr>
-<td><code>AGENTS.md</code></td>
-<td>Repository-specific instructions for AI coding agents.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="references">References</h2>
-<p>The CRD reference is generated:</p>
-<div class="highlight"><pre><span></span><code>go<span class="w"> </span>-C<span class="w"> </span>tools<span class="w"> </span>tool<span class="w"> </span>task<span class="w"> </span>docs:api-ref
-</code></pre></div>
-<p>Do not hand-edit <code>docs/reference/api.md</code>; update <code>api/v1alpha1</code> comments and
-regenerate it. The CLI reference target is still future work because the
-current Cobra lease commands are scaffolds.</p>
-<h2 id="publishing">Publishing</h2>
-<p><code>mkdocs.yml</code> defines the site navigation. <code>.github/workflows/docs.yml</code>
-publishes:</p>
+<h1 id="4-the-shared-state-volume-is-a-trust-boundary-not-shared-scratch-space">4. The shared state volume is a trust boundary, not shared scratch space</h1>
 <ul>
-<li><code>main</code> pushes as the <code>main</code> docs version.</li>
-<li><code>v*</code> tags as versioned docs, updating the <code>latest</code> alias.</li>
+<li><strong>Status</strong>: accepted</li>
+<li><strong>Date</strong>: 2026-08-09</li>
+<li><strong>Deciders</strong>: Shawn Stratton</li>
+<li><strong>Consulted</strong>: Skaphos team</li>
+<li><strong>Informed</strong>: Berth contributors</li>
+</ul>
+<p>Amends <a href="../0003-sidecar-runtime-enforcement-by-container-kill/">ADR-0003</a>,
+which remains accepted: killing the main container is still the enforcement
+mechanism, and <code>probe</code> is still the default. This ADR narrows the trust model
+ADR-0003 assumed for the volume that carries that enforcement.</p>
+<h2 id="context-and-problem-statement">Context and Problem Statement</h2>
+<p>ADR-0003 chose to enforce at-most-once by failing an injected liveness probe,
+backed by a health marker on a shared <code>emptyDir</code>. It treated the volume as a
+transport for state between the injected helpers and the probe, and did not
+say who else may write to it.</p>
+<p>Two verified defects came from that gap.</p>
+<p><strong>The workload could write the volume (#96).</strong> The webhook forced the
+workload's state mount read-only only when its path equalled <code>StateDir</code>, and
+<code>preflight</code> rejected only a <em>different</em> volume mounted there. A second mount of
+the same <code>berth-state</code> volume at another path stayed writable. Both mounts
+share one <code>emptyDir</code>, so a workload could recreate the marker after the sidecar
+removed it.</p>
+<p><strong>The verifier lives in the volume it verifies.</strong> <code>InstallCheckBinary</code> copies
+the running helper executable to <code>&lt;StateDir&gt;/check</code>, and the kubelet execs that
+binary every two seconds. Write access therefore lets a workload replace the
+<em>verifier</em>, not merely the marker — between probe invocations, with a two
+second window.</p>
+<p>That second point is what forces the shape of the fix. Any scheme that
+authenticates the marker — signing it, embedding an expiry, adding a token —
+is defeated by replacing the binary that would check it, and by replacing any
+key shipped alongside it. Marker integrity cannot be established from inside a
+volume the adversary can write.</p>
+<p><strong>Enforcement also depended on a live sidecar (#98).</strong> The probe passed on
+marker existence alone, so every path to enforcement ran through the sidecar
+deleting the file. A dead or crash-looping sidecar left the marker in place,
+the workload passing liveness, and the lease free to expire under it.</p>
+<h2 id="decision-drivers">Decision Drivers</h2>
+<ul>
+<li>Constitution X: safety must not depend on well-behaved clients, and must
+  hold under arbitrary interleaving rather than on the happy path.</li>
+<li>Constitution IX: whatever the code does not guarantee must be stated, not
+  implied.</li>
+<li>ADR-0003's own premise — that <code>probe</code> "preserves container isolation" — is
+  only true if the workload cannot reach the artifacts the probe depends on.</li>
+<li>The probe runs inside the workload's container, which may be distroless and
+  has no Berth configuration of its own.</li>
+</ul>
+<h2 id="considered-options">Considered Options</h2>
+<ol>
+<li><strong>Make the marker unforgeable</strong> — sign it, or embed a validated expiry.</li>
+<li><strong>Reserve the volume at admission</strong> — refuse any workload-authored writable
+   mount of it.</li>
+<li><strong>Move enforcement state off the shared volume</strong> — a separate channel the
+   workload cannot reach at all.</li>
+</ol>
+<h2 id="decision-outcome">Decision Outcome</h2>
+<p><strong>Chosen: option 2, reserve the volume at admission.</strong></p>
+<p>Admission rejects any Pod whose author-declared containers mount <code>berth-state</code>
+writably, at any path, in either enforce mode, on Pod creation and on the
+<code>pods/ephemeralcontainers</code> subresource. Injector-owned mounts keep write
+access. Read-only author mounts remain allowed.</p>
+<p>The volume's contents — holder, token, marker, and the <code>check</code> binary — are
+now a <strong>trusted set</strong>: written only by injected helpers, readable by the
+workload, writable by nothing else.</p>
+<p>Freshness is layered on top: the probe fails when the marker is absent <em>or</em>
+older than one lease TTL, so enforcement no longer depends on a live sidecar
+acting. That check is only meaningful because option 2 makes the verifier
+trustworthy — which is why the two shipped as one unit of work, in that order.</p>
+<p>Because the rule is a safety control rather than a convenience mutation, the
+chart's <code>failurePolicy</code> default moves from <code>Ignore</code> to <code>Fail</code>. Under <code>Ignore</code>
+the rule lapsed silently for the duration of any webhook outage.</p>
+<p><strong>Option 1 was rejected on the merits, not on cost.</strong> It does not work here.
+The verifier and any key ship inside the writable volume, so the attacker
+replaces the checker rather than forging the input.</p>
+<p><strong>Option 3 was rejected as disproportionate.</strong> There is no channel available
+to a distroless main container that does not involve the shared filesystem;
+reaching for one would mean a network dependency or an exec-based probe, both
+of which give up the properties ADR-0003 chose <code>probe</code> for.</p>
+<h3 id="consequences">Consequences</h3>
+<p><strong>Good</strong></p>
+<ul>
+<li>At-most-once no longer depends on the workload behaving, which is the
+  guarantee Berth exists to provide.</li>
+<li>The trust boundary is explicit and enforced at admission rather than assumed.</li>
+<li>A dead sidecar now stops its workload within one TTL instead of never.</li>
+<li>Probe failures distinguish "lease lost" from "sidecar dead", which were
+  previously indistinguishable.</li>
+</ul>
+<p><strong>Bad</strong></p>
+<ul>
+<li>Breaking. Pods that mount the state volume writably admitted before and do
+  not now, with no opt-out and no grace period.</li>
+<li>The operator becomes a hard dependency for Pod creation in gated namespaces
+  under <code>failurePolicy: Fail</code>.</li>
+<li><code>signal</code> mode keeps a residual gap: the freshness backstop needs the
+  container's single <code>livenessProbe</code> slot, and <code>preflight</code> steers users to
+  <code>signal</code> precisely when that slot is taken. Those Pods still lose enforcement
+  if their sidecar dies. Documented as a limitation and tracked for a watchdog
+  mechanism.</li>
+</ul>
+<p><strong>Neutral</strong></p>
+<ul>
+<li>The freshness bound reaches <code>check</code> as a command-line argument rather than
+  configuration, keeping the probe path free of config, network, and
+  filesystem dependencies beyond the marker itself.</li>
+</ul>
+<h2 id="links">Links</h2>
+<ul>
+<li>Supersedes the trust model in
+  <a href="../0003-sidecar-runtime-enforcement-by-container-kill/">ADR-0003</a>; the
+  enforcement mechanism there is unchanged.</li>
+<li><a href="../../workload-gating-injection/">Workload gating via injection</a></li>
+<li><a href="../../operations/upgrade-state-volume-trust/">Upgrade notes</a></li>
+<li>Issues #96 (probe enforcement bypass) and #98 (marker freshness).</li>
 </ul>
 
 
@@ -976,10 +932,10 @@ publishes:</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
