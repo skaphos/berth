@@ -192,6 +192,14 @@ func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	if pod.Labels[LabelInject] != InjectValueAcquire {
 		return nil
 	}
+	// The state volume is reserved. This runs *before* the already-injected
+	// short-circuit on purpose: an ephemeral container is attached to a pod
+	// that has already been injected, so a check placed after the
+	// short-circuit would never see a kubectl-debug request at all.
+	if err := i.checkStateVolumeMounts(pod); err != nil {
+		return err
+	}
+
 	if pod.Annotations[AnnInjected] == "true" {
 		return nil // already injected; idempotent no-op
 	}
@@ -205,6 +213,81 @@ func (i *PodInjector) Default(ctx context.Context, pod *corev1.Pod) error {
 	}
 	i.mutate(pod, r)
 	return nil
+}
+
+// isInjectorOwnedContainer reports whether a container is one the webhook
+// itself adds. Those must keep write access to the state volume, so the
+// rule below cannot simply key on "writable" — it has to distinguish the
+// injector's own mounts from ones the pod author declared.
+func isInjectorOwnedContainer(name string) bool {
+	return name == InitContainerName || name == SidecarContainerName
+}
+
+// checkStateVolumeMounts enforces the reserved state volume (#96).
+//
+// The health marker is only half of what lives there: the helper copies its
+// own executable to <StateDir>/check, and the kubelet execs that binary as
+// the liveness probe every two seconds. A workload with a writable mount can
+// therefore replace the *verifier*, which is why no amount of signing or
+// freshness-stamping the marker closes this — the thing that would check the
+// signature is in the same writable volume. The mount itself has to be
+// refused.
+func (i *PodInjector) checkStateVolumeMounts(pod *corev1.Pod) error {
+	// Containers present at creation. A writable mount at exactly StateDir
+	// is repaired by applyEnforcement rather than refused (see the admission
+	// contract), so it is not an error here.
+	for _, set := range [][]corev1.Container{pod.Spec.Containers, pod.Spec.InitContainers} {
+		for idx := range set {
+			c := &set[idx]
+			if isInjectorOwnedContainer(c.Name) {
+				continue
+			}
+			for _, m := range c.VolumeMounts {
+				if m.Name != VolumeName || m.ReadOnly || m.MountPath == i.cfg.StateDir {
+					continue
+				}
+				return i.rejectStateMount(ReasonWritableStateMount, c.Name, m)
+			}
+		}
+	}
+
+	// Ephemeral containers arrive on an already-injected pod, which is never
+	// mutated again — so unlike the create path there is no repair step, and
+	// a writable mount at StateDir must be refused along with the rest.
+	for idx := range pod.Spec.EphemeralContainers {
+		c := &pod.Spec.EphemeralContainers[idx]
+		if isInjectorOwnedContainer(c.Name) {
+			continue
+		}
+		for _, m := range c.VolumeMounts {
+			if m.Name != VolumeName || m.ReadOnly {
+				continue
+			}
+			return i.rejectStateMount(ReasonWritableStateMountEphemeral, c.Name, m)
+		}
+	}
+
+	return nil
+}
+
+// rejectStateMount builds the admission error. It names the container,
+// volume, and path so the person who sees it can fix it without reading
+// Berth's source, and it states the resolutions without implying an opt-out
+// exists — there is none.
+func (i *PodInjector) rejectStateMount(reason RejectReason, container string, m corev1.VolumeMount) error {
+	if reason == ReasonWritableStateMountEphemeral {
+		return fmt.Errorf("cannot attach ephemeral container %q: it mounts the Berth state volume %q "+
+			"writably at %q. The pod itself is healthy — this debug request is refused. The state volume "+
+			"is reserved: write access would let a container forge the health marker and replace the "+
+			"probe's check binary, defeating at-most-once enforcement. Re-run with the mount marked "+
+			"readOnly: true, or without mounting %s",
+			container, m.Name, m.MountPath, VolumeName)
+	}
+	return fmt.Errorf("cannot inject: container %q mounts the Berth state volume %q writably at %q. "+
+		"The state volume is reserved: a writable mount lets the workload forge the health marker and "+
+		"replace the probe's check binary, defeating at-most-once enforcement. Either mark the mount "+
+		"readOnly: true, or use a separate volume for workload data",
+		container, m.Name, m.MountPath)
 }
 
 // preflight rejects pods the injector cannot safely mutate, so the failure

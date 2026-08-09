@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // State manages the files the helper shares between its init container,
@@ -94,11 +95,98 @@ func (s *State) MarkUnhealthy() error {
 	return nil
 }
 
-// IsHealthy reports whether the health marker is present. The check
-// command uses this.
+// HealthVerdict is why the health marker did or did not pass. Absent and
+// Stale are deliberately distinct: they are different operational stories.
+// Absent means the sidecar removed the marker, so the lease was lost — an
+// expected failover. Stale means nobody removed it and nobody refreshed it,
+// so the sidecar is dead or wedged — an incident.
+type HealthVerdict int
+
+const (
+	// HealthOK: the marker exists and is within the freshness bound.
+	HealthOK HealthVerdict = iota
+	// HealthAbsent: the marker does not exist.
+	HealthAbsent
+	// HealthStale: the marker exists but has not been refreshed in time.
+	HealthStale
+	// HealthIndeterminate: the marker exists but could not be examined.
+	// Treated as unhealthy — an unreadable marker is not evidence of health.
+	HealthIndeterminate
+)
+
+// HealthResult is the verdict plus the evidence behind it, so a failing
+// probe can report *why* rather than only that it failed.
+type HealthResult struct {
+	Verdict HealthVerdict
+	// Age of the marker, set when it could be stat'ed.
+	Age time.Duration
+	// MaxAge applied; zero means the freshness check was not requested.
+	MaxAge time.Duration
+	// Err is the underlying error for HealthIndeterminate.
+	Err error
+}
+
+// OK reports whether the marker should be treated as healthy.
+func (r HealthResult) OK() bool { return r.Verdict == HealthOK }
+
+// Reason is a short human-readable explanation suitable for probe stderr,
+// which the kubelet surfaces on the pod's probe-failure event.
+func (r HealthResult) Reason(path string) string {
+	switch r.Verdict {
+	case HealthOK:
+		return ""
+	case HealthAbsent:
+		return fmt.Sprintf("health marker absent: %s", path)
+	case HealthStale:
+		return fmt.Sprintf("health marker stale: %s not refreshed for %s (limit %s); "+
+			"the lease sidecar is not renewing", path, r.Age.Round(time.Second), r.MaxAge)
+	default:
+		return fmt.Sprintf("health marker indeterminate: %s: %v", path, r.Err)
+	}
+}
+
+// EvaluateMarker is the single freshness predicate. Both the sidecar's
+// [State.IsHealthy] and the probe's check subcommand call it, so the two
+// can never disagree about what "healthy" means.
+//
+// A maxAge of zero or less requests presence-only evaluation, preserving
+// the behavior of releases that had no freshness bound.
+//
+// Freshness compares the marker's modification time against the caller's
+// own clock. Both the writing sidecar and the reading probe observe one
+// node kernel clock through the shared volume, so the result never depends
+// on two container clocks agreeing.
+func EvaluateMarker(path string, maxAge time.Duration) HealthResult {
+	fi, err := os.Stat(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return HealthResult{Verdict: HealthAbsent, MaxAge: maxAge}
+	case err != nil:
+		return HealthResult{Verdict: HealthIndeterminate, MaxAge: maxAge, Err: err}
+	}
+
+	if maxAge <= 0 {
+		return HealthResult{Verdict: HealthOK}
+	}
+
+	age := time.Since(fi.ModTime())
+	if age > maxAge {
+		return HealthResult{Verdict: HealthStale, Age: age, MaxAge: maxAge}
+	}
+	return HealthResult{Verdict: HealthOK, Age: age, MaxAge: maxAge}
+}
+
+// IsHealthy reports whether the health marker is present. It is the
+// sidecar-side view and deliberately shares [EvaluateMarker] with the
+// probe so the two cannot drift apart.
 func (s *State) IsHealthy() bool {
-	_, err := os.Stat(s.healthyPath())
-	return err == nil
+	return EvaluateMarker(s.healthyPath(), 0).OK()
+}
+
+// IsFresh reports whether the health marker is present and was refreshed
+// within maxAge, using the same predicate the probe applies.
+func (s *State) IsFresh(maxAge time.Duration) HealthResult {
+	return EvaluateMarker(s.healthyPath(), maxAge)
 }
 
 // InstallCheckBinary copies the currently-running executable to

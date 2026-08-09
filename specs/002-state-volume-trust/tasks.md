@@ -28,9 +28,9 @@ Repository root is the Go module root. Key paths: `internal/webhook/`,
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Confirm a green baseline before changes: run `go -C tools tool task test`, `lint`, and `verify-generated` from the repository root and record that all three pass
-- [ ] T002 [P] Resolve the R5 open item: determine whether `State.IsHealthy()` has any non-test callers, searching `internal/` and `cmd/`; if it has none, note that removing it satisfies FR-009 trivially and adjust T030
-- [ ] T003 [P] Resolve the check-CLI skew risk: confirm how the current Cobra command in `cmd/berth-acquire/main.go` behaves on an unknown flag, since an old `check` receiving `--max-age` must not fail argument parsing (see contracts/check-cli.md); if it errors, record helper-image-before-webhook as a release-ordering requirement
+- [X] T001 Confirm a green baseline before changes: run `go -C tools tool task test`, `lint`, and `verify-generated` from the repository root and record that all three pass
+- [X] T002 [P] Resolve the R5 open item: determine whether `State.IsHealthy()` has any non-test callers, searching `internal/` and `cmd/`; if it has none, note that removing it satisfies FR-009 trivially and adjust T030
+- [X] T003 [P] Resolve the check-CLI skew risk: confirm how the current Cobra command in `cmd/berth-acquire/main.go` behaves on an unknown flag, since an old `check` receiving `--max-age` must not fail argument parsing (see contracts/check-cli.md); if it errors, record helper-image-before-webhook as a release-ordering requirement
 
 ---
 
@@ -39,8 +39,8 @@ Repository root is the Go module root. Key paths: `internal/webhook/`,
 These define the two shared vocabularies every later phase reuses. Complete
 before starting any user story.
 
-- [ ] T004 [P] Define the rejection reason type (`WritableStateMount`, `WritableStateMountEphemeral`) in `internal/webhook/contract.go`, per data-model.md — consumed by US1 messages and the US3 counter
-- [ ] T005 [P] Define the freshness verdict type (`Healthy`, `Absent`, `Stale`, `Indeterminate`) and the shared age predicate in `internal/acquire/state.go`, per data-model.md and R5 — boundary is `age <= bound` healthy, `age > bound` stale
+- [X] T004 [P] Define the rejection reason type (`WritableStateMount`, `WritableStateMountEphemeral`) in `internal/webhook/contract.go`, per data-model.md — consumed by US1 messages and the US3 counter
+- [X] T005 [P] Define the freshness verdict type (`Healthy`, `Absent`, `Stale`, `Indeterminate`) and the shared age predicate in `internal/acquire/state.go`, per data-model.md and R5 — boundary is `age <= bound` healthy, `age > bound` stale
 
 ---
 
@@ -57,22 +57,22 @@ cannot modify the marker or the verifier.
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] Test that a writable author-declared state-volume mount at a non-injected path is rejected, in `internal/webhook/inject_test.go` — must fail pre-fix
-- [ ] T007 [P] [US1] Test that a `readOnly: true` author-declared mount is admitted, in `internal/webhook/inject_test.go`
-- [ ] T008 [P] [US1] Test that injector-owned writable helper mounts are still admitted, in `internal/webhook/inject_test.go` — guards against keying the rule on "writable" alone
-- [ ] T009 [P] [US1] Test that a writable mount arriving via the ephemeral-containers subresource is rejected and a read-only one admitted, in `internal/webhook/inject_test.go` — must fail pre-fix
-- [ ] T010 [P] [US1] Test that the existing behaviours are unchanged: a writable mount at exactly `StateDir` is admitted and forced read-only, and a different volume at `StateDir` is still rejected, in `internal/webhook/inject_test.go`
-- [ ] T011 [P] [US1] Test both enforce modes (`probe` and `signal`) against the mount rule, in `internal/webhook/inject_test.go` — the rule is mode-independent
+- [X] T006 [P] [US1] Test that a writable author-declared state-volume mount at a non-injected path is rejected, in `internal/webhook/inject_test.go` — must fail pre-fix
+- [X] T007 [P] [US1] Test that a `readOnly: true` author-declared mount is admitted, in `internal/webhook/inject_test.go`
+- [X] T008 [P] [US1] Test that injector-owned writable helper mounts are still admitted, in `internal/webhook/inject_test.go` — guards against keying the rule on "writable" alone
+- [X] T009 [P] [US1] Test that a writable mount arriving via the ephemeral-containers subresource is rejected and a read-only one admitted, in `internal/webhook/inject_test.go` — must fail pre-fix
+- [X] T010 [P] [US1] Test that the existing behaviours are unchanged: a writable mount at exactly `StateDir` is admitted and forced read-only, and a different volume at `StateDir` is still rejected, in `internal/webhook/inject_test.go`
+- [X] T011 [P] [US1] Test both enforce modes (`probe` and `signal`) against the mount rule, in `internal/webhook/inject_test.go` — the rule is mode-independent
 - [ ] T012 [US1] **(G1)** End-to-end test in `test/e2e/` asserting that inside an *admitted* workload container, both `touch /berth/healthy` and overwriting `/berth/check` fail — admission tests prove the spec is rejected, this proves the runtime property the feature actually claims
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement mount classification in `preflight` in `internal/webhook/inject.go`: reject when the mount targets the state volume, is not read-only, and is not injector-owned, per data-model.md
-- [ ] T014 [US1] Implement the rejection message in `internal/webhook/inject.go` naming container, volume, and mount path, stating why and giving the resolutions, with no implication that an opt-out exists (FR-002)
-- [ ] T015 [US1] Apply the rule to the ephemeral-containers admission path in `internal/webhook/inject.go`, with wording that makes clear the running pod is healthy and the debug request was refused
-- [ ] T016 [US1] Register `pods/ephemeralcontainers` (`CREATE`) in `deploy/helm/berth-operator/templates/mutatingwebhookconfiguration.yaml` alongside the existing `pods` rule
-- [ ] T017 [US1] **(C1)** Change the shipped default to `failurePolicy: Fail` in `deploy/helm/berth-operator/values.yaml` and update the surrounding comment to state the trade — a webhook outage blocks pod creation for pods matching the selector (FR-001b)
-- [ ] T018 [US1] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` — **minor**, since T016 and T017 change chart behavior additively and by default (FR-014)
+- [X] T013 [US1] Implement mount classification in `preflight` in `internal/webhook/inject.go`: reject when the mount targets the state volume, is not read-only, and is not injector-owned, per data-model.md
+- [X] T014 [US1] Implement the rejection message in `internal/webhook/inject.go` naming container, volume, and mount path, stating why and giving the resolutions, with no implication that an opt-out exists (FR-002)
+- [X] T015 [US1] Apply the rule to the ephemeral-containers admission path in `internal/webhook/inject.go`, with wording that makes clear the running pod is healthy and the debug request was refused
+- [X] T016 [US1] Register `pods/ephemeralcontainers` (`CREATE`) in `deploy/helm/berth-operator/templates/mutatingwebhookconfiguration.yaml` alongside the existing `pods` rule
+- [X] T017 [US1] **(C1)** Change the shipped default to `failurePolicy: Fail` in `deploy/helm/berth-operator/values.yaml` and update the surrounding comment to state the trade — a webhook outage blocks pod creation for pods matching the selector (FR-001b)
+- [X] T018 [US1] Bump `version` in `deploy/helm/berth-operator/Chart.yaml` — **minor**, since T016 and T017 change chart behavior additively and by default (FR-014)
 
 **Checkpoint**: The bypass is closed and cannot lapse during a webhook outage. US2 is meaningless before this point, because `check` is only trustworthy once the volume is.
 
@@ -206,6 +206,20 @@ docs must not claim otherwise until US2 lands.
 3. **US3** — makes the breaking change survivable. Ship *with* US1, not after
    it: T038/T039/T040 are what stop the upgrade surprising people, so treating
    them as follow-up work would land two breaking changes without guidance.
+
+### Phase 1 investigation findings (T002, T003)
+
+- **T002** — `State.IsHealthy()` has **no non-test callers**, but 10+ test call
+  sites across `renew_test.go` and `state_test.go`. Removing it would churn
+  those tests for no benefit, so T030 rewires it onto the shared predicate
+  instead of deleting it. FR-009 is satisfied either way.
+- **T003** — the skew risk in contracts/check-cli.md is **not reachable**
+  through normal upgrade. Cobra does error on unknown flags
+  (`SilenceErrors` suppresses printing, not parsing), but the probe command
+  and the helper image both come from one `InjectorConfig` applied in a single
+  admission pass, so a pod's `check` binary and probe command always match.
+  No release-ordering requirement; only a pinned-stale `injection.helper.image`
+  could produce the failing combination. Contract updated accordingly.
 
 ### Notes
 

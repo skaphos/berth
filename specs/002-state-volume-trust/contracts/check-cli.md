@@ -68,12 +68,25 @@ new `check`, and a pod admitted by a new webhook may briefly run an old
 | `--max-age` | New | Freshness enforced |
 | `--max-age` | Old | Unknown flag — **must not** crash-loop the workload |
 
-The last row is the trap. An old `check` receiving an unknown flag must not
-exit non-zero on argument parsing, or the rollout itself kills healthy
-workloads. Implementation must confirm the current Cobra configuration's
-behavior on unknown flags and, if it errors, treat sequencing (helper image
-before webhook config) as a release-ordering requirement rather than an
-assumption.
+The last row looked like a trap, and was investigated rather than assumed
+(task T003). Two findings:
+
+1. **An old `check` would indeed fail.** The root command sets
+   `SilenceUsage` and `SilenceErrors` (`cmd/berth-acquire/main.go:46-47`),
+   which suppress *printing* but do not change parsing — Cobra still returns
+   an error for an unknown flag, and the process exits non-zero.
+2. **That combination is nevertheless unreachable through normal upgrade.**
+   The probe command and the helper image both come from one
+   `InjectorConfig` (`internal/webhook/inject.go:22` and `:397`) and are
+   applied in a single admission pass. A pod therefore always receives a
+   `check` binary and a probe command originating from the same operator
+   configuration. Existing pods keep their old pair untouched; new pods get
+   the new pair.
+
+So there is **no release-ordering requirement**. The only way to reach the
+failing row is to pin `injection.helper.image` to a tag older than the
+operator binary, which is a misconfiguration rather than an upgrade path.
+Worth a sentence in the configuration reference; not a sequencing constraint.
 
 ## Agreement with `State.IsHealthy()`
 

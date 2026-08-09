@@ -387,6 +387,12 @@ func TestInjectorConfigValidate(t *testing.T) {
 // TestInjectAddsStateMountWhenExistingMountPathDiffers ensures the probe's
 // StateDir mount is added even when the container already mounts berth-state
 // at a different path, so the probe can find its marker files.
+//
+// This previously accepted a *writable* mount at the other path and simply
+// added a read-only one alongside it. That was issue #96: both mounts share
+// one emptyDir, so the workload could still forge the marker and replace the
+// check binary the probe execs. The behaviour is preserved only for a
+// read-only existing mount; a writable one is now refused.
 func TestInjectAddsStateMountWhenExistingMountPathDiffers(t *testing.T) {
 	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
 	pod.Spec.Volumes = []corev1.Volume{{
@@ -394,7 +400,7 @@ func TestInjectAddsStateMountWhenExistingMountPathDiffers(t *testing.T) {
 		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 	}}
 	pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
-		{Name: VolumeName, MountPath: "/somewhere-else"},
+		{Name: VolumeName, MountPath: "/somewhere-else", ReadOnly: true},
 	}
 
 	if err := testInjector().Default(context.Background(), pod); err != nil {
@@ -404,5 +410,22 @@ func TestInjectAddsStateMountWhenExistingMountPathDiffers(t *testing.T) {
 	if !containerHasMountAt(app, VolumeName, acquire.DefaultStateDir) {
 		t.Errorf("expected a berth-state mount at %s despite the existing mount at /somewhere-else; got %+v",
 			acquire.DefaultStateDir, app.VolumeMounts)
+	}
+}
+
+// The same shape with a writable mount is the #96 bypass and must be refused
+// rather than quietly supplemented with a read-only mount.
+func TestInjectRejectsWritableExistingStateMountAtOtherPath(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	pod.Spec.Volumes = []corev1.Volume{{
+		Name:         VolumeName,
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}}
+	pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+		{Name: VolumeName, MountPath: "/somewhere-else"},
+	}
+
+	if err := testInjector().Default(context.Background(), pod); err == nil {
+		t.Fatal("a writable berth-state mount at another path is the #96 bypass and must be rejected")
 	}
 }

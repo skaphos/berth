@@ -305,3 +305,160 @@ func findEnvSource(c *corev1.Container, name string) *corev1.EnvVarSource {
 	}
 	return nil
 }
+
+// --- US1: the state volume is reserved (issue #96) ---------------------
+//
+// The probe's verifier (<StateDir>/check) lives inside the state volume,
+// so a workload with a writable mount can replace the verifier itself, not
+// merely forge the marker. Marker-signing schemes cannot close that; only
+// refusing the mount can.
+
+// mountedPod returns an opted-in pod whose "app" container carries mounts.
+func mountedPod(mounts ...corev1.VolumeMount) *corev1.Pod {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, mounts...)
+	return pod
+}
+
+func TestInjectRejectsWritableStateMountAtOtherPath(t *testing.T) {
+	pod := mountedPod(corev1.VolumeMount{Name: VolumeName, MountPath: "/rw"})
+
+	err := testInjector().Default(context.Background(), pod)
+	if err == nil {
+		t.Fatal("a writable mount of the state volume must be rejected: the workload could replace the check binary")
+	}
+	for _, want := range []string{"app", VolumeName, "/rw"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q must name %q so the owner knows what to fix", err, want)
+		}
+	}
+}
+
+func TestInjectAllowsReadOnlyStateMountAtOtherPath(t *testing.T) {
+	pod := mountedPod(corev1.VolumeMount{Name: VolumeName, MountPath: "/ro", ReadOnly: true})
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("read-only access is not a bypass and must stay allowed: %v", err)
+	}
+}
+
+func TestInjectAllowsInjectorOwnedWritableMounts(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	// The helpers must keep write access; the rule cannot key on "writable".
+	var sawWritable bool
+	for _, c := range pod.Spec.InitContainers {
+		if !isInjectorOwnedContainer(c.Name) {
+			continue
+		}
+		for _, m := range c.VolumeMounts {
+			if m.Name == VolumeName && !m.ReadOnly {
+				sawWritable = true
+			}
+		}
+	}
+	if !sawWritable {
+		t.Error("injected helpers must retain a writable state mount")
+	}
+}
+
+func TestInjectRejectsWritableStateMountOnEphemeralContainer(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("initial inject: %v", err)
+	}
+	// kubectl debug attaches to an already-injected, running pod.
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			Name:         "debugger",
+			Image:        "busybox",
+			VolumeMounts: []corev1.VolumeMount{{Name: VolumeName, MountPath: "/rw"}},
+		},
+	})
+
+	err := testInjector().Default(context.Background(), pod)
+	if err == nil {
+		t.Fatal("an ephemeral container must not obtain a writable state mount on a running gated pod")
+	}
+	if !strings.Contains(err.Error(), "debugger") {
+		t.Errorf("error %q must name the offending ephemeral container", err)
+	}
+}
+
+func TestInjectAllowsReadOnlyEphemeralStateMount(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("initial inject: %v", err)
+	}
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			Name:         "debugger",
+			Image:        "busybox",
+			VolumeMounts: []corev1.VolumeMount{{Name: VolumeName, MountPath: "/ro", ReadOnly: true}},
+		},
+	})
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("read-only debugging must stay possible: %v", err)
+	}
+}
+
+// An ephemeral container mounting at StateDir cannot be repaired, because
+// an already-injected pod is not mutated again — so unlike the create
+// path it must be refused outright.
+func TestInjectRejectsWritableEphemeralStateMountAtStateDir(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("initial inject: %v", err)
+	}
+	pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			Name:         "debugger",
+			Image:        "busybox",
+			VolumeMounts: []corev1.VolumeMount{{Name: VolumeName, MountPath: acquire.DefaultStateDir}},
+		},
+	})
+
+	if err := testInjector().Default(context.Background(), pod); err == nil {
+		t.Fatal("a writable ephemeral mount at the state dir is not repaired, so it must be rejected")
+	}
+}
+
+// Row 4 of the admission contract: an author's writable mount at exactly
+// the state dir is repaired rather than refused, preserving today's
+// behaviour for the shape people most often write by accident.
+func TestInjectStillRepairsWritableMountAtStateDir(t *testing.T) {
+	pod := mountedPod(corev1.VolumeMount{Name: VolumeName, MountPath: acquire.DefaultStateDir})
+
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("a writable mount at the state dir must still be repaired, not rejected: %v", err)
+	}
+	app := findContainer(pod.Spec.Containers, "app")
+	for _, m := range app.VolumeMounts {
+		if m.Name == VolumeName && !m.ReadOnly {
+			t.Error("the state mount must be forced read-only")
+		}
+	}
+}
+
+func TestStateMountRuleAppliesInBothEnforceModes(t *testing.T) {
+	for _, mode := range []acquire.Enforce{acquire.EnforceProbe, acquire.EnforceSignal} {
+		t.Run(string(mode), func(t *testing.T) {
+			pod := optInPod("prod", map[string]string{
+				AnnLeaseName:    "checkout",
+				AnnEnforce:      string(mode),
+				AnnSignalTarget: "app",
+			})
+			pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+				{Name: VolumeName, MountPath: "/rw"},
+			}
+
+			if err := testInjector().Default(context.Background(), pod); err == nil {
+				t.Fatalf("the mount rule is mode-independent; %s must reject too", mode)
+			}
+		})
+	}
+}

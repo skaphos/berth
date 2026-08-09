@@ -29,10 +29,14 @@ webhooks:
       caBundle: {{ $tls.caBundle }}
       {{- end }}
     rules:
+      {{- /* pods/ephemeralcontainers is a second admission path: kubectl
+             debug attaches a container to an already-running pod and can
+             mount volumes the pod already declares. Without this rule the
+             reserved-state-volume check never sees such a request. */}}
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE"]
-        resources: ["pods"]
+        resources: ["pods", "pods/ephemeralcontainers"]
         scope: Namespaced
     {{- /* Never mutate the Berth control plane. Combined with any
            user-supplied namespaceSelector matchExpressions. */ -}}
