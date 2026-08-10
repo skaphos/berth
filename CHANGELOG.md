@@ -5,6 +5,35 @@
 
 ### ⚠ BREAKING CHANGES
 
+Two changes here can stop workloads from starting. Read the
+[upgrade notes](docs/operations/upgrade-state-volume-trust.md) first — they
+include a `kubectl`/`jq` recipe for finding affected workloads **before** you
+upgrade.
+
+* **The `berth-state` volume is reserved.** Pods whose own containers mount it
+  with write access are now refused at admission — at any mount path, in either
+  enforce mode, on Pod creation and on `kubectl debug` attachments. There is no
+  opt-out, and a rejected Pod is refused on every admission event, including
+  re-admission after eviction or rescheduling. Read-only mounts are still
+  allowed, and a writable mount at exactly the state dir is repaired to
+  read-only rather than refused.
+
+  Such a Pod used to be admitted. Because the helper copies the liveness
+  probe's `check` binary into that same volume, write access let a workload
+  forge its own health marker *and replace the verifier*, defeating
+  at-most-once enforcement ([#96](https://github.com/skaphos/berth/issues/96)).
+
+* **`injection.webhook.failurePolicy` now defaults to `Fail`** (previously
+  `Ignore`). Installations that never overrode it inherit the change on
+  upgrade.
+
+  While the webhook is unavailable, opted-in Pods will not be created: the
+  operator becomes a hard dependency for Pod creation in gated namespaces.
+  This is deliberate — under `Ignore` the reserved-volume rule silently lapsed
+  for the duration of any webhook outage, which is indistinguishable from not
+  having it. Set it back to `Ignore` only if you would rather a gated workload
+  start unprotected than not start at all.
+
 * **gating:** reserve the state volume, add marker freshness, close the injection bypass ([#140](https://github.com/skaphos/berth/issues/140))
 
 ### Bug Fixes
