@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/skaphos/berth/compare/v0.3.1...v0.4.0) (2026-08-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **gating:** reserve the state volume, add marker freshness, close the injection bypass ([#140](https://github.com/skaphos/berth/issues/140))
+
+### Bug Fixes
+
+* **acquire:** bound lease RPCs so a hung API cannot wedge enforcement ([#138](https://github.com/skaphos/berth/issues/138)) ([6fd0a69](https://github.com/skaphos/berth/commit/6fd0a69a18da2ac1af07c342bd8a6adb35b248b3)), closes [#97](https://github.com/skaphos/berth/issues/97)
+* **gating:** reserve the state volume, add marker freshness, close the injection bypass ([#140](https://github.com/skaphos/berth/issues/140)) ([fa716df](https://github.com/skaphos/berth/commit/fa716dfc45fd3a1dd35814866b2cc2dd11f12d5c))
+
 ## [0.3.1](https://github.com/skaphos/berth/compare/v0.3.0...v0.3.1) (2026-08-08)
 
 
