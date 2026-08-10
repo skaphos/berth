@@ -1,0 +1,1495 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Distributed lease coordination for Kubernetes multi-cluster workloads.">
+      
+      
+      
+        <link rel="canonical" href="https://skaphos.github.io/berth/0.4.0/reference/api-versioning/">
+      
+      
+        <link rel="prev" href="../api/">
+      
+      
+        <link rel="next" href="../configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>API Versioning - Berth</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#crd-api-versioning-standard" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Berth" class="md-header__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Berth
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Versioning
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Berth" class="md-nav__button md-logo" aria-label="Berth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Berth
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/skaphos/berth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    skaphos/berth
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../workload-gating-injection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workload Gating (Injection)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Versioning
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Versioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-rule-everything-else-follows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one rule everything else follows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-does-not-govern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this does not govern
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-maturity-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The maturity ladder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The maturity ladder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#alpha-vnalpham" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alpha — vNalphaM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#beta-vnbetam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Beta — vNbetaM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stable-ga-vn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stable (GA) — vN
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-compatible-means-at-the-field-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "compatible" means at the field level
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-and-served-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage and served versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conversion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#introducing-a-new-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introducing a new version
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deprecation-and-removal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecation and removal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relationship-to-the-operator-release-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relationship to the operator release version
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enforcement-and-tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enforcement and tooling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-must-never-happen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What must never happen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-deviate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to deviate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scalability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade-state-volume-trust/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade: state-volume trust
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-rule-everything-else-follows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one rule everything else follows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-does-not-govern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this does not govern
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-maturity-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The maturity ladder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The maturity ladder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#alpha-vnalpham" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alpha — vNalphaM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#beta-vnbetam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Beta — vNbetaM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stable-ga-vn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stable (GA) — vN
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-compatible-means-at-the-field-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "compatible" means at the field level
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-and-served-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage and served versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conversion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#introducing-a-new-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introducing a new version
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deprecation-and-removal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecation and removal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relationship-to-the-operator-release-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relationship to the operator release version
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enforcement-and-tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enforcement and tooling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-must-never-happen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What must never happen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-deviate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to deviate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/skaphos/berth/edit/main/docs/reference/api-versioning.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="crd-api-versioning-standard">CRD API Versioning Standard</h1>
+<blockquote>
+<p><strong>Canonical source:</strong> <a href="https://github.com/skaphos/skaphos-resources/blob/main/standards/crd-api-versioning-standard.md"><code>skaphos-resources/standards/crd-api-versioning-standard.md</code></a>.
+This file is an in-repo mirror kept for Berth contributors and the published
+docs site. Propose changes to the standard there first, then re-sync this copy.</p>
+</blockquote>
+<p>How Skaphos operators version the Custom Resource Definitions they own and
+serve. The governance standard in <code>repository-governance.md</code> keeps changes
+reviewable and releasable; the documentation standard in
+<code>documentation-standard.md</code> keeps the <em>generated</em> API reference honest. This
+document governs the thing those two point at but do not define: <strong>the version
+string in a CRD's <code>apiVersion</code>, and the compatibility contract that string
+promises.</strong></p>
+<p>Use it when adding a field to a CRD, when a change to a CRD would break
+existing objects, or when deciding whether a resource is ready to graduate from
+alpha.</p>
+<p>Reference implementations and current state:</p>
+<table>
+<thead>
+<tr>
+<th>Repo</th>
+<th>Group</th>
+<th>Served versions</th>
+<th>Storage version</th>
+<th>Maturity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/skaphos/fathom"><code>fathom</code></a></td>
+<td><code>fathom.skaphos.io</code></td>
+<td><code>v1alpha1</code></td>
+<td><code>v1alpha1</code></td>
+<td>alpha</td>
+</tr>
+<tr>
+<td><a href="https://github.com/skaphos/berth"><code>berth</code></a></td>
+<td><code>berth.skaphos.io</code></td>
+<td><code>v1alpha1</code></td>
+<td><code>v1alpha1</code></td>
+<td>alpha</td>
+</tr>
+</tbody>
+</table>
+<p>Both reference operators are single-version and alpha today. The expensive
+machinery below — conversion, storage migration, deprecation windows — does not
+exist in either repo yet, and that is correct: you build it the day you
+introduce a second version, not before. This standard exists now so that day
+follows a written procedure instead of an improvisation.</p>
+<p>Berth's <code>BerthLease</code> kind lives at <code>berth.skaphos.io/v1alpha1</code>. Its alpha status
+is exactly why the CRD can still say <code>at-least-once</code> is "reserved for a future
+behavior" (see <code>api/v1alpha1/doc.go</code>): reserving and reshaping fields is a
+liberty alpha grants and beta/GA revoke. The generated reference for the surface
+is <a href="../api/"><code>api.md</code></a>; this document is the policy for changing it.</p>
+<h2 id="the-one-rule-everything-else-follows">The one rule everything else follows</h2>
+<p><strong>A CRD version string is a compatibility contract, not a feature or release
+number.</strong> It follows the upstream Kubernetes API versioning and deprecation
+conventions verbatim — we do not invent our own scheme:</p>
+<ul>
+<li><a href="https://kubernetes.io/docs/reference/using-api/#api-versioning">API versioning</a></li>
+<li><a href="https://kubernetes.io/docs/reference/using-api/deprecation-policy/">Deprecation policy</a></li>
+<li><a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api_conventions.md#backward-compatibility-gotchas">Changing the API — compatibility</a></li>
+</ul>
+<p>When this document and upstream disagree, upstream wins and this document is the
+bug. Everything below is the application of those conventions to a Skaphos
+operator built with kubebuilder v4 + controller-runtime.</p>
+<h2 id="what-this-does-not-govern">What this does <em>not</em> govern</h2>
+<p>Several things carry a "version" and are routinely confused with the CRD API
+version. None of them are governed here:</p>
+<ul>
+<li><strong>The operator's release version</strong> (the SemVer that <code>release-please</code> cuts and
+  that tags the operator images). Orthogonal to the CRD API version — see
+  "Relationship to the operator release version" below.</li>
+<li><strong>Any in-process contract version</strong> an operator maintains between its own
+  components. That is an internal Go compatibility boundary, not a Kubernetes API
+  surface.</li>
+<li><strong>The served versions of <em>third-party</em> CRDs</strong> an operator inspects at runtime.
+  Detecting which version of someone else's CRD is installed is reconcile
+  behavior, not our API contract.</li>
+</ul>
+<p>If it does not appear in the <code>apiVersion:</code> of a resource this operator
+<em>defines</em>, it is out of scope.</p>
+<h2 id="the-maturity-ladder">The maturity ladder</h2>
+<p>Every served version sits at exactly one maturity level. The level is encoded
+in the version string and dictates what you are allowed to change without
+introducing a new version.</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Version strings</th>
+<th>Availability</th>
+<th>In-place breaking changes</th>
+<th>Min support after deprecation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Alpha</strong></td>
+<td><code>v1alpha1</code>, <code>v1alpha2</code>, …</td>
+<td>Served, but documented as unstable</td>
+<td>Discouraged, but permitted</td>
+<td>None — may be removed in any release</td>
+</tr>
+<tr>
+<td><strong>Beta</strong></td>
+<td><code>v1beta1</code>, <code>v1beta2</code>, …</td>
+<td>Served and safe for pre-production</td>
+<td><strong>Forbidden</strong></td>
+<td>≥ 9 months or 3 releases, whichever is longer</td>
+</tr>
+<tr>
+<td><strong>Stable (GA)</strong></td>
+<td><code>v1</code>, <code>v2</code>, …</td>
+<td>Served; the version users should adopt</td>
+<td><strong>Forbidden</strong></td>
+<td>≥ 12 months or 3 releases, whichever is longer</td>
+</tr>
+</tbody>
+</table>
+<p>Read the ladder as a ratchet: maturity only ever increases for a given schema,
+and the compatibility promise only ever tightens.</p>
+<h3 id="alpha-vnalpham">Alpha — <code>vNalphaM</code></h3>
+<p>The escape hatch for a schema still being designed.</p>
+<ul>
+<li><strong>No backward-compatibility guarantee.</strong> The schema may change, and existing
+  objects may be dropped or require manual migration across an operator upgrade.</li>
+<li>Prefer to bump the alpha counter (<code>v1alpha1</code> → <code>v1alpha2</code>) for a breaking
+  change so users have a name for "the old shape," but changing an alpha version
+  in place is <em>permitted</em>. It is the only level where that is true.</li>
+<li>May be <strong>removed in any release</strong>, ideally with a release-note heads-up.</li>
+<li>Document the instability plainly in the CRD docs and the getting-started
+  guide. Users must opt in with eyes open.</li>
+</ul>
+<p>New kinds start here. A kind stays alpha until its schema has survived real use
+without a breaking change for long enough to make a beta promise credibly.</p>
+<h3 id="beta-vnbetam">Beta — <code>vNbetaM</code></h3>
+<p>The schema is believed correct and is being hardened.</p>
+<ul>
+<li><strong>Backward compatibility within the beta version is mandatory.</strong> Once
+  <code>v1beta1</code> ships, you may not make an incompatible change to it — an
+  incompatible change requires <code>v1beta2</code> (or GA).</li>
+<li>Compatible additions (a new optional field) are fine and do not need a new
+  version.</li>
+<li>Safe for pre-production and for users who accept a documented upgrade path.</li>
+<li>Once deprecated, a beta version must remain served for <strong>≥ 9 months or 3
+  operator releases, whichever is longer.</strong></li>
+</ul>
+<h3 id="stable-ga-vn">Stable (GA) — <code>vN</code></h3>
+<p>The long-term contract.</p>
+<ul>
+<li><strong>A GA version never receives an incompatible change.</strong> Not in a patch, not in
+  a minor, not ever. If the shape must break, that is a <em>new</em> GA version (<code>v2</code>),
+  served alongside <code>v1</code> with conversion, and <code>v1</code> enters deprecation.</li>
+<li>Compatible additions remain allowed.</li>
+<li>Once deprecated, a GA version must remain served for <strong>≥ 12 months or 3
+  operator releases, whichever is longer</strong> — and never while objects are still
+  stored in it (see storage migration).</li>
+</ul>
+<h2 id="what-compatible-means-at-the-field-level">What "compatible" means at the field level</h2>
+<p>The maturity rules above hinge on one distinction: is a schema change
+<em>compatible</em> or not? Apply the Kubernetes API change guidelines.</p>
+<p><strong>Compatible</strong> (allowed within a served beta/GA version):</p>
+<ul>
+<li>Adding a <strong>new optional field</strong> whose zero value preserves prior behavior.</li>
+<li>Adding a new value to an open-ended enum (as long as old clients tolerate
+  unknown values).</li>
+<li>Relaxing validation (widening an allowed range, loosening a pattern).</li>
+<li>Adding a new <code>status</code> field.</li>
+</ul>
+<p><strong>Incompatible</strong> (requires a new API version):</p>
+<ul>
+<li>Removing or renaming a field, or changing its JSON tag.</li>
+<li>Changing a field's type, units, or semantics.</li>
+<li>Making an optional field required, or adding a default that changes the
+  meaning of existing stored objects.</li>
+<li>Tightening validation so that a previously-valid object is now rejected.</li>
+<li>Removing an enum value.</li>
+</ul>
+<p>Two rules have no exceptions at any maturity level, because violating them
+silently corrupts data rather than breaking loudly:</p>
+<ol>
+<li><strong>Never reuse a field name or JSON tag with a different meaning.</strong> A retired
+   field's name is retired with it.</li>
+<li><strong>Never change the semantics of a field under an unchanged version string.</strong>
+   The whole point of the version is that a given <code>(group, version, field)</code>
+   means one thing forever.</li>
+</ol>
+<h2 id="storage-and-served-versions">Storage and served versions</h2>
+<p>A CRD may serve several versions at once but stores objects in exactly one.</p>
+<ul>
+<li><strong>Exactly one served version is the storage version</strong> (<code>storage: true</code>,
+  marked in Go with <code>+kubebuilder:storageversion</code>). Zero or two is a bug that
+  <code>controller-gen</code> will reject.</li>
+<li><strong>Every served version must round-trip losslessly through the storage
+  version.</strong> A read-modify-write via any served version must not silently drop
+  fields. If a field exists in one served version but not the storage version,
+  it is lost on write — that is a design error, not an acceptable trade-off.</li>
+<li>The storage version should generally be the <strong>most mature</strong> served version.</li>
+<li>A version can be <strong>served but not stored</strong>, or <strong>stored-history but no longer
+  served</strong> (<code>+kubebuilder:unservedversion</code> marks a known-but-not-served
+  version). Track what is stored via the CRD's <code>status.storedVersions</code>.</li>
+</ul>
+<p>While a group has a single version there is no conversion and none of this bites.
+It all activates the moment a second version appears.</p>
+<h2 id="conversion">Conversion</h2>
+<p>Two or more served versions require <strong>conversion</strong> between them.</p>
+<ul>
+<li>Use a <strong>conversion webhook</strong> with the controller-runtime hub-and-spoke
+  pattern: one version implements <code>conversion.Hub</code>; every other served version
+  implements <code>conversion.Convertible</code> (<code>ConvertTo</code> / <code>ConvertFrom</code>) against the
+  hub. The hub is normally the storage version.</li>
+<li>Conversion must be <strong>lossless in both directions</strong> for fields that exist in
+  both versions, and must have a defined, documented behavior for fields that
+  exist in only one (annotation round-tripping for otherwise-unrepresentable
+  fields is the upstream escape hatch).</li>
+<li><strong>Round-trip conversion tests are mandatory</strong> once more than one version is
+  served: for each pair, <code>A → hub → A</code> and <code>hub → A → hub</code> must be identity on
+  shared fields. These tests are the safety net that makes a version bump
+  reviewable.</li>
+</ul>
+<h2 id="introducing-a-new-version">Introducing a new version</h2>
+<p>Bump the version when — and only when — you need an <strong>incompatible change</strong>, or
+you are <strong>graduating maturity</strong> (alpha → beta → GA). Never bump it for a
+compatible addition; add the field to the existing version instead.</p>
+<p>Procedure (kubebuilder v4):</p>
+<ol>
+<li><strong>Scaffold</strong> the new version alongside the old one, keeping the old one
+   served:
+   <code>kubebuilder create api --group &lt;group&gt; --version &lt;new&gt; --kind &lt;Kind&gt;</code>.</li>
+<li><strong>Choose the storage version</strong> and mark exactly one with
+   <code>+kubebuilder:storageversion</code> (usually the new, more mature version once its
+   schema is settled).</li>
+<li><strong>Implement and test conversions</strong> between all served versions, with the
+   round-trip tests above.</li>
+<li><strong>Regenerate everything and let the drift gate prove it:</strong> CRDs, DeepCopy,
+   and the API reference (<code>docs/reference/api.md</code>) all regenerate and are caught
+   by the <code>verify-generated</code> gate (see <code>documentation-standard.md</code> → "Generated
+   references must be drift-gated"). Update the <code>PROJECT</code> file's resource list.</li>
+<li><strong>Announce the deprecation</strong> of the version being superseded, with a concrete
+   removal timeline that respects the support windows above. Mark the old
+   version with <code>+kubebuilder:deprecatedversion</code> (optionally
+   <code>:warning="..."</code>), which surfaces a warning to <code>kubectl</code>.</li>
+<li><strong>Migrate stored objects</strong> to the new storage version, then prune the old
+   version from <code>status.storedVersions</code>, then — and only then — stop serving and
+   remove the old version. Removing a stored version before migrating strands
+   data the API can no longer decode.</li>
+</ol>
+<h2 id="deprecation-and-removal">Deprecation and removal</h2>
+<p>Removing a served version is the one irreversible act in this standard; it
+follows the Kubernetes deprecation policy as a hard floor.</p>
+<ul>
+<li>A served version, once shipped, <strong>cannot be removed without a deprecation
+  announcement and window.</strong> The windows are the "min support after deprecation"
+  column above: GA ≥ 12 months / 3 releases; beta ≥ 9 months / 3 releases; alpha
+  0 (removable at any release, ideally announced). "Releases" means minor
+  releases of <em>that operator</em>; take whichever bound is longer.</li>
+<li>Mark the deprecated version in-tree (<code>+kubebuilder:deprecatedversion</code>) so the
+  CRD advertises <code>deprecated: true</code> and a <code>deprecationWarning</code>.</li>
+<li><strong>Never remove the storage version while objects are stored in it.</strong> Migrate
+  first; confirm via <code>status.storedVersions</code>.</li>
+<li>The removal itself is a <strong>breaking change to consumers</strong> even when done by the
+  book — call it out in the changelog and, for GA removals, in release notes.</li>
+</ul>
+<h2 id="relationship-to-the-operator-release-version">Relationship to the operator release version</h2>
+<p>The CRD API version and the operator's SemVer release are <strong>orthogonal axes.</strong></p>
+<ul>
+<li>A patch or minor operator release <strong>must not</strong> ship an incompatible CRD schema
+  change under an unchanged served version. Incompatible CRD changes ride a new
+  <em>API version</em>, not merely a new operator version.</li>
+<li>A new GA API version <em>may</em> coincide with a major operator release, but neither
+  requires the other. <code>release-please</code> versions the software; this standard
+  versions the API.</li>
+<li>Adding a compatible field is a <code>feat:</code> in the operator (minor bump) and no CRD
+  version change at all.</li>
+</ul>
+<h2 id="enforcement-and-tooling">Enforcement and tooling</h2>
+<ul>
+<li><strong><code>PROJECT</code></strong> tracks every <code>(group, version, kind)</code>. Keep it accurate; the
+  scaffolding tools rely on it.</li>
+<li><strong>kubebuilder markers</strong> are the source of truth for version state:
+  <code>+kubebuilder:storageversion</code>, <code>+kubebuilder:unservedversion</code>,
+  <code>+kubebuilder:deprecatedversion</code>.</li>
+<li><strong><code>verify-generated</code></strong> already fails the build when CRDs, DeepCopy, or the
+  generated API reference drift from the Go types (per
+  <code>documentation-standard.md</code>). A version bump that forgets to regenerate cannot
+  merge.</li>
+<li><strong>Round-trip conversion tests</strong> are required once more than one version is
+  served (above).</li>
+<li><strong>Recommended:</strong> add a CRD schema-compatibility check to CI (e.g. diffing the
+  generated <code>config/crd/bases/*.yaml</code> against the previous release, or a
+  kube-api-linter pass) so an <em>accidental</em> incompatible change under an unchanged
+  version fails a check instead of shipping.</li>
+</ul>
+<h2 id="what-must-never-happen">What must never happen</h2>
+<p>A checklist of the failure modes this standard exists to prevent:</p>
+<ul>
+<li>An incompatible change to a served <strong>beta or GA</strong> version under its existing
+  version string.</li>
+<li>A field name or JSON tag <strong>reused</strong> with a new meaning.</li>
+<li>A served version <strong>removed</strong> without a deprecation window, or the <strong>storage
+  version</strong> removed before stored objects are migrated.</li>
+<li>A CRD with <strong>zero or two</strong> storage versions.</li>
+<li>A second served version added <strong>without conversion</strong> and round-trip tests.</li>
+<li>A schema <strong>incompatibly changed across operator releases</strong> under an unchanged
+  version (outside alpha).</li>
+</ul>
+<h2 id="when-to-deviate">When to deviate</h2>
+<p>Alpha is the sanctioned place for churn — that is what it is <em>for</em>, and moving
+fast there is not a deviation. Everything at beta and GA is a hard contract with
+users and does not bend for convenience.</p>
+<p>If a real situation cannot be expressed within these rules — a security fix that
+demands a breaking change to a GA version faster than the deprecation window
+allows, say — that is a genuine exception. Open a PR against the canonical
+standard describing the case. It either becomes a documented carve-out or is
+driven back into the standard shape. Do not deviate silently: a quiet
+incompatible change to a stable API is exactly the outage this standard is
+written to prevent.</p>
+<h2 id="ownership">Ownership</h2>
+<p>The API types and the generators that turn them into CRDs are high-leverage and
+belong under <code>CODEOWNERS</code> per <code>repository-governance.md</code> §4–§5:</p>
+<div class="highlight"><pre><span></span><code>/api/**                       @skaphos/maintainers
+/PROJECT                      @skaphos/maintainers
+/config/crd/**                @skaphos/maintainers
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.action.edit", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
