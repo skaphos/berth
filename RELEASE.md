@@ -5,11 +5,19 @@ Actions to publish release artifacts.
 
 ## Release Flow
 
-1. Commits land on `main` through pull requests.
+1. Commits land on `main` through pull requests. Pull requests are
+   squash-merged and the squash commit is composed from the pull request title
+   and description, so those are what Release Please parses — see
+   [Commit Messages and Releases](CONTRIBUTING.md#commit-messages-and-releases).
+   **Breaking changes need both a `!` on the type and a `BREAKING CHANGE:`
+   footer**; the `!` bumps the version, the footer supplies the changelog text.
 2. `.github/workflows/release-please.yml` runs stock
    `googleapis/release-please-action`, which maintains a single rolling Release
    Please pull request from the Conventional Commits on `main`.
-3. A maintainer reviews and merges the release pull request.
+3. A maintainer reviews and merges the release pull request. Read the generated
+   `CHANGELOG.md` before merging, particularly any `⚠ BREAKING CHANGES`
+   section: if it only repeats a commit subject, the footer was missing and the
+   entry needs fixing on the release pull request before the release goes out.
 4. The same `release-please.yml` run then pushes the `vX.Y.Z` tag (Release
    Please runs with `skip-github-release`, so `release.yml` owns the GitHub
    release; the tag is pushed with the release-bot app token, because a tag
