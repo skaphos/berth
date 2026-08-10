@@ -2,78 +2,78 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://skaphos.github.io/berth/main/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/architecture/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/code-map/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/concepts/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/getting-started/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/release-and-issue-workflow/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/workload-gating-injection/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/adr/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/adr/0001-pod-level-gating-for-injected-singletons/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/adr/0002-label-annotation-opt-in-over-crd/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/adr/0003-sidecar-runtime-enforcement-by-container-kill/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/adr/0004-state-volume-is-a-trust-boundary/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/design/2026-05-workload-gating-injection-model/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/operations/scalability/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/operations/upgrade-state-volume-trust/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/operations/results/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/reference/api-versioning/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/reference/api/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
     <url>
          <loc>https://skaphos.github.io/berth/main/reference/configuration/</loc>
-         <lastmod>2026-08-09</lastmod>
+         <lastmod>2026-08-10</lastmod>
     </url>
 </urlset>
