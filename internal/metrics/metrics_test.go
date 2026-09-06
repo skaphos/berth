@@ -3,15 +3,89 @@ package metrics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/skaphos/berth/internal/api"
 	"github.com/skaphos/berth/internal/lease"
 )
+
+func TestObserveRequestBoundsMethodLabels(t *testing.T) {
+	t.Parallel()
+	m := New()
+	methods := []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace, http.MethodPatch}
+	for _, method := range methods {
+		m.ObserveRequest("unmatched", method, http.StatusMethodNotAllowed, time.Millisecond)
+	}
+	for i := range 100 {
+		m.ObserveRequest("unmatched", fmt.Sprintf("CUSTOM%d", i), http.StatusMethodNotAllowed, time.Millisecond)
+	}
+	// Method tokens are case-sensitive; alternate casing and invalid direct-call
+	// input must not allocate more series or be confused with standard methods.
+	for _, method := range []string{"get", "Get", "", "OTHER", "GET ", "Méthod", strings.Repeat("X", 4096)} {
+		m.ObserveRequest("unmatched", method, http.StatusMethodNotAllowed, time.Millisecond)
+	}
+	for _, method := range methods {
+		if got := testutil.ToFloat64(m.reqTotal.WithLabelValues("unmatched", method, "405")); got != 1 {
+			t.Fatalf("count for %s = %v, want 1", method, got)
+		}
+	}
+	if got := testutil.ToFloat64(m.reqTotal.WithLabelValues("unmatched", "OTHER", "405")); got != 107 {
+		t.Fatalf("OTHER count = %v, want 107", got)
+	}
+	for name, collector := range map[string]prometheus.Collector{
+		"counter": m.reqTotal, "histogram": m.reqDuration,
+	} {
+		if got := testutil.CollectAndCount(collector); got != len(methods)+1 {
+			t.Errorf("%s series = %d, want %d", name, got, len(methods)+1)
+		}
+	}
+}
+
+func TestMetricsMiddlewareBoundsUnauthenticatedMethods(t *testing.T) {
+	t.Parallel()
+	m := New()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	h := api.MetricsMiddleware(m)(mux)
+	for _, path := range []string{"/healthz", "/missing"} {
+		want := http.StatusMethodNotAllowed
+		if path == "/missing" {
+			want = http.StatusNotFound
+		}
+		for i := range 100 {
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, httptest.NewRequest(fmt.Sprintf("CUSTOM%d", i), path, nil))
+			if rr.Code != want {
+				t.Fatalf("%s status = %d, want %d", path, rr.Code, want)
+			}
+			if want == http.StatusMethodNotAllowed && rr.Header().Get("Allow") != "GET, HEAD" {
+				t.Fatalf("Allow = %q, want GET, HEAD", rr.Header().Get("Allow"))
+			}
+		}
+	}
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, httptest.NewRequest(method, "/healthz", nil))
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("%s status = %d, want 204", method, rr.Code)
+		}
+	}
+	for _, collector := range []prometheus.Collector{m.reqTotal, m.reqDuration} {
+		if got := testutil.CollectAndCount(collector); got != 4 {
+			t.Errorf("series = %d, want 4 (two OTHER statuses, GET, HEAD)", got)
+		}
+	}
+}
 
 func TestObserveRequestCountsAndInflight(t *testing.T) {
 	t.Parallel()

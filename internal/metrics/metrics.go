@@ -81,8 +81,15 @@ func New() *Metrics {
 
 // ObserveRequest records one served HTTP request. status is the numeric HTTP
 // status code; it is formatted as a label so cardinality stays bounded to the
-// codes actually returned.
+// codes actually returned. Non-standard methods share the OTHER label to avoid
+// retaining a new series for each caller-controlled method token.
 func (m *Metrics) ObserveRequest(route, method string, status int, dur time.Duration) {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace, http.MethodPatch:
+	default:
+		method = "OTHER"
+	}
 	code := fmt.Sprintf("%d", status)
 	m.reqDuration.WithLabelValues(route, method, code).Observe(dur.Seconds())
 	m.reqTotal.WithLabelValues(route, method, code).Inc()
