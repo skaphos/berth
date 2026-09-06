@@ -1107,7 +1107,7 @@ kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-w
 <p><code>demo-app</code> is a trivial Deployment (the <code>pause</code> container — it starts fast and
 does nothing) that starts at <strong>0 replicas</strong>. Berth, not you, decides when it
 scales up. Apply it to <strong>both</strong> runner clusters:</p>
-<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39; | tee /tmp/demo-app.yaml</span>
+<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;'EOF' | tee /tmp/demo-app.yaml</span>
 <span class="s">apiVersion: apps/v1</span>
 <span class="s">kind: Deployment</span>
 <span class="s">metadata:</span>
@@ -1142,7 +1142,7 @@ watches all namespaces, and just needs RBAC to scale the target there.</p>
 <p>The <code>BerthLease</code> is the declarative request: <em>"keep <code>demo-app</code> at 2 replicas on
 whichever cluster currently holds <code>demo-lease</code>, and at 0 everywhere else."</em>
 Apply the <strong>identical</strong> manifest to both runner clusters:</p>
-<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39; | tee /tmp/demo-lease.yaml</span>
+<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;'EOF' | tee /tmp/demo-lease.yaml</span>
 <span class="s">apiVersion: berth.skaphos.io/v1alpha1</span>
 <span class="s">kind: BerthLease</span>
 <span class="s">metadata:</span>
@@ -1175,19 +1175,19 @@ The race resolves within a few heartbeats.</p>
 <h2 id="step-4-observe-single-active">Step 4 — Observe single-active</h2>
 <p>Watch the replica counts on both clusters. Exactly one side goes to <strong>2</strong>; the
 other stays at <strong>0</strong>:</p>
-<div class="highlight"><pre><span></span><code>watch<span class="w"> </span>-n1<span class="w"> </span><span class="s1">&#39;</span>
-<span class="s1">  echo &quot;east: $(kubectl --context kind-berth-e2e-east -n berth-system get deploy demo-app -o jsonpath=&#39;</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">&#39;)&quot;</span>
-<span class="s1">  echo &quot;west: $(kubectl --context kind-berth-e2e-west -n berth-system get deploy demo-app -o jsonpath=&#39;</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">&#39;)&quot;</span>
-<span class="s1">&#39;</span>
+<div class="highlight"><pre><span></span><code>watch<span class="w"> </span>-n1<span class="w"> </span><span class="s1">'</span>
+<span class="s1">  echo "east: $(kubectl --context kind-berth-e2e-east -n berth-system get deploy demo-app -o jsonpath='</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">')"</span>
+<span class="s1">  echo "west: $(kubectl --context kind-berth-e2e-west -n berth-system get deploy demo-app -o jsonpath='</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">')"</span>
+<span class="s1">'</span>
 </code></pre></div>
 <p>Within ~15 seconds you should see a stable split such as <code>east: 2 / west: 0</code>.
 That is the whole guarantee: one active workload across two clusters.</p>
 <p>Confirm it from the lease's own status. The holder reports <code>leaseState: held</code>
 and names itself in <code>currentHolder</code>; the standby reports <code>leaseState: waiting</code>:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.leaseState}{&quot; holder=&quot;}{.status.currentHolder}{&quot;\n&quot;}&#39;</span>
+<span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.leaseState}{" holder="}{.status.currentHolder}{"\n"}'</span>
 kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.leaseState}{&quot; holder=&quot;}{.status.currentHolder}{&quot;\n&quot;}&#39;</span>
+<span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.leaseState}{" holder="}{.status.currentHolder}{"\n"}'</span>
 </code></pre></div>
 <p>You can also peek at the authoritative record in the coordination cluster — the
 central <code>Lease</code> object that both operators are contending for:</p>

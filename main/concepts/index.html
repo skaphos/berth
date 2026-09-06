@@ -1091,7 +1091,7 @@ holder cannot impersonate another after that holder's lease expires. See
 <p>A standby that does <em>not</em> hold the lease keeps retrying acquisition on an
 interval of <strong><code>min(heartbeat, ttl/3)</code></strong>. So worst-case failover time is bounded
 by roughly <strong>TTL + the standby's reacquire interval</strong>:</p>
-<div class="highlight"><pre><span></span><code>holder stops renewing ──▶ TTL elapses ──▶ standby&#39;s next acquire wins
+<div class="highlight"><pre><span></span><code>holder stops renewing ──▶ TTL elapses ──▶ standby's next acquire wins
         t=0                  t≈TTL              t≈TTL + reacquire
 </code></pre></div>
 <p>With <code>ttlSeconds: 15</code> and <code>heartbeatIntervalSeconds: 5</code>, takeover lands in about

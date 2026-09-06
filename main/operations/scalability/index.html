@@ -1347,7 +1347,10 @@ RED metrics on the lease handlers and the backend store calls
 <li><code>berth_lease_store_call_duration_seconds{op, backend, outcome}</code></li>
 </ul>
 <p>The <code>route</code> label is the matched mux pattern (templated, so cardinality is
-bounded), and <code>store-call</code> <code>outcome</code> separates the expected control-flow
+bounded). The <code>method</code> label preserves <code>GET</code>, <code>HEAD</code>, <code>POST</code>, <code>PUT</code>, <code>DELETE</code>,
+<code>CONNECT</code>, <code>OPTIONS</code>, <code>TRACE</code>, and <code>PATCH</code>; all other method tokens share
+<code>OTHER</code>. This label normalization does not change HTTP routing or responses.
+The <code>store-call</code> <code>outcome</code> separates the expected control-flow
 signals (<code>conflict</code>, <code>notfound</code>) from an unexpected backend <code>error</code>. The
 request middleware is the outermost wrapper, so recorded status includes auth
 rejections; the store wrapper is a transparent <code>lease.Store</code> decorator tagged

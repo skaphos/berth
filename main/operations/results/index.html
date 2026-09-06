@@ -718,26 +718,26 @@ hardware/cluster they came from in the PR.</p>
 <strong>plus</strong> a <code>resources</code> block that <code>run.sh</code> adds from a Prometheus query over the
 run window:</p>
 <div class="highlight"><pre><span></span><code>{
-  &quot;scenario&quot;: &quot;steady&quot;,        // steady | coldstart | failover | churn
-  &quot;backend&quot;: &quot;k8s&quot;,            // store backend driven (k8s | sql)
-  &quot;leases&quot;: 500,
-  &quot;pairs&quot;: 8,
-  &quot;ttlMs&quot;: 30000,
-  &quot;elapsedMs&quot;: 60012.3,
-  &quot;ops&quot;: {                     // keyed by operation: acquire | renew | release
-    &quot;acquire&quot;: {
-      &quot;count&quot;: 4000,
-      &quot;errors&quot;: 0,
-      &quot;minMs&quot;: 0.8, &quot;maxMs&quot;: 42.1, &quot;meanMs&quot;: 3.2,
-      &quot;p50Ms&quot;: 2.7, &quot;p95Ms&quot;: 7.9, &quot;p99Ms&quot;: 14.0, &quot;p999Ms&quot;: 31.5
+  "scenario": "steady",        // steady | coldstart | failover | churn
+  "backend": "k8s",            // store backend driven (k8s | sql)
+  "leases": 500,
+  "pairs": 8,
+  "ttlMs": 30000,
+  "elapsedMs": 60012.3,
+  "ops": {                     // keyed by operation: acquire | renew | release
+    "acquire": {
+      "count": 4000,
+      "errors": 0,
+      "minMs": 0.8, "maxMs": 42.1, "meanMs": 3.2,
+      "p50Ms": 2.7, "p95Ms": 7.9, "p99Ms": 14.0, "p999Ms": 31.5
     }
   },
-  &quot;resources&quot;: {               // API server pod, over [startTs, endTs]
-    &quot;window&quot;: { &quot;startTs&quot;: 1748620800, &quot;endTs&quot;: 1748620860, &quot;seconds&quot;: 60 },
-    &quot;cpuCoresAvg&quot;: 0.31, &quot;cpuCoresPeak&quot;: 0.58,   // cores (1.0 = one vCPU)
-    &quot;memBytesPeak&quot;: 96468992,
-    &quot;cpuRequestCores&quot;: 0.1, &quot;cpuLimitCores&quot;: 1.0,
-    &quot;memRequestBytes&quot;: 134217728, &quot;memLimitBytes&quot;: 268435456
+  "resources": {               // API server pod, over [startTs, endTs]
+    "window": { "startTs": 1748620800, "endTs": 1748620860, "seconds": 60 },
+    "cpuCoresAvg": 0.31, "cpuCoresPeak": 0.58,   // cores (1.0 = one vCPU)
+    "memBytesPeak": 96468992,
+    "cpuRequestCores": 0.1, "cpuLimitCores": 1.0,
+    "memRequestBytes": 134217728, "memLimitBytes": 268435456
   }
 }
 </code></pre></div>

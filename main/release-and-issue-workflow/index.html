@@ -854,7 +854,7 @@ long-lived signing keys to manage.</p>
 <h3 id="verifying-an-image">Verifying an image</h3>
 <div class="highlight"><pre><span></span><code>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v'</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>ghcr.io/skaphos/berth-apiserver@sha256:&lt;digest&gt;
 
 <span class="c1"># SLSA build provenance:</span>
@@ -868,7 +868,7 @@ omitting<span class="w"> </span>any<span class="w"> </span>of<span class="w"> </
 <span class="sb">```</span>sh
 cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v'</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--certificate<span class="w"> </span>checksums.txt.pem<span class="w"> </span>--signature<span class="w"> </span>checksums.txt.sig<span class="w"> </span>checksums.txt
 sha256sum<span class="w"> </span>-c<span class="w"> </span>checksums.txt
 </code></pre></div>
