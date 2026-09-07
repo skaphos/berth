@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -284,5 +285,42 @@ func TestRunLoopFetchesAndWritesToken(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(got), "jwt-") {
 		t.Fatalf("token file = %q, want a jwt-... value", got)
+	}
+}
+
+// Exercise startup failures through the CLI wiring, including discovery through
+// the upgraded OIDC client. No token output may be created on these failures.
+func TestRunRejectsInvalidStartup(t *testing.T) {
+	originalFlags, originalArgs := flag.CommandLine, os.Args
+	t.Cleanup(func() { flag.CommandLine, os.Args = originalFlags, originalArgs })
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "discovery unavailable", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "secret")
+	if err := os.WriteFile(secret, []byte("test-secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		args []string
+		want int
+	}{
+		{"missing configuration", nil, 2},
+		{"unreadable secret", []string{"--oidc-client-id=test", "--oidc-token-url=" + srv.URL, "--oidc-client-secret-file=" + filepath.Join(dir, "missing")}, 2},
+		{"discovery unavailable", []string{"--oidc-client-id=test", "--oidc-issuer-url=" + srv.URL, "--oidc-client-secret-file=" + secret}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "token")
+			flag.CommandLine = flag.NewFlagSet("berth-oidc-broker", flag.ContinueOnError)
+			os.Args = append([]string{"berth-oidc-broker", "--output=" + output}, tc.args...)
+			if got := run(); got != tc.want {
+				t.Fatalf("run() = %d, want %d", got, tc.want)
+			}
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatalf("failed startup created token output: %v", err)
+			}
+		})
 	}
 }

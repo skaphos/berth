@@ -163,3 +163,48 @@ The publish workflow extracts this exact version section from the tagged
 changelog with `scripts/release-notes.sh`; it does not replace those entries with
 GitHub's PR-title summary. Test the extraction with
 `scripts/test-release-notes.sh`.
+
+## Dependency refresh baseline
+
+The September 2026 refresh requires Go 1.27.1 for both application and development
+tool modules. The Docker builders use that same release. Runtime containers use
+Debian 13 distroless static images with numeric UID/GID 65532. This updates build
+inputs; it does not migrate deployed databases or publish application images.
+
+| Component | Baseline |
+| --- | --- |
+| Go | 1.27.1 |
+| Kubernetes libraries / controller-runtime | 0.37.0 / 0.25.0 |
+| controller-gen / staticcheck / golangci-lint | 0.22.0 / 0.8.1 / 2.13.2 |
+| govulncheck / goimports | 1.7.0 / 0.49.0 |
+| CI Python / stable Ubuntu runner | 3.14.7 / 24.04 |
+| Helm / kind / Kubernetes test nodes | 4.2.4 / 0.33.0 / 1.37.0 |
+| cert-manager / kube-prometheus-stack test infrastructure | 1.21.1 / 90.0.0 |
+| Disposable load-test PostgreSQL | 18.6 Alpine |
+| Buildx / BuildKit / cosign / Syft | 0.37.0 / 0.33.0 / 3.1.3 / 1.51.1 |
+
+Action references and container images remain pinned to immutable commits and
+image digests. Recheck publisher releases when refreshing; release-please owns
+Berth application release numbers and chart `appVersion` packaging.
+
+Kubernetes is a coordinated dependency family. Keep `k8s.io/kube-openapi` at
+`v0.0.0-20260721132016-d427ff9ee9ad`, the revision selected by Kubernetes 1.37
+and controller-runtime 0.25. Its newer development revision changes
+structured-merge-diff schema types from v6 to v7 and does not compile with these
+released clients. Revisit this exception when the Kubernetes family supports it.
+
+The existing `github.com/google/cel-go` import family stays at v0.31.0. Its
+v0.32.0 tag declares the new `cel.dev/cel-go` module path and cannot be upgraded
+under the old path; migrate with the Kubernetes clients when they adopt it.
+
+PostgreSQL's load fixture uses an emptyDir at `/var/lib/postgresql` and the
+PostgreSQL 18 data path beneath it. Recreate disposable load fixtures when
+upgrading. This is not an in-place PostgreSQL 16 data upgrade; production database
+upgrades require their own migration. Existing benchmark snapshots describe
+the versions originally measured and are not rewritten as new measurements.
+
+Before merging a refresh, verify both module graphs, race tests, SQL integration,
+generated artifacts, image builds, Helm renders and workflow syntax. Check
+`govulncheck` using the repository's pinned Go version. Reverting the dependency
+PR and rebuilding restores the previous code/toolchain inputs; it does not
+reverse an external database upgrade.

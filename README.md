@@ -133,7 +133,7 @@ acquisition on the configured heartbeat cadence.
 
 ## Development
 
-Requires Go 1.26+. Task is declared as a Go tool in `tools/go.mod`, so no
+Requires Go 1.27.1+. Task is declared as a Go tool in `tools/go.mod`, so no
 separate Task installation is required.
 
 ```bash

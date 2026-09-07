@@ -369,8 +369,15 @@ func TestLoadHandoffFallbackWhenStateMissing(t *testing.T) {
 // TestRunRenewsAndReleasesOnCancel drives the full loop with a fast
 // heartbeat: it should renew at least once and release on context cancel.
 func TestRunRenewsAndReleasesOnCancel(t *testing.T) {
+	renewed := make(chan struct{}, 1)
 	fc := &fakeClient{
-		renewFn: func(string, int32) (acquireResult, error) { return acquired(3, 30*time.Second), nil },
+		renewFn: func(string, int32) (acquireResult, error) {
+			select {
+			case renewed <- struct{}{}:
+			default:
+			}
+			return acquired(3, 30*time.Second), nil
+		},
 	}
 	r, state := newTestRenewer(t, fc)
 	r.cfg.HeartbeatInterval = 2 * time.Millisecond
@@ -379,11 +386,19 @@ func TestRunRenewsAndReleasesOnCancel(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- r.Run(ctx) }()
 
-	// Let a few heartbeats elapse, then shut down.
-	time.Sleep(30 * time.Millisecond)
+	// Observe an actual renewal before cancelling; a fixed sleep races the
+	// scheduler on loaded race-test and container-build runners.
+	select {
+	case <-renewed:
+	case err := <-done:
+		t.Fatalf("Run returned before renewal: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("Run did not renew")
+	}
 	cancel()
 
 	select {

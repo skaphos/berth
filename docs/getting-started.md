@@ -51,7 +51,7 @@ You need these tools on your `PATH`:
 | [`helm`](https://helm.sh/) | Installs the API server and operator charts. |
 | `docker` | Builds the Berth images and runs the `kind` nodes. |
 | `openssl` | Mints the harness's throwaway TLS material. |
-| Go 1.26+ | Runs the `task` build orchestration (declared as a Go tool, so no separate install). |
+| Go 1.27.1+ | Runs the `task` build orchestration (declared as a Go tool, so no separate install). |
 
 Clone the repository and work from its root:
 
