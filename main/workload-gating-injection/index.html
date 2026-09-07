@@ -552,10 +552,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#known-limitation-signal-mode-and-a-dead-sidecar" class="md-nav__link">
+  <a href="#required-liveness-probe-and-signal-mode-upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Known limitation — signal mode and a dead sidecar
+        Required liveness probe and signal-mode upgrade
       
     </span>
   </a>
@@ -1159,10 +1159,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#known-limitation-signal-mode-and-a-dead-sidecar" class="md-nav__link">
+  <a href="#required-liveness-probe-and-signal-mode-upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Known limitation — signal mode and a dead sidecar
+        Required liveness probe and signal-mode upgrade
       
     </span>
   </a>
@@ -1588,10 +1588,12 @@ downstream enforcement is still needed to reject writes from expired holders.</p
   helper ships a static <code>check</code> binary onto the shared volume, so the probe does
   <strong>not</strong> require a shell in the target image.</li>
 <li><strong><code>signal</code></strong> — the webhook sets <code>shareProcessNamespace: true</code>; the sidecar
-  sends <code>SIGTERM</code>/<code>SIGKILL</code> to the main process on lease loss. More immediate,
-  but every container in the Pod can then see and signal every other one (weaker
-  isolation), and PID-1 signal handling varies by image. Reserve it for images
-  where the probe cannot run.</li>
+  attempts <code>SIGTERM</code>/<code>SIGKILL</code> on lease loss, in addition to the mandatory
+  freshness liveness probe on every main container. Signals may stop a matching
+  process sooner when Linux permissions allow it. A different workload UID,
+  an unmatched target, or a dead helper does not remove the kubelet fallback.
+  Berth does not grant <code>CAP_KILL</code>. Sharing the PID namespace weakens process
+  isolation; prefer <code>probe</code> unless the extra signal attempt is needed.</li>
 </ul>
 <blockquote>
 <p><strong>Multi-sidecar hazard.</strong> An unscoped signal enforcer signals <strong>every</strong>
@@ -1657,20 +1659,38 @@ surface on the Pod's probe-failure event.</p>
 <p>A correctly-renewing holder never trips this: validation requires the heartbeat
 to be strictly shorter than the TTL, so a healthy sidecar refreshes the marker
 well inside the bound.</p>
-<h3 id="known-limitation-signal-mode-and-a-dead-sidecar">Known limitation — <code>signal</code> mode and a dead sidecar</h3>
-<p><code>signal</code> enforcement is carried out by the sidecar, so a dead sidecar cannot
-signal anything. Where a main container defines <strong>no</strong> <code>livenessProbe</code> of its
-own, the webhook injects the freshness probe as a backstop and the behaviour
-matches <code>probe</code> mode.</p>
-<p>Where the container <strong>already defines a <code>livenessProbe</code></strong>, it does not. A
-container may have only one, and overwriting the workload's own health check
-would be a worse failure than the gap. That case is exactly why <code>preflight</code>
-steers people to <code>signal</code> in the first place, so it is not rare.</p>
-<p><strong>For those Pods, a dead sidecar still leaves the workload running unleased.</strong>
-If you need the guarantee unconditionally, use <code>enforce: probe</code> and let Berth
-own the liveness slot. Closing this for <code>signal</code> requires a separate watchdog
-mechanism, tracked in
-<a href="https://github.com/skaphos/berth/issues/142">#142</a>.</p>
+<h3 id="required-liveness-probe-and-signal-mode-upgrade">Required liveness probe and signal-mode upgrade</h3>
+<p>Both runtime enforcement modes require Berth's unmodified freshness liveness
+probe on <strong>every</strong> regular container. Admission rejects a pre-existing liveness
+probe instead of overwriting it, and rejects startup probes because
+<a href="https://kubernetes.io/docs/concepts/workloads/pods/probes/">Kubernetes defers liveness checks until startup succeeds</a>.
+Readiness probes remain available for application readiness checks. Startup-gate
+retains its existing probe behavior and provides no runtime enforcement.</p>
+<p>The final validating webhook checks this contract after all mutating webhooks.
+It rejects missing or changed probes, newly added ungated containers, and mounts
+that hide the trusted state directory, marker, or check binary. State-root
+mounts must expose the full read-only volume; subpath mounts are unsupported.
+Both admission registrations must be installed with <code>failurePolicy: Fail</code>.
+The injector and helper reject TTLs above 2,147,483,647 seconds so the probe
+and the API use the same value without integer wraparound.</p>
+<p>On lease loss, signal mode removes the health marker before discovering or
+signalling processes. Permission and discovery errors are returned and logged;
+an already-exited process is harmless. Successful renewals refresh the marker
+in both modes. If the helper dies, the marker eventually becomes stale instead.
+Kubelet detection, probe scheduling and the Pod's termination grace period still
+contribute to the stop delay. A restarted process can run until its next failed
+probe; use downstream fencing tokens to reject stale writes throughout that
+window. This requires a functioning kubelet, as in probe mode.</p>
+<p>Before upgrading, drain affected workloads, remove conflicting liveness/startup
+probes (or redesign their health checks), and recreate the Pods using the patched
+injector <strong>and</strong> helper images. Existing Pods are not retroactively protected.
+Signal mode is no longer an escape for images that cannot execute the check
+binary. Mixed injector versions can reject admission during rollout; upgrade all
+replicas before relying on the new policy.</p>
+<p>Manual/direct helper deployments must install the same freshness exec probe and
+read-only state mount on every workload container and avoid startup probes. The
+helper cannot inspect an external Pod spec or install kubelet probes itself;
+running it with <code>enforce=signal</code> alone is not a supported runtime fencing setup.</p>
 <h2 id="examples">Examples</h2>
 <h3 id="deployment-runtime-singleton-legacy-cross-cluster-singleton">Deployment — runtime singleton (legacy cross-cluster singleton)</h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
@@ -1858,7 +1878,7 @@ container and the <code>berth-sidecar</code> sidecar. They are separate from the
 <tr>
 <td>Main container CrashLoopBackOff right after start (probe mode)</td>
 <td>The injected <code>exec</code> probe can't run, or the marker is absent</td>
-<td>Confirm the helper's static <code>check</code> binary is on the shared volume; for images where the probe can't run, switch to <code>berth.skaphos.io/enforce: signal</code>.</td>
+<td>Confirm the helper's static <code>check</code> binary is on the shared volume; both runtime modes require an image that can execute that binary.</td>
 </tr>
 <tr>
 <td>Webhook never fires (no injection)</td>
@@ -1867,8 +1887,8 @@ container and the <code>berth-sidecar</code> sidecar. They are separate from the
 </tr>
 <tr>
 <td>Pod create rejected with a webhook error</td>
-<td>A reserved name/volume collision (<code>berth-acquire</code>/<code>berth-sidecar</code>/<code>berth-state</code>), an existing <code>livenessProbe</code> in probe mode, a foreign volume already mounted at the state dir, or a <strong>writable mount of the reserved <code>berth-state</code> volume</strong></td>
-<td>Read the admission error — the webhook rejects these up front with a clear message naming the container, volume, and path; rename the conflicting resource, mark the mount <code>readOnly: true</code>, use a separate volume, or switch enforcement mode.</td>
+<td>A reserved name/volume collision (<code>berth-acquire</code>/<code>berth-sidecar</code>/<code>berth-state</code>), an existing <code>livenessProbe</code> or <code>startupProbe</code> in either runtime mode, a foreign volume already mounted at the state dir, or a <strong>writable mount of the reserved <code>berth-state</code> volume</strong></td>
+<td>Read the admission error — the webhook rejects these up front with a clear message naming the container, volume, and path; rename the conflicting resource, mark the mount <code>readOnly: true</code>, use a separate volume, or redesign the application health checks to leave Berth the liveness slot.</td>
 </tr>
 <tr>
 <td><code>kubectl debug</code> refused on a healthy gated Pod</td>
