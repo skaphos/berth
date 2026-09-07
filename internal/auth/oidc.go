@@ -36,7 +36,8 @@ type OIDCConfig struct {
 	UsernameClaim string
 
 	// TenantClaim is the JWT claim copied into [Identity.Tenant]. When the
-	// claim is array-valued the first element is used. Default: "sub".
+	// claim is array-valued the first element is used. It must not contain "/".
+	// Default: "sub".
 	TenantClaim string
 }
 
@@ -121,9 +122,13 @@ func (a *OIDCAuthenticator) Authenticate(ctx context.Context, token string) (*Id
 		}
 	}
 
+	tenant := claimAsString(claims, a.tenantClaim)
+	if ValidateTenant(tenant) != nil {
+		return nil, errors.New("oidc: unauthorized")
+	}
 	return &Identity{
 		Holder: claimAsString(claims, a.usernameClaim),
-		Tenant: claimAsString(claims, a.tenantClaim),
+		Tenant: tenant,
 	}, nil
 }
 

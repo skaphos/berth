@@ -39,7 +39,7 @@ For deployed components, the practical precedence is:
 | `--oidc-audience` | empty | Expected JWT `aud` claim. Required with `oidc`. |
 | `--oidc-required-claim` | repeatable | Required claim equality check, such as `groups=berth-clients`. |
 | `--oidc-username-claim` | `sub` | Claim copied into the authenticated identity username. |
-| `--oidc-tenant-claim` | `sub` | Claim copied into the tenant identity. |
+| `--oidc-tenant-claim` | `sub` | Claim copied into the tenant identity; its resolved value must not contain `/`. |
 | `--oidc-jwks-url` | discovered | Override JWKS URL from issuer discovery. |
 
 Auth defaults depend on the resolved backend: `mem` defaults to `none`; `k8s`
@@ -169,4 +169,8 @@ team-a:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
 The value after `:` is the SHA-256 hex digest of the raw token. The raw token
-is only distributed to clients.
+is only distributed to clients. The key ID must be nonempty and must not contain
+`/`; that character is reserved for holder names beneath a tenant. Invalid key
+files fail startup or reload, with the previous keys retained on reload failure.
+See [tenant migration](../architecture.md#migrating-slash-containing-tenants)
+before upgrading a deployment with slash-containing tenant IDs.

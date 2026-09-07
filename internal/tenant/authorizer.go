@@ -42,7 +42,7 @@ func (IdentityResolver) ResolveTenant(id *auth.Identity) (string, error) {
 }
 
 // DefaultAuthorizer is the out-of-the-box policy: permissive on namespace,
-// tenant-scoped on holder.
+// tenant-scoped on holder. Tenant IDs must not contain the holder separator "/".
 //
 //   - Namespace: any authenticated identity may operate on any namespace. The
 //     cross-cluster failover model has distinct clusters (distinct tenants)
@@ -67,14 +67,14 @@ func NewDefaultAuthorizer() *DefaultAuthorizer {
 // AuthorizeNamespace allows any identity that resolves to a tenant. It does not
 // restrict which namespace that tenant may use; holder ownership is the guard.
 func (a *DefaultAuthorizer) AuthorizeNamespace(id *auth.Identity, _ string) error {
-	_, err := a.resolver.ResolveTenant(id)
+	_, err := a.resolveTenant(id)
 	return err
 }
 
 // AuthorizeHolder allows holders owned by the caller's tenant: the bare tenant
 // name, or any "<tenant>/..." sub-holder. Everything else is denied.
 func (a *DefaultAuthorizer) AuthorizeHolder(id *auth.Identity, holder string) error {
-	tenant, err := a.resolver.ResolveTenant(id)
+	tenant, err := a.resolveTenant(id)
 	if err != nil {
 		return err
 	}
@@ -82,4 +82,17 @@ func (a *DefaultAuthorizer) AuthorizeHolder(id *auth.Identity, holder string) er
 		return nil
 	}
 	return fmt.Errorf("holder %q is not within tenant %q", holder, tenant)
+}
+
+// resolveTenant validates the resolved root even for identities supplied by
+// other authenticators or resolvers, before the prefix policy is applied.
+func (a *DefaultAuthorizer) resolveTenant(id *auth.Identity) (string, error) {
+	tenant, err := a.resolver.ResolveTenant(id)
+	if err != nil {
+		return "", err
+	}
+	if err := auth.ValidateTenant(tenant); err != nil {
+		return "", err
+	}
+	return tenant, nil
 }

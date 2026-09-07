@@ -93,3 +93,35 @@ func TestDefaultAuthorizerHolderRejectsUntenantedIdentity(t *testing.T) {
 		t.Fatal("identity without a tenant must be denied")
 	}
 }
+
+func TestDefaultAuthorizerRejectsSlashTenant(t *testing.T) {
+	t.Parallel()
+	for _, tenant := range []string{"team/subteam", "/team", "team/", "/"} {
+		id := &auth.Identity{Tenant: tenant}
+		a := NewDefaultAuthorizer()
+		if err := a.AuthorizeNamespace(id, "shared"); err == nil {
+			t.Fatalf("namespace allowed for tenant %q", tenant)
+		}
+		if err := a.AuthorizeHolder(id, tenant+"/worker"); err == nil {
+			t.Fatalf("holder allowed for tenant %q", tenant)
+		}
+	}
+}
+
+func TestDefaultAuthorizerPreservesExactTenantRoots(t *testing.T) {
+	t.Parallel()
+	a := NewDefaultAuthorizer()
+	for _, tenant := range []string{"team", "team-subteam", "team%2Fsubteam", `team\subteam`, "team∕subteam"} {
+		id := &auth.Identity{Tenant: tenant}
+		for _, holder := range []string{tenant, tenant + "/worker/pod"} {
+			if err := a.AuthorizeHolder(id, holder); err != nil {
+				t.Fatalf("valid holder %q rejected: %v", holder, err)
+			}
+		}
+		if tenant != "team" {
+			if err := a.AuthorizeHolder(&auth.Identity{Tenant: "team"}, tenant+"/worker"); err == nil {
+				t.Fatalf("tenant root %q aliases team", tenant)
+			}
+		}
+	}
+}

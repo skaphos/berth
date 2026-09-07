@@ -351,3 +351,42 @@ func TestNewOIDCAuthenticatorFailsOnUnreachableIssuer(t *testing.T) {
 
 // Compile-time assertion the type satisfies Authenticator.
 var _ Authenticator = (*OIDCAuthenticator)(nil)
+
+func TestOIDCAuthenticatorTenantRoots(t *testing.T) {
+	t.Parallel()
+	iss := newTestIssuer(t)
+	for _, tc := range []struct {
+		name  string
+		claim string
+		value any
+		want  string
+	}{
+		{name: "default subject", claim: "sub", value: "team/subteam"},
+		{name: "custom string", claim: "tenant", value: "team/subteam"},
+		{name: "custom array", claim: "tenant", value: []string{"team/subteam", "safe"}},
+		{name: "unicode escape", claim: "tenant", value: json.RawMessage(`"team\u002fsubteam"`)},
+		{name: "escaped slash", claim: "tenant", value: json.RawMessage(`"team\/subteam"`)},
+		{name: "flat tenant nested username", claim: "tenant", value: "team", want: "team"},
+		{name: "array first element", claim: "tenant", value: []string{"team", "unused/slash"}, want: "team"},
+		{name: "literal percent encoding", claim: "tenant", value: "team%2Fsubteam", want: "team%2Fsubteam"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newOIDCAuth(t, iss, "berth-api", func(c *OIDCConfig) {
+				if tc.claim != "sub" {
+					c.TenantClaim = tc.claim
+				}
+			})
+			claims := map[string]any{"sub": "team/worker/pod"}
+			claims[tc.claim] = tc.value
+			token := iss.mint(t, jwt.Claims{Audience: jwt.Audience{"berth-api"}}, claims)
+			id, err := a.Authenticate(context.Background(), token)
+			if tc.want == "" {
+				if id != nil || err == nil || err.Error() != "oidc: unauthorized" {
+					t.Fatalf("slash tenant authenticated: id=%+v err=%v", id, err)
+				}
+			} else if err != nil || id.Tenant != tc.want || id.Holder != "team/worker/pod" {
+				t.Fatalf("valid tenant or nested username changed: id=%+v err=%v", id, err)
+			}
+		})
+	}
+}

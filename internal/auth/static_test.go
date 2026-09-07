@@ -212,3 +212,44 @@ func TestStaticAuthenticatorReloadWithoutFileErrors(t *testing.T) {
 		t.Fatal("expected error reloading an authenticator with no file path")
 	}
 }
+
+func TestStaticAuthenticatorTenantRoots(t *testing.T) {
+	t.Parallel()
+	for _, tenant := range []string{"team/subteam", "/team", "team/", "/"} {
+		t.Run(tenant, func(t *testing.T) {
+			a := NewStaticAuthenticator(map[string]Identity{"token": {Tenant: tenant}})
+			id, err := a.Authenticate(context.Background(), "token")
+			if id != nil || err == nil || err.Error() != "static auth: unauthorized" {
+				t.Fatalf("slash tenant authenticated: id=%+v err=%v", id, err)
+			}
+			path := writeKeysFile(t, tenant+":"+sha256hex("token")+"\n")
+			if _, err := NewStaticAuthenticatorFromKeysFile(path); err == nil || !strings.Contains(err.Error(), "line 1") {
+				t.Fatalf("keys file must reject slash tenant with line context: %v", err)
+			}
+		})
+	}
+}
+
+func TestStaticAuthenticatorReloadRejectsOverlappingTenant(t *testing.T) {
+	t.Parallel()
+	path := writeKeysFile(t, "team:"+sha256hex("old")+"\n")
+	a, err := NewStaticAuthenticatorFromKeysFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := "other:" + sha256hex("new") + "\nteam/subteam:" + sha256hex("child") + "\n"
+	if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Reload(); err == nil {
+		t.Fatal("overlapping tenant reload succeeded")
+	}
+	if _, err := a.Authenticate(context.Background(), "old"); err != nil {
+		t.Fatalf("old configuration lost: %v", err)
+	}
+	for _, token := range []string{"new", "child"} {
+		if _, err := a.Authenticate(context.Background(), token); err == nil {
+			t.Fatal("failed reload partially installed new keys")
+		}
+	}
+}

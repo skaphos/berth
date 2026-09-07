@@ -129,3 +129,50 @@ func TestAuthzNoneModeBypassesHolderBinding(t *testing.T) {
 		t.Fatalf("none-mode acquire with arbitrary holder: status = %d, want 200", resp.StatusCode)
 	}
 }
+
+// Slash-containing tenant IDs previously shared their holder space with a
+// parent tenant. Reject them before any lease operation can reach the store.
+func TestAuthzRejectsOverlappingTenant(t *testing.T) {
+	t.Parallel()
+	authn := auth.NewStaticAuthenticator(map[string]auth.Identity{
+		"parent": {Tenant: "team"},
+		"child":  {Tenant: "team/subteam"},
+	})
+	mux := NewMux(lease.NewManager(lease.NewMemStore()), authn, nil)
+	for _, op := range []string{"acquire", "renew", "release"} {
+		t.Run(op, func(t *testing.T) {
+			body := `{"holder":"team/subteam/worker"}`
+			if op == "acquire" {
+				body = `{"holder":"team/subteam/worker","ttlSeconds":30}`
+			}
+			if op == "renew" {
+				body = `{"holder":"team/subteam/worker","ttlSeconds":30,"fencingToken":1}`
+			}
+			if op == "release" {
+				body = `{"holder":"team/subteam/worker","fencingToken":1}`
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1alpha1/namespaces/shared/leases/test/"+op, bytes.NewBufferString(body))
+			req.Header.Set("Authorization", "Bearer child")
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("slash tenant %s: status=%d, want 401; %s", op, rec.Code, rec.Body.String())
+			}
+		})
+	}
+	// The same nested holder remains valid for its sole owning tenant, team.
+	req := httptest.NewRequest(http.MethodPost, "/v1alpha1/namespaces/shared/leases/test/acquire", bytes.NewBufferString(`{"holder":"team/subteam/worker","ttlSeconds":30}`))
+	req.Header.Set("Authorization", "Bearer parent")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("parent nested holder rejected: %d %s", rec.Code, rec.Body.String())
+	}
+	var out LeaseResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.Acquired {
+		t.Fatal("parent could not acquire its nested holder")
+	}
+}

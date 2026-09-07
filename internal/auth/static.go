@@ -91,7 +91,7 @@ func (a *StaticAuthenticator) Authenticate(_ context.Context, token string) (*Id
 	a.mu.RLock()
 	id, ok := a.keys[hash]
 	a.mu.RUnlock()
-	if !ok {
+	if !ok || ValidateTenant(id.Tenant) != nil {
 		return nil, errors.New("static auth: unauthorized")
 	}
 	return &id, nil
@@ -126,6 +126,9 @@ func loadKeysFile(path string) (map[string]Identity, error) {
 		hashHex := strings.TrimSpace(parts[1])
 		if keyID == "" {
 			return nil, fmt.Errorf("keys file %q line %d: empty key id", path, line)
+		}
+		if err := ValidateTenant(keyID); err != nil {
+			return nil, fmt.Errorf("keys file %q line %d: %w", path, line, err)
 		}
 		if !validHex256(hashHex) {
 			return nil, fmt.Errorf("keys file %q line %d: hash must be 64 lowercase hex chars", path, line)
