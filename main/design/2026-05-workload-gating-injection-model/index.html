@@ -1515,24 +1515,27 @@ alongside them, and — critically — does not block Job/CronJob completion.</p
    using the holder identity and fencing token.</li>
 <li><strong>If renew reports the lease is lost, the sidecar actively stops the main
    container</strong> using the configured enforcement mechanism (see "Active
-   Enforcement" below), keeps it stopped (marker held red / repeated signal),
-   and attempts to re-<code>Acquire</code>. The main container is only allowed to run
-   again once the sidecar re-acquires.</li>
+   Enforcement" below), keeps the marker unhealthy, and attempts to
+   re-<code>Acquire</code>. A kubelet-restarted workload begins executing before its
+   liveness probe can fail, so downstream fencing remains required for strict
+   stale-write rejection.</li>
 <li>On graceful shutdown, the sidecar performs a best-effort <code>Release</code>.</li>
 </ol>
 <h4 id="active-enforcement-v1">Active Enforcement (v1)</h4>
 <p>Because the target image cannot be modified, the helper cannot rely on the
-application to react to lease loss. The sidecar enforces the at-most-once
-guarantee at the pod level. Two mechanisms are supported, selected by the
+application to react to lease loss. The sidecar provides process-level
+enforcement for the lease. Two mechanisms are supported, selected by the
 <code>berth.skaphos.io/enforce</code> annotation:</p>
 <ul>
 <li><strong><code>probe</code> (default)</strong> — The webhook injects an <code>exec</code> liveness probe on each
-  main container (<code>cat /berth/healthy</code>) backed by a shared <code>emptyDir</code> volume.
-  The sidecar writes the marker on acquire and removes it on lease loss; the
-  kubelet then kills the container. The sidecar keeps the marker absent until it
-  re-acquires, so a kubelet-restarted container stays gated (init containers do
-  <strong>not</strong> re-run on a same-pod container restart — see "Restart Re-Gating").
-  Native, preserves container isolation, no extra RBAC.</li>
+  main container (<code>/berth/check check /berth/healthy --max-age &lt;ttl&gt;</code>) backed by
+  a shared <code>emptyDir</code> volume. The sidecar writes the marker on acquire and
+  removes it on lease loss; the kubelet then kills the container. The sidecar
+  keeps the marker absent until it re-acquires, so each restarted container is
+  stopped by a subsequent failed probe (init containers do <strong>not</strong> re-run on a
+  same-pod container restart — see "Restart Re-Gating"). The probe uses the
+  Kubernetes minimum one-second termination grace without changing normal Pod
+  shutdown. Native, preserves container isolation, no extra RBAC.</li>
 <li><strong><code>signal</code></strong> — The webhook sets <code>shareProcessNamespace: true</code>; the sidecar
   finds the main process and sends <code>SIGTERM</code> then <code>SIGKILL</code>, re-signalling on
   every restart until it re-acquires. More immediate, but every container in the
@@ -1542,26 +1545,29 @@ guarantee at the pod level. Two mechanisms are supported, selected by the
   must not leave the probe healthy. Both modes reject occupied liveness slots
   and startup probes; the static check binary does not require a shell.</li>
 </ul>
-<p>Both are <strong>best-effort within a bounded window</strong>: there is a detection +
-kill latency between lease loss and the main container actually stopping. This
-strengthens at-most-once at the process level but does <strong>not</strong> replace the
-fencing token, which remains the real boundary for any downstream resource that
-must reject a stale holder.</p>
+<p>Both are <strong>best-effort process enforcement</strong>: there is detection + kill latency
+between lease loss and the main container actually stopping. Kubernetes starts
+a restarted container before evaluating liveness, so the workload can execute
+briefly on each restart. The two-second probe period, one-second timeout,
+one-failure threshold, and one-second termination grace normally limit that
+window to a few seconds, but kubelet scheduling provides no hard wall-clock
+bound. The fencing token remains the real boundary for any downstream resource
+that must reject a stale holder.</p>
 <h4 id="restart-re-gating">Restart Re-Gating</h4>
 <p>A kubelet container restart (from a failed probe or a signal kill) does <strong>not</strong>
 re-run completed init containers. The sidecar is therefore responsible for
-keeping the main container gated after it stops it: it must hold the probe
-marker absent (or keep re-signalling) until it has re-acquired the lease, at
-which point it restores the marker and lets the main container run. This turns
-"lease lost" into a controlled crashloop rather than an unguarded restart.</p>
+keeping the probe unhealthy after it stops the workload: it must hold the marker
+absent (or keep re-signalling) until it has re-acquired the lease, at which point
+it restores the marker. Until then, Kubernetes can restart the workload and run
+it briefly before the next failed probe stops it again.</p>
 <p>Guarantee:</p>
 <ul>
-<li>At most one candidate holder runs its main container at a time, subject to the
-  store's linearizability, the TTL window, and the enforcement detection+kill
-  latency.</li>
-<li>Runtime enforcement lasts only while the sidecar is running and renewing. If
-  the sidecar itself dies, the native-sidecar <code>restartPolicy: Always</code> restarts
-  it; until it is back and has re-confirmed the lease, the marker stays red.</li>
+<li>The store selects at most one current lease holder. More than one candidate's
+  process can execute during TTL, enforcement, and restart windows; strict
+  effects require downstream fencing-token checks.</li>
+<li>If the sidecar dies, the native-sidecar <code>restartPolicy: Always</code> restarts it.
+  Marker freshness also makes the workload's liveness probe fail after one TTL
+  without a successful refresh.</li>
 <li>Strong end-to-end fencing for downstream systems still requires token-aware
   behavior on those systems; pod-level enforcement bounds, but does not
   eliminate, the overlap window.</li>
@@ -1803,8 +1809,8 @@ runtime singleton default.</p>
 - Sidecar performs continuous heartbeats while the main container runs.
 - If <code>Renew</code> reports lease loss, the sidecar <strong>enforces</strong> per <code>enforce</code>: removes
   the marker in both modes and additionally attempts to signal the main process (<code>signal</code>), records a clear
-  log/event, keeps the main container stopped, and retries <code>Acquire</code>. It
-  restores the marker / stops signalling only after re-acquiring. (See
+  log/event, keeps the probe unhealthy, and retries <code>Acquire</code>. It restores the
+  marker / stops signalling only after re-acquiring. (See
   "Restart Re-Gating".)
 - The sidecar reuses the same reacquire-after-expiry logic the operator uses;
   see SKA-436 for the failover-after-TTL-expiry bug this must not reintroduce.
@@ -1918,9 +1924,11 @@ it has won the lease, not be killed mid-run on a transient renew blip.</p>
 <span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vendor/checkout:1.4.2</span>
 <span class="w">      </span><span class="nt">livenessProbe</span><span class="p">:</span><span class="w">                 </span><span class="c1"># injected: kubelet kills on lease loss</span>
 <span class="w">        </span><span class="nt">exec</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"/berth/check"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"/berth/healthy"</span><span class="p p-Indicator">]</span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"/berth/check"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"check"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"/berth/healthy"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"--max-age"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"30s"</span><span class="p p-Indicator">]</span>
 <span class="w">        </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">        </span><span class="nt">timeoutSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="w">        </span><span class="nt">failureThreshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">        </span><span class="nt">terminationGracePeriodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="w">      </span><span class="nt">volumeMounts</span><span class="p">:</span>
 <span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">berth-state</span><span class="p p-Indicator">,</span><span class="nt"> mountPath</span><span class="p">:</span><span class="w"> </span><span class="nv">/berth</span><span class="p p-Indicator">,</span><span class="nt"> readOnly</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
 </code></pre></div>

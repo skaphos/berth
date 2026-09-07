@@ -1443,8 +1443,8 @@ the operator/user how-to.</p>
 <td><strong>Injection — <code>startup-gate</code></strong></td>
 </tr>
 <tr>
-<td>Exactly one Pod candidate to run behind a continuously renewed lease</td>
-<td><strong>Injection — <code>runtime-singleton</code></strong></td>
+<td>Continuously monitor an unmodifiable Pod against a renewed lease</td>
+<td><strong>Injection — <code>runtime-singleton</code></strong>, with downstream fencing for strict stale-write rejection</td>
 </tr>
 </tbody>
 </table>
@@ -1598,11 +1598,15 @@ run-to-completion Jobs that just need to win the lease before running.</p>
 <h3 id="runtime-singleton"><code>runtime-singleton</code></h3>
 <p>Injects the init "hold" <strong>plus a native sidecar</strong> (an init container with
 <code>restartPolicy: Always</code>, so Jobs/CronJobs can still complete). The sidecar
-renews the lease and, <strong>on lease loss, actively stops the main container</strong> and
-keeps it gated until it re-acquires. This is the at-most-once mode.</p>
-<p>A kubelet restart does <strong>not</strong> re-run init containers, so the sidecar is what
-keeps a stopped main container gated after enforcement fires — "lease lost"
-becomes a controlled crashloop, not an unguarded restart.</p>
+renews the lease and, <strong>on lease loss, actively stops the main container</strong>. It
+keeps the injected health check failing until it re-acquires. Kubernetes starts
+a restarted container before evaluating its liveness probe, so the workload can
+execute briefly on every restart; use fencing tokens at downstream resources
+when stale work must be rejected.</p>
+<p>A kubelet restart does <strong>not</strong> re-run init containers. While the lease remains
+unconfirmed, each restarted workload container fails Berth's liveness probe and
+is stopped again with a one-second probe-level termination grace. The normal
+Pod-level termination grace remains unchanged for deliberate Pod shutdown.</p>
 <h3 id="supported-initialization-and-admission">Supported initialization and admission</h3>
 <p><code>runtime-singleton</code> rejects Pods with workload <code>initContainers</code>, including
 restartable init containers (native sidecars). This applies to both <code>probe</code> and
@@ -1666,11 +1670,13 @@ downstream enforcement is still needed to reject writes from expired holders.</p
 <p>Selected by <code>berth.skaphos.io/enforce</code>:</p>
 <ul>
 <li><strong><code>probe</code> (default)</strong> — the webhook injects an <code>exec</code> liveness probe
-  (<code>/berth/check /berth/healthy</code>) on each main container, backed by a shared
-  <code>emptyDir</code>. The sidecar removes the health marker on lease loss; the kubelet
-  kills the container. Native, preserves container isolation, no extra RBAC. The
-  helper ships a static <code>check</code> binary onto the shared volume, so the probe does
-  <strong>not</strong> require a shell in the target image.</li>
+  (<code>/berth/check check /berth/healthy --max-age &lt;ttl&gt;</code>) on each main container,
+  backed by a shared <code>emptyDir</code>. The sidecar removes the health marker on lease
+  loss; the kubelet kills the container. The probe uses a one-second
+  <code>terminationGracePeriodSeconds</code>, the Kubernetes minimum. Native, preserves
+  container isolation, no extra RBAC. The helper ships a static <code>check</code> binary
+  onto the shared volume, so the probe does <strong>not</strong> require a shell in the target
+  image.</li>
 <li><strong><code>signal</code></strong> — the webhook sets <code>shareProcessNamespace: true</code>; the sidecar
   attempts <code>SIGTERM</code>/<code>SIGKILL</code> on lease loss, in addition to the mandatory
   freshness liveness probe on every main container. Signals may stop a matching
@@ -1692,8 +1698,12 @@ truncates <code>comm</code> to 15 bytes, which the matcher accounts for) to boun
 blast radius. <code>probe</code> remains the recommended default precisely because it
 has no such cross-container reach.</p>
 </blockquote>
-<p>Both are <strong>best-effort within a bounded window</strong>: there is detection + kill
-latency between lease loss and the container stopping. The <strong>fencing token</strong>
+<p>Both are <strong>best-effort process enforcement</strong>: there is detection + kill latency
+between lease loss and the container stopping. A restarted container begins
+executing before its first liveness result, and kubelet scheduling means this is
+not a hard wall-clock bound. With the injected two-second probe period,
+one-second timeout, one-failure threshold, and one-second termination grace, the
+restart execution window is normally a few seconds. The <strong>fencing token</strong>
 remains the real boundary for any downstream resource that must reject a stale
 holder.</p>
 <h3 id="the-state-volume-is-reserved">The state volume is reserved</h3>
@@ -1781,10 +1791,11 @@ and the API use the same value without integer wraparound.</p>
 signalling processes. Permission and discovery errors are returned and logged;
 an already-exited process is harmless. Successful renewals refresh the marker
 in both modes. If the helper dies, the marker eventually becomes stale instead.
-Kubelet detection, probe scheduling and the Pod's termination grace period still
-contribute to the stop delay. A restarted process can run until its next failed
-probe; use downstream fencing tokens to reject stale writes throughout that
-window. This requires a functioning kubelet, as in probe mode.</p>
+Kubelet detection, probe scheduling and the probe's one-second termination grace
+still contribute to the stop delay. Berth leaves the Pod-level grace unchanged.
+A restarted process can still run until its next failed probe; use downstream
+fencing tokens to reject stale writes throughout that window. This requires a
+functioning kubelet, as in probe mode.</p>
 <p>Before upgrading, drain affected workloads, remove conflicting liveness/startup
 probes (or redesign their health checks), and recreate the Pods using the patched
 injector <strong>and</strong> helper images. Existing Pods are not retroactively protected.
@@ -1886,9 +1897,11 @@ container, and the corresponding volume mounts:</p>
 <span class="w">  </span><span class="nt">containers</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">app</span>
 <span class="w">      </span><span class="nt">livenessProbe</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">exec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"/berth/check"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"/berth/healthy"</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">        </span><span class="nt">exec</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"/berth/check"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"check"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"/berth/healthy"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"--max-age"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"30s"</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <span class="w">        </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">        </span><span class="nt">timeoutSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="w">        </span><span class="nt">failureThreshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">        </span><span class="nt">terminationGracePeriodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="w">      </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">berth-state</span><span class="p p-Indicator">,</span><span class="nt"> mountPath</span><span class="p">:</span><span class="w"> </span><span class="nv">/berth</span><span class="p p-Indicator">,</span><span class="nt"> readOnly</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="w"> </span><span class="p p-Indicator">}]</span>
 </code></pre></div>
 <h2 id="authenticating-injected-pods">Authenticating injected Pods</h2>
