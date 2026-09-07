@@ -17,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -296,6 +297,21 @@ func setOperatorReplicas(ctx context.Context, c ctrlclient.Client, replicas int3
 	if err := c.Update(ctx, dep); err != nil {
 		return fmt.Errorf("scale operator to %d: %w", replicas, err)
 	}
+	if replicas > 0 {
+		// A successful scale request does not mean admission is serving yet.
+		// Operator readiness includes the webhook server's started check. Wait
+		// for the new generation to be available before another scenario can
+		// create workloads through the fail-closed admission webhooks.
+		generation := dep.Generation
+		if err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+			if err := c.Get(ctx, key, dep); err != nil {
+				return false, err
+			}
+			return dep.Status.ObservedGeneration >= generation && dep.Status.UpdatedReplicas == replicas && dep.Status.AvailableReplicas == replicas, nil
+		}); err != nil {
+			return fmt.Errorf("wait for restored operator readiness: %w (observed generation=%d, updated=%d, available=%d)", err, dep.Status.ObservedGeneration, dep.Status.UpdatedReplicas, dep.Status.AvailableReplicas)
+		}
+	}
 	return nil
 }
 
@@ -338,7 +354,7 @@ func TestHolderFailover(t *testing.T) {
 	// is LIFO, so this runs before cleanupFixtures deletes the leases.
 	t.Cleanup(func() {
 		if err := setOperatorReplicas(ctx, holder.c, 1); err != nil {
-			t.Logf("restore operator on %s: %v", holder.name, err)
+			t.Errorf("restore operator on %s: %v", holder.name, err)
 		}
 	})
 	t.Logf("scaled operator on %s to 0 (simulated holder loss)", holder.name)
@@ -395,7 +411,7 @@ func TestHolderRejoin(t *testing.T) {
 	// restore the operator so the next test isn't left with it scaled to 0.
 	t.Cleanup(func() {
 		if err := setOperatorReplicas(ctx, original.c, 1); err != nil {
-			t.Logf("restore operator on %s: %v", original.name, err)
+			t.Errorf("restore operator on %s: %v", original.name, err)
 		}
 	})
 	t.Logf("scaled operator on %s to 0 (simulated holder loss)", original.name)
