@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 
-version="${1:?usage: release-notes.sh VERSION [CHANGELOG]}"
+version="${1:?usage: release-notes.sh VERSION [CHANGELOG] [UPGRADE_DIR]}"
 changelog="${2:-CHANGELOG.md}"
 upgrade_dir="${3:-$(dirname "$changelog")/docs/releases}"
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]]; then
