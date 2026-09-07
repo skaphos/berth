@@ -55,9 +55,25 @@ func TestEvaluateMarkerFreshnessBoundary(t *testing.T) {
 // The inclusive edge is called out separately because the FR-007 margin
 // argument rests on it: a marker exactly at the bound is still healthy.
 func TestEvaluateMarkerBoundIsInclusive(t *testing.T) {
-	_, path := agedMarker(t, 0)
-	if got := EvaluateMarker(path, time.Hour).Verdict; got != HealthOK {
-		t.Errorf("a marker younger than the bound must be healthy, got %v", got)
+	t.Parallel()
+	const bound = time.Minute
+	modified := time.Unix(1_700_000_000, 0)
+	for _, tc := range []struct {
+		name string
+		age  time.Duration
+		want HealthVerdict
+	}{
+		{"below", bound - time.Nanosecond, HealthOK},
+		{"equal", bound, HealthOK},
+		{"above", bound + time.Nanosecond, HealthStale},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := evaluateMarkerAge(modified, modified.Add(tc.age), bound)
+			if got.Verdict != tc.want || got.Age != tc.age || got.MaxAge != bound {
+				t.Errorf("age %s: result = %+v, want verdict %v with exact age and bound", tc.age, got, tc.want)
+			}
+		})
 	}
 }
 

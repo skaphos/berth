@@ -165,11 +165,17 @@ func EvaluateMarker(path string, maxAge time.Duration) HealthResult {
 		return HealthResult{Verdict: HealthIndeterminate, MaxAge: maxAge, Err: err}
 	}
 
+	return evaluateMarkerAge(fi.ModTime(), time.Now(), maxAge)
+}
+
+// evaluateMarkerAge keeps the inclusive age boundary independent of filesystem
+// timestamp precision and of the time spent observing the marker in tests.
+func evaluateMarkerAge(modified, observed time.Time, maxAge time.Duration) HealthResult {
 	if maxAge <= 0 {
 		return HealthResult{Verdict: HealthOK}
 	}
 
-	age := time.Since(fi.ModTime())
+	age := observed.Sub(modified)
 	if age > maxAge {
 		return HealthResult{Verdict: HealthStale, Age: age, MaxAge: maxAge}
 	}

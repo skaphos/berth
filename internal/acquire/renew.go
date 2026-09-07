@@ -24,9 +24,11 @@ type Renewer struct {
 	now func() time.Time
 
 	// runtime state
-	holder    string
-	token     int32
-	held      bool
+	holder string
+	token  int32
+	held   bool
+	// expiresAt is a local monotonic deadline, anchored before the last
+	// successful RPC. A zero value means the handoff is not yet confirmed.
 	expiresAt time.Time
 }
 
@@ -53,11 +55,8 @@ func (r *Renewer) loadHandoff() {
 	token, terr := r.state.ReadToken()
 	if herr == nil && terr == nil && holder == r.holder && token > 0 {
 		r.holder, r.token, r.held = holder, token, true
-		// We do not know the exact expiry from the handoff; assume one TTL
-		// from now and let the first Renew correct it. This is safe: a too-
-		// optimistic expiry is corrected downward on the next renew, and a
-		// failed renew past this point triggers enforcement.
-		r.expiresAt = r.now().Add(r.cfg.TTL)
+		// The persisted token identifies a lease, but proves no remaining
+		// lifetime. Run keeps enforcement active until a fresh Renew succeeds.
 		return
 	}
 	r.log.Warn("no matching lease handoff; gating before acquiring as the configured holder")
@@ -67,22 +66,37 @@ func (r *Renewer) loadHandoff() {
 // release when configured. It returns nil on graceful shutdown.
 func (r *Renewer) Run(ctx context.Context) error {
 	r.loadHandoff()
-	if !r.held {
-		if err := r.enforcer.Hold(ctx); err != nil {
-			return fmt.Errorf("enforce without a valid lease handoff: %w", err)
-		}
+	if err := r.enforcer.Hold(ctx); err != nil {
+		return fmt.Errorf("enforce before confirming lease handoff: %w", err)
 	}
 	r.log = r.log.With("holder", r.holder)
 	r.log.Info("sidecar starting", "held", r.held, "heartbeat", r.cfg.HeartbeatInterval, "ttl", r.cfg.TTL)
+	if r.held && ctx.Err() == nil {
+		r.tickHeld(ctx)
+	}
 
 	ticker := time.NewTicker(r.cfg.HeartbeatInterval)
 	defer ticker.Stop()
+	expiry := time.NewTimer(r.cfg.TTL)
+	defer expiry.Stop()
 
 	for {
+		// Wake at expiry even when it falls between heartbeat ticks. RPCs
+		// are separately bounded by the same deadline while this loop is busy.
+		var expiryC <-chan time.Time
+		if r.held && !r.expiresAt.IsZero() {
+			expiry.Reset(r.expiresAt.Sub(r.now()))
+			expiryC = expiry.C
+		} else {
+			expiry.Stop()
+		}
 		select {
 		case <-ctx.Done():
 			r.shutdown()
 			return nil
+		case <-expiryC:
+			r.log.Warn("local lease deadline reached; enforcing")
+			r.lose(ctx)
 		case <-ticker.C:
 			if r.held {
 				r.tickHeld(ctx)
@@ -93,18 +107,15 @@ func (r *Renewer) Run(ctx context.Context) error {
 	}
 }
 
-// tickCtx bounds one lease RPC to a single heartbeat interval.
-//
-// The self-fence branches below only run once the call returns, so an
-// unbounded call is an enforcement outage: an API server that accepts a
-// connection and then stalls would park the loop inside the RPC while the
-// lease expires server-side and a standby takes over — two live holders,
-// for as long as the connection hangs. Bounding each call at the
-// heartbeat keeps the loop ticking, so expiry is always noticed within
-// one heartbeat of the truth. The deadline surfaces as a normal transient
-// error, which is exactly the case the past-expiry check already handles.
+// tickCtx bounds a lease RPC to one heartbeat or the remaining confirmed
+// lifetime, whichever is shorter. A stalled request cannot consume the time
+// reserved for enforcement at the local deadline.
 func (r *Renewer) tickCtx(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(ctx, r.cfg.HeartbeatInterval)
+	deadline := r.now().Add(r.cfg.HeartbeatInterval)
+	if r.held && !r.expiresAt.IsZero() && r.expiresAt.Before(deadline) {
+		deadline = r.expiresAt
+	}
+	return context.WithDeadline(ctx, deadline)
 }
 
 // tickHeld renews the lease we believe we hold. On a definitive loss
@@ -113,6 +124,11 @@ func (r *Renewer) tickCtx(ctx context.Context) (context.Context, context.CancelF
 // last-known expiry; past that point it can no longer prove at-most-once,
 // so it enforces. This is the failover-after-expiry guarantee (SKA-436).
 func (r *Renewer) tickHeld(ctx context.Context) {
+	started := r.now()
+	if !r.expiresAt.IsZero() && !started.Before(r.expiresAt) {
+		r.lose(ctx)
+		return
+	}
 	rpcCtx, cancel := r.tickCtx(ctx)
 	defer cancel()
 
@@ -122,7 +138,7 @@ func (r *Renewer) tickHeld(ctx context.Context) {
 		r.log.Warn("renew conflict: lease lost")
 		r.lose(ctx)
 	case err != nil:
-		if r.now().After(r.expiresAt) {
+		if !r.now().Before(r.expiresAt) {
 			r.log.Warn("renew failing past lease expiry; enforcing", "error", err, "expired_at", r.expiresAt)
 			r.lose(ctx)
 		} else {
@@ -131,9 +147,14 @@ func (r *Renewer) tickHeld(ctx context.Context) {
 	case !res.Acquired:
 		r.log.Warn("renew reports lease held by another: lease lost", "current_holder", res.Holder)
 		r.lose(ctx)
+	case rpcCtx.Err() != nil || !r.now().Before(started.Add(r.cfg.TTL)) ||
+		(!r.expiresAt.IsZero() && !r.now().Before(r.expiresAt)):
+		// Even a successful response may arrive too late to prove ownership.
+		r.log.Warn("renew response arrived after its local deadline; enforcing")
+		r.lose(ctx)
 	default:
 		r.token = res.FencingToken
-		r.expiresAt = res.ExpiresAt
+		r.expiresAt = started.Add(r.cfg.TTL)
 		if err := r.enforcer.Release(ctx); err != nil {
 			r.log.Warn("enforcer release failed", "error", err)
 		}
@@ -155,13 +176,16 @@ func (r *Renewer) tickReacquire(ctx context.Context) {
 	rpcCtx, cancel := r.tickCtx(ctx)
 	defer cancel()
 
+	started := r.now()
 	res, err := r.lc.Acquire(rpcCtx, r.cfg.LeaseNamespace, r.cfg.LeaseName, r.holder, r.cfg.TTL)
 	switch {
 	case err != nil:
 		r.log.Warn("reacquire failed", "error", err)
+	case res.Acquired && (rpcCtx.Err() != nil || !r.now().Before(started.Add(r.cfg.TTL))):
+		r.log.Warn("acquire response arrived after its local deadline; remaining gated")
 	case res.Acquired:
 		r.token = res.FencingToken
-		r.expiresAt = res.ExpiresAt
+		r.expiresAt = started.Add(r.cfg.TTL)
 		r.held = true
 		if err := r.state.WriteAcquired(r.holder, r.token); err != nil {
 			r.log.Warn("persist reacquired state failed", "error", err)
