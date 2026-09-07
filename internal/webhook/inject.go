@@ -610,6 +610,7 @@ func (i *PodInjector) freshnessProbe(r resolved) *corev1.Probe {
 	marker := i.cfg.StateDir + "/healthy"
 	check := i.cfg.StateDir + "/check"
 	maxAge := (time.Duration(r.ttlSeconds) * time.Second).String()
+	terminationGraceSeconds := int64(1)
 
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
@@ -619,6 +620,10 @@ func (i *PodInjector) freshnessProbe(r resolved) *corev1.Probe {
 		TimeoutSeconds:   1,
 		SuccessThreshold: 1,
 		FailureThreshold: 1,
+		// A failed Berth probe means the workload no longer has a confirmed
+		// lease. Use Kubernetes' minimum probe-level grace so the normal Pod
+		// shutdown grace remains available for deliberate termination.
+		TerminationGracePeriodSeconds: &terminationGraceSeconds,
 	}
 }
 

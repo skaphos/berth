@@ -36,7 +36,7 @@ func TestRuntimeRequiresExclusiveLiveness(t *testing.T) {
 
 func TestFinalAdmissionRequiresFreshnessFallback(t *testing.T) {
 	for _, enforce := range []string{"probe", "signal"} {
-		for _, change := range []string{"none", "missing", "command", "delay", "startup", "subpath", "shadow", "writable", "late-container", "volume-source"} {
+		for _, change := range []string{"none", "missing", "command", "delay", "termination-grace", "startup", "subpath", "shadow", "writable", "late-container", "volume-source"} {
 			t.Run(enforce+"/"+change, func(t *testing.T) {
 				inj := testInjector()
 				pod := optInPod("prod", map[string]string{AnnLeaseName: "test", AnnEnforce: enforce, AnnSignalTarget: "app"})
@@ -53,6 +53,9 @@ func TestFinalAdmissionRequiresFreshnessFallback(t *testing.T) {
 					c.LivenessProbe.Exec.Command = []string{"true"}
 				case "delay":
 					c.LivenessProbe.InitialDelaySeconds = 10000
+				case "termination-grace":
+					grace := int64(30)
+					c.LivenessProbe.TerminationGracePeriodSeconds = &grace
 				case "startup":
 					c.StartupProbe = c.LivenessProbe.DeepCopy()
 				case "subpath":

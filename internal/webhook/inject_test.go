@@ -68,6 +68,8 @@ func envMap(c *corev1.Container) map[string]string {
 
 func TestInjectRuntimeSingletonProbe(t *testing.T) {
 	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	podTerminationGrace := int64(45)
+	pod.Spec.TerminationGracePeriodSeconds = &podTerminationGrace
 	if err := testInjector().Default(context.Background(), pod); err != nil {
 		t.Fatalf("Default: %v", err)
 	}
@@ -104,6 +106,12 @@ func TestInjectRuntimeSingletonProbe(t *testing.T) {
 			t.Errorf("probe command = %v, want %v", got, wantCmd)
 			break
 		}
+	}
+	if app.LivenessProbe.TerminationGracePeriodSeconds == nil || *app.LivenessProbe.TerminationGracePeriodSeconds != 1 {
+		t.Errorf("probe termination grace = %v, want 1", app.LivenessProbe.TerminationGracePeriodSeconds)
+	}
+	if pod.Spec.TerminationGracePeriodSeconds == nil || *pod.Spec.TerminationGracePeriodSeconds != podTerminationGrace {
+		t.Errorf("pod termination grace = %v, want %d", pod.Spec.TerminationGracePeriodSeconds, podTerminationGrace)
 	}
 	if !containerHasMountAt(app, VolumeName, acquire.DefaultStateDir) {
 		t.Error("main container should mount the state volume for the probe")
