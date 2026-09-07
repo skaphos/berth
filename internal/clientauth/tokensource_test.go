@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -53,27 +54,30 @@ func TestFileTokenSourceTrimsWhitespace(t *testing.T) {
 
 func TestFileTokenSourcePicksUpRotationAfterTTL(t *testing.T) {
 	t.Parallel()
+	// Only the explicit sleep advances the test clock; a slow filesystem
+	// write or descheduled runner cannot exhaust the cached-value window.
+	synctest.Test(t, func(t *testing.T) {
+		path := writeTokenFile(t, "v1")
+		s, err := NewFileTokenSource(path, 10*time.Millisecond)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := s.Get(); got != "v1" {
+			t.Fatalf("initial Get = %q, want v1", got)
+		}
 
-	path := writeTokenFile(t, "v1")
-	s, err := NewFileTokenSource(path, 10*time.Millisecond)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := s.Get(); got != "v1" {
-		t.Fatalf("initial Get = %q, want v1", got)
-	}
-
-	if err := os.WriteFile(path, []byte("v2"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// Within TTL window the cached value is returned.
-	if got := s.Get(); got != "v1" {
-		t.Fatalf("Get within TTL = %q, want v1 (cached)", got)
-	}
-	time.Sleep(20 * time.Millisecond)
-	if got := s.Get(); got != "v2" {
-		t.Fatalf("Get after TTL = %q, want v2 (re-read)", got)
-	}
+		if err := os.WriteFile(path, []byte("v2"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// Within TTL window the cached value is returned.
+		if got := s.Get(); got != "v1" {
+			t.Fatalf("Get within TTL = %q, want v1 (cached)", got)
+		}
+		time.Sleep(20 * time.Millisecond)
+		if got := s.Get(); got != "v2" {
+			t.Fatalf("Get after TTL = %q, want v2 (re-read)", got)
+		}
+	})
 }
 
 func TestFileTokenSourceReturnsCachedOnReadError(t *testing.T) {
