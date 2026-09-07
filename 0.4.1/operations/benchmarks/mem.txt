@@ -1,0 +1,24 @@
+goos: linux
+goarch: amd64
+pkg: github.com/skaphos/berth/internal/lease
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor          
+BenchmarkMemStore/AcquireParallel-32         	10496652	       234.4 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/AcquireParallel-32         	10390840	       244.4 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/AcquireParallel-32         	10915969	       235.6 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/AcquireParallel-32         	10092334	       240.4 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/AcquireParallel-32         	 9358159	       241.8 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/AcquireParallel-32         	10105444	       246.6 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/RenewSteadyState-32        	 6050997	       408.3 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/RenewSteadyState-32        	 5749220	       410.5 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/RenewSteadyState-32        	 5893536	       389.3 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/RenewSteadyState-32        	 6239061	       390.2 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/RenewSteadyState-32        	 5946675	       413.1 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/RenewSteadyState-32        	 6112712	       413.9 ns/op	     224 B/op	       2 allocs/op
+BenchmarkMemStore/FailoverFanout-32          	   62523	     38878 ns/op	    1148 B/op	      17 allocs/op
+BenchmarkMemStore/FailoverFanout-32          	   61029	     39010 ns/op	    1148 B/op	      17 allocs/op
+BenchmarkMemStore/FailoverFanout-32          	   62304	     39547 ns/op	    1148 B/op	      17 allocs/op
+BenchmarkMemStore/FailoverFanout-32          	   62684	     39073 ns/op	    1148 B/op	      17 allocs/op
+BenchmarkMemStore/FailoverFanout-32          	   62798	     39255 ns/op	    1147 B/op	      17 allocs/op
+BenchmarkMemStore/FailoverFanout-32          	   62832	     39417 ns/op	    1148 B/op	      17 allocs/op
+PASS
+ok  	github.com/skaphos/berth/internal/lease	158.711s
