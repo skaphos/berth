@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-fixture_dir="$(mktemp -d)"
+fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/berth-release-notes.XXXXXXXXXX")"
 trap 'rm -rf -- "$fixture_dir"' EXIT
 cat > "$fixture_dir/CHANGELOG.md" <<'CHANGELOG'
 # Changelog
