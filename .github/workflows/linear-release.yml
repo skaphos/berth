@@ -30,7 +30,7 @@ concurrency:
 jobs:
   sync:
     name: Move released issues to Released
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       TEAM_KEY: SKA
@@ -125,13 +125,12 @@ jobs:
           #      - already in Released (idempotent) - canceled/duplicate (skip)
           failed=0
           for id in "${IDS[@]}"; do
-            num="${id#${TEAM_KEY}-}"
+            num="${id#"${TEAM_KEY}"-}"
             q_issue=$(jq -n --arg team "${TEAM_KEY}" --argjson number "${num}" '{
               query: "query($team:String!,$number:Float!){issues(filter:{team:{key:{eq:$team}},number:{eq:$number}}){nodes{id identifier state{name type}}}}",
               variables: {team:$team, number:$number}
             }')
-            resp=$(gql "${q_issue}")
-            if [ $? -ne 0 ]; then
+            if ! resp=$(gql "${q_issue}"); then
               echo "  ${id}: lookup request failed, skipping"
               failed=$((failed + 1))
               continue
@@ -157,8 +156,7 @@ jobs:
               query: "mutation($id:String!,$stateId:String!){issueUpdate(id:$id,input:{stateId:$stateId}){success}}",
               variables: {id:$id, stateId:$s}
             }')
-            resp=$(gql "${m}")
-            if [ $? -ne 0 ]; then
+            if ! resp=$(gql "${m}"); then
               echo "::warning::${id}: issueUpdate request failed"
               failed=$((failed + 1))
               continue
@@ -174,8 +172,7 @@ jobs:
               query: "mutation($id:String!,$body:String!){commentCreate(input:{issueId:$id,body:$body}){success}}",
               variables: {id:$id, body:$body}
             }')
-            resp=$(gql "${c}")
-            if [ $? -ne 0 ] || [ "$(printf '%s' "${resp}" | jq -r '.data.commentCreate.success // false')" != "true" ]; then
+            if ! resp=$(gql "${c}") || [ "$(printf '%s' "${resp}" | jq -r '.data.commentCreate.success // false')" != "true" ]; then
               echo "  ${id}: comment failed (non-fatal)"
             fi
           done

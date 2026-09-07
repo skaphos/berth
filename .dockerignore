@@ -1,0 +1,13 @@
+.git
+.github
+.agents
+.codex
+.tmp
+bin
+dist
+graphify-out
+coverage.out
+*.test
+*.log
+.env
+.env.*

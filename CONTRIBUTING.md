@@ -61,7 +61,7 @@ upgrade notes; the footer should point at it rather than repeat it.
 
 ## Local Validation
 
-Requires Go 1.26+. Task is declared in `tools/go.mod`.
+Requires Go 1.27.1+. Task is declared in `tools/go.mod`.
 
 ```bash
 go -C tools tool task verify-generated

@@ -19,7 +19,7 @@
 - `go -C tools tool task lint`: run `golangci-lint`.
 
 ## Coding Style & Testing Guidelines
-- Go version: `go 1.26` (see `go.mod`).
+- Go version: `go 1.27.1` (see `go.mod`).
 - Keep `cmd/*` thin and place non-trivial behavior in `internal/` or `pkg/` packages.
 - Prefer focused unit tests in the same package as the code under test.
 - Generated files must be kept in sync with source changes; update them in the same change.

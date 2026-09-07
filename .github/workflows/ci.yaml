@@ -16,7 +16,7 @@ permissions:
 jobs:
   dco:
     name: DCO
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -44,7 +44,7 @@ jobs:
 
   reuse:
     name: REUSE
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Set up Python
@@ -52,17 +52,17 @@ jobs:
         with:
           # Pinned so CI doesn't pick up a new Python minor mid-stream;
           # ratchet manually when intentionally upgrading.
-          python-version: '3.13'
+          python-version: '3.14.7'
       - name: Install REUSE tool
         # Pin to a known-good REUSE version so a new upstream release
         # cannot break CI behind our backs. Bump deliberately.
-        run: python -m pip install --upgrade pip 'reuse==6.2.0'
+        run: python -m pip install --upgrade pip 'reuse[charset-normalizer]==6.2.0'
       - name: Run REUSE lint
         run: reuse lint
 
   generated:
     name: Verify Generated
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
@@ -73,7 +73,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
@@ -84,7 +84,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
@@ -105,7 +105,7 @@ jobs:
 
   sql-integration:
     name: SQL Integration
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       BERTH_TEST_POSTGRES_DSN: ${{ secrets.BERTH_TEST_POSTGRES_DSN || vars.BERTH_TEST_POSTGRES_DSN }}
       BERTH_TEST_MYSQL_DSN: ${{ secrets.BERTH_TEST_MYSQL_DSN || vars.BERTH_TEST_MYSQL_DSN }}
@@ -148,7 +148,7 @@ jobs:
 
   quality:
     name: Static Analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
@@ -161,7 +161,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [dco, reuse, generated, lint, test, sql-integration, quality]
     if: >-
       ${{
@@ -184,7 +184,7 @@ jobs:
 
   summary:
     name: CI Summary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [dco, reuse, generated, lint, test, sql-integration, quality, build]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:

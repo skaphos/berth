@@ -64,6 +64,7 @@ kubectl --context "$CTX" create namespace "$MON_NS"
 # Installs the monitoring.coreos.com CRDs (incl. ServiceMonitor) the
 # apiserver charts need, so this must precede the apiserver installs.
 helm --kube-context "$CTX" install "$PROM_RELEASE" prometheus-community/kube-prometheus-stack \
+  --version 90.0.0 \
   -n "$MON_NS" \
   -f "$FIXTURES_DIR/prometheus-values.yaml" \
   --wait --timeout 6m
