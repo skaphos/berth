@@ -271,6 +271,29 @@ well inside the bound.
 
 ### Required liveness probe and signal-mode upgrade
 
+The runtime sidecar measures its confirmed lease lifetime using a local
+monotonic deadline: the time just before sending a successful acquire or renew
+request, plus the requested TTL. Response latency consumes that lifetime.
+Server-provided expiry timestamps are informational and do not control local
+enforcement, so server/node clock offsets cannot extend the deadline. The
+sidecar wakes at this deadline independently of heartbeat ticks and bounds an
+in-flight renewal by the remaining lifetime. At the deadline it starts
+enforcement; a late success cannot reopen the gate.
+
+On every sidecar start, including restart within an existing Pod, enforcement
+begins immediately. A persisted holder/token does not establish remaining
+lease lifetime. The sidecar attempts to renew a matching handoff immediately
+and restores the health marker only after a timely successful response. If
+confirmation fails, the workload remains subject to enforcement while the
+sidecar retries acquisition. Repeated restarts cannot grant a fresh TTL from
+the saved state.
+
+This changes restart behavior: even a still-valid handoff can briefly fail the
+probe or trigger a signal before renewal succeeds. Plan for workload interruption
+when restarting or upgrading the sidecar. The marker freshness check remains
+inclusive: a marker exactly at its maximum age is healthy; one older than the
+bound fails the check. Local lease expiry itself triggers enforcement at equality.
+
 Both runtime enforcement modes require Berth's unmodified freshness liveness
 probe on **every** regular container. Admission rejects a pre-existing liveness
 probe instead of overwriting it, and rejects startup probes because

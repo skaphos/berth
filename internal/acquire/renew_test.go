@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/skaphos/berth/pkg/client"
@@ -58,8 +59,7 @@ func TestTickHeldBoundsHungRenewAndEnforcesPastExpiry(t *testing.T) {
 	const heartbeat = 50 * time.Millisecond
 	r, state, hc := newHangingRenewer(t, heartbeat)
 	r.held = true
-	// The lease already expired, so once the hung call returns the
-	// past-expiry branch must gate the container.
+	// The lease already expired, so enforce before attempting another RPC.
 	r.expiresAt = time.Now().Add(-time.Second)
 	if err := state.MarkHealthy(); err != nil {
 		t.Fatalf("MarkHealthy: %v", err)
@@ -70,8 +70,8 @@ func TestTickHeldBoundsHungRenewAndEnforcesPastExpiry(t *testing.T) {
 		t.Fatal("tickHeld did not return: a hung renew wedged the loop (issue #97)")
 	}
 
-	if hc.callCount() != 1 {
-		t.Errorf("renew calls = %d, want 1", hc.callCount())
+	if hc.callCount() != 0 {
+		t.Errorf("renew calls = %d, want 0 for an expired lease", hc.callCount())
 	}
 	if r.held {
 		t.Error("a renew hung past lease expiry must mark the lease lost")
@@ -369,6 +369,10 @@ func TestLoadHandoffFallbackWhenStateMissing(t *testing.T) {
 // TestRunRenewsAndReleasesOnCancel drives the full loop with a fast
 // heartbeat: it should renew at least once and release on context cancel.
 func TestRunRenewsAndReleasesOnCancel(t *testing.T) {
+	synctest.Test(t, testRunRenewsAndReleasesOnCancel)
+}
+
+func testRunRenewsAndReleasesOnCancel(t *testing.T) {
 	renewed := make(chan struct{}, 1)
 	fc := &fakeClient{
 		renewFn: func(string, int32) (acquireResult, error) {
@@ -399,6 +403,8 @@ func TestRunRenewsAndReleasesOnCancel(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Run did not renew")
 	}
+	// Wait for the response to be processed before cancelling its context.
+	synctest.Wait()
 	cancel()
 
 	select {
