@@ -26,7 +26,7 @@ per-Pod startup gating.
 | Fine-grained holder/renewal logic in an app you maintain | **Direct integration** (the Berth Go client) |
 | To gate an **unmodifiable** (legacy/vendor) image on a lease | **Injection** (this page) |
 | Pod startup to *wait* for a lease, with no runtime guarantee | **Injection — `startup-gate`** |
-| Exactly one Pod candidate to run behind a continuously renewed lease | **Injection — `runtime-singleton`** |
+| Continuously monitor an unmodifiable Pod against a renewed lease | **Injection — `runtime-singleton`**, with downstream fencing for strict stale-write rejection |
 
 Injection creates **more potential lease holders** (every opted-in replica can
 race to acquire) than operator-as-holder, so its split-brain surface is larger.
@@ -115,12 +115,16 @@ run-to-completion Jobs that just need to win the lease before running.
 
 Injects the init "hold" **plus a native sidecar** (an init container with
 `restartPolicy: Always`, so Jobs/CronJobs can still complete). The sidecar
-renews the lease and, **on lease loss, actively stops the main container** and
-keeps it gated until it re-acquires. This is the at-most-once mode.
+renews the lease and, **on lease loss, actively stops the main container**. It
+keeps the injected health check failing until it re-acquires. Kubernetes starts
+a restarted container before evaluating its liveness probe, so the workload can
+execute briefly on every restart; use fencing tokens at downstream resources
+when stale work must be rejected.
 
-A kubelet restart does **not** re-run init containers, so the sidecar is what
-keeps a stopped main container gated after enforcement fires — "lease lost"
-becomes a controlled crashloop, not an unguarded restart.
+A kubelet restart does **not** re-run init containers. While the lease remains
+unconfirmed, each restarted workload container fails Berth's liveness probe and
+is stopped again with a one-second probe-level termination grace. The normal
+Pod-level termination grace remains unchanged for deliberate Pod shutdown.
 
 ### Supported initialization and admission
 
@@ -197,11 +201,13 @@ downstream enforcement is still needed to reject writes from expired holders.
 Selected by `berth.skaphos.io/enforce`:
 
 - **`probe` (default)** — the webhook injects an `exec` liveness probe
-  (`/berth/check /berth/healthy`) on each main container, backed by a shared
-  `emptyDir`. The sidecar removes the health marker on lease loss; the kubelet
-  kills the container. Native, preserves container isolation, no extra RBAC. The
-  helper ships a static `check` binary onto the shared volume, so the probe does
-  **not** require a shell in the target image.
+  (`/berth/check check /berth/healthy --max-age <ttl>`) on each main container,
+  backed by a shared `emptyDir`. The sidecar removes the health marker on lease
+  loss; the kubelet kills the container. The probe uses a one-second
+  `terminationGracePeriodSeconds`, the Kubernetes minimum. Native, preserves
+  container isolation, no extra RBAC. The helper ships a static `check` binary
+  onto the shared volume, so the probe does **not** require a shell in the target
+  image.
 - **`signal`** — the webhook sets `shareProcessNamespace: true`; the sidecar
   attempts `SIGTERM`/`SIGKILL` on lease loss, in addition to the mandatory
   freshness liveness probe on every main container. Signals may stop a matching
@@ -222,8 +228,12 @@ Selected by `berth.skaphos.io/enforce`:
   > blast radius. `probe` remains the recommended default precisely because it
   > has no such cross-container reach.
 
-Both are **best-effort within a bounded window**: there is detection + kill
-latency between lease loss and the container stopping. The **fencing token**
+Both are **best-effort process enforcement**: there is detection + kill latency
+between lease loss and the container stopping. A restarted container begins
+executing before its first liveness result, and kubelet scheduling means this is
+not a hard wall-clock bound. With the injected two-second probe period,
+one-second timeout, one-failure threshold, and one-second termination grace, the
+restart execution window is normally a few seconds. The **fencing token**
 remains the real boundary for any downstream resource that must reject a stale
 holder.
 
@@ -313,10 +323,11 @@ On lease loss, signal mode removes the health marker before discovering or
 signalling processes. Permission and discovery errors are returned and logged;
 an already-exited process is harmless. Successful renewals refresh the marker
 in both modes. If the helper dies, the marker eventually becomes stale instead.
-Kubelet detection, probe scheduling and the Pod's termination grace period still
-contribute to the stop delay. A restarted process can run until its next failed
-probe; use downstream fencing tokens to reject stale writes throughout that
-window. This requires a functioning kubelet, as in probe mode.
+Kubelet detection, probe scheduling and the probe's one-second termination grace
+still contribute to the stop delay. Berth leaves the Pod-level grace unchanged.
+A restarted process can still run until its next failed probe; use downstream
+fencing tokens to reject stale writes throughout that window. This requires a
+functioning kubelet, as in probe mode.
 
 Before upgrading, drain affected workloads, remove conflicting liveness/startup
 probes (or redesign their health checks), and recreate the Pods using the patched
@@ -439,9 +450,11 @@ spec:
   containers:
     - name: app
       livenessProbe:
-        exec: { command: ["/berth/check", "/berth/healthy"] }
+        exec: { command: ["/berth/check", "check", "/berth/healthy", "--max-age", "30s"] }
         periodSeconds: 2
+        timeoutSeconds: 1
         failureThreshold: 1
+        terminationGracePeriodSeconds: 1
       volumeMounts: [{ name: berth-state, mountPath: /berth, readOnly: true }]
 ```
 

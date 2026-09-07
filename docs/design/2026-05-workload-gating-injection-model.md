@@ -210,25 +210,28 @@ Lifecycle:
    using the holder identity and fencing token.
 3. **If renew reports the lease is lost, the sidecar actively stops the main
    container** using the configured enforcement mechanism (see "Active
-   Enforcement" below), keeps it stopped (marker held red / repeated signal),
-   and attempts to re-`Acquire`. The main container is only allowed to run
-   again once the sidecar re-acquires.
+   Enforcement" below), keeps the marker unhealthy, and attempts to
+   re-`Acquire`. A kubelet-restarted workload begins executing before its
+   liveness probe can fail, so downstream fencing remains required for strict
+   stale-write rejection.
 4. On graceful shutdown, the sidecar performs a best-effort `Release`.
 
 #### Active Enforcement (v1)
 
 Because the target image cannot be modified, the helper cannot rely on the
-application to react to lease loss. The sidecar enforces the at-most-once
-guarantee at the pod level. Two mechanisms are supported, selected by the
+application to react to lease loss. The sidecar provides process-level
+enforcement for the lease. Two mechanisms are supported, selected by the
 `berth.skaphos.io/enforce` annotation:
 
 - **`probe` (default)** — The webhook injects an `exec` liveness probe on each
-  main container (`cat /berth/healthy`) backed by a shared `emptyDir` volume.
-  The sidecar writes the marker on acquire and removes it on lease loss; the
-  kubelet then kills the container. The sidecar keeps the marker absent until it
-  re-acquires, so a kubelet-restarted container stays gated (init containers do
-  **not** re-run on a same-pod container restart — see "Restart Re-Gating").
-  Native, preserves container isolation, no extra RBAC.
+  main container (`/berth/check check /berth/healthy --max-age <ttl>`) backed by
+  a shared `emptyDir` volume. The sidecar writes the marker on acquire and
+  removes it on lease loss; the kubelet then kills the container. The sidecar
+  keeps the marker absent until it re-acquires, so each restarted container is
+  stopped by a subsequent failed probe (init containers do **not** re-run on a
+  same-pod container restart — see "Restart Re-Gating"). The probe uses the
+  Kubernetes minimum one-second termination grace without changing normal Pod
+  shutdown. Native, preserves container isolation, no extra RBAC.
 - **`signal`** — The webhook sets `shareProcessNamespace: true`; the sidecar
   finds the main process and sends `SIGTERM` then `SIGKILL`, re-signalling on
   every restart until it re-acquires. More immediate, but every container in the
@@ -238,29 +241,32 @@ guarantee at the pod level. Two mechanisms are supported, selected by the
   must not leave the probe healthy. Both modes reject occupied liveness slots
   and startup probes; the static check binary does not require a shell.
 
-Both are **best-effort within a bounded window**: there is a detection +
-kill latency between lease loss and the main container actually stopping. This
-strengthens at-most-once at the process level but does **not** replace the
-fencing token, which remains the real boundary for any downstream resource that
-must reject a stale holder.
+Both are **best-effort process enforcement**: there is detection + kill latency
+between lease loss and the main container actually stopping. Kubernetes starts
+a restarted container before evaluating liveness, so the workload can execute
+briefly on each restart. The two-second probe period, one-second timeout,
+one-failure threshold, and one-second termination grace normally limit that
+window to a few seconds, but kubelet scheduling provides no hard wall-clock
+bound. The fencing token remains the real boundary for any downstream resource
+that must reject a stale holder.
 
 #### Restart Re-Gating
 
 A kubelet container restart (from a failed probe or a signal kill) does **not**
 re-run completed init containers. The sidecar is therefore responsible for
-keeping the main container gated after it stops it: it must hold the probe
-marker absent (or keep re-signalling) until it has re-acquired the lease, at
-which point it restores the marker and lets the main container run. This turns
-"lease lost" into a controlled crashloop rather than an unguarded restart.
+keeping the probe unhealthy after it stops the workload: it must hold the marker
+absent (or keep re-signalling) until it has re-acquired the lease, at which point
+it restores the marker. Until then, Kubernetes can restart the workload and run
+it briefly before the next failed probe stops it again.
 
 Guarantee:
 
-- At most one candidate holder runs its main container at a time, subject to the
-  store's linearizability, the TTL window, and the enforcement detection+kill
-  latency.
-- Runtime enforcement lasts only while the sidecar is running and renewing. If
-  the sidecar itself dies, the native-sidecar `restartPolicy: Always` restarts
-  it; until it is back and has re-confirmed the lease, the marker stays red.
+- The store selects at most one current lease holder. More than one candidate's
+  process can execute during TTL, enforcement, and restart windows; strict
+  effects require downstream fencing-token checks.
+- If the sidecar dies, the native-sidecar `restartPolicy: Always` restarts it.
+  Marker freshness also makes the workload's liveness probe fail after one TTL
+  without a successful refresh.
 - Strong end-to-end fencing for downstream systems still requires token-aware
   behavior on those systems; pod-level enforcement bounds, but does not
   eliminate, the overlap window.
@@ -437,8 +443,8 @@ The webhook will inject:
 - Sidecar performs continuous heartbeats while the main container runs.
 - If `Renew` reports lease loss, the sidecar **enforces** per `enforce`: removes
   the marker in both modes and additionally attempts to signal the main process (`signal`), records a clear
-  log/event, keeps the main container stopped, and retries `Acquire`. It
-  restores the marker / stops signalling only after re-acquiring. (See
+  log/event, keeps the probe unhealthy, and retries `Acquire`. It restores the
+  marker / stops signalling only after re-acquiring. (See
   "Restart Re-Gating".)
 - The sidecar reuses the same reacquire-after-expiry logic the operator uses;
   see SKA-436 for the failover-after-TTL-expiry bug this must not reintroduce.
@@ -573,9 +579,11 @@ spec:
       image: vendor/checkout:1.4.2
       livenessProbe:                 # injected: kubelet kills on lease loss
         exec:
-          command: ["/berth/check", "/berth/healthy"]
+          command: ["/berth/check", "check", "/berth/healthy", "--max-age", "30s"]
         periodSeconds: 2
+        timeoutSeconds: 1
         failureThreshold: 1
+        terminationGracePeriodSeconds: 1
       volumeMounts:
         - {name: berth-state, mountPath: /berth, readOnly: true}
 ```
