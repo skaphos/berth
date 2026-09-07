@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 
-version="${1:?usage: release-notes.sh VERSION [CHANGELOG]}"
+version="${1:?usage: release-notes.sh VERSION [CHANGELOG] [UPGRADE_DIR]}"
 changelog="${2:-CHANGELOG.md}"
+upgrade_dir="${3:-$(dirname "$changelog")/docs/releases}"
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]]; then
   echo "Invalid release version: $version" >&2
   exit 1
@@ -35,3 +36,15 @@ awk -v version="$version" '
     printf "%s", notes
   }
 ' "$changelog"
+
+# Version-specific migration text is reviewed in source alongside the fixes.
+# Keep it outside the generated changelog so release-please cannot overwrite it.
+upgrade_notes="$upgrade_dir/$version.md"
+if [ -f "$upgrade_notes" ]; then
+  if [ ! -s "$upgrade_notes" ]; then
+    echo "Empty upgrade notes for $version" >&2
+    exit 1
+  fi
+  printf '\n'
+  cat "$upgrade_notes"
+fi

@@ -63,10 +63,8 @@ injection:
     enforce: probe
     ttlSeconds: 15
   webhook:
-    # Ignore so a webhook hiccup can't wedge the shared runner cluster; the
-    # injection test asserts the mutation happened, so a non-firing webhook
-    # still fails loudly.
-    failurePolicy: Ignore
+    # Exercise the release's fail-closed admission policy in disposable clusters.
+    failurePolicy: Fail
 
 workloadManagement:
   enabled: true

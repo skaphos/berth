@@ -39,6 +39,26 @@ require helm
 require docker
 require openssl
 
+APISERVER_IMG=berth-apiserver:e2e
+OPERATOR_IMG=berth-operator:e2e
+ACQUIRE_IMG=berth-acquire:e2e
+API_CHART="$REPO_ROOT/deploy/helm/berth-apiserver"
+OPERATOR_CHART="$REPO_ROOT/deploy/helm/berth-operator"
+API_IMAGE_ARGS=()
+OPERATOR_IMAGE_ARGS=()
+if [ -n "${BERTH_RELEASE_VERSION:-}" ]; then
+  "$REPO_ROOT/scripts/package-release-charts.sh" "$BERTH_RELEASE_VERSION" "$TMP_DIR/release-charts"
+  APISERVER_IMG=$(grep '/berth-apiserver:' "$TMP_DIR/release-charts/images.txt")
+  OPERATOR_IMG=$(grep '/berth-operator:' "$TMP_DIR/release-charts/images.txt")
+  ACQUIRE_IMG=$(grep '/berth-acquire:' "$TMP_DIR/release-charts/images.txt")
+  API_CHART="$TMP_DIR/release-charts/berth-apiserver-$BERTH_RELEASE_VERSION.tgz"
+  OPERATOR_CHART="$TMP_DIR/release-charts/berth-operator-$BERTH_RELEASE_VERSION.tgz"
+  # Remove fixture tag overrides so the packaged chart's AppVersion is used.
+  API_IMAGE_ARGS=(--set-string "image.repository=${APISERVER_IMG%:*}" --set-string image.tag=)
+  OPERATOR_IMAGE_ARGS=(--set-string "image.repository=${OPERATOR_IMG%:*}" --set-string image.tag=
+    --set-string "injection.helper.repository=${ACQUIRE_IMG%:*}" --set-string injection.helper.tag=)
+fi
+
 log "creating kind clusters (parallel)"
 for cfg in kind-coord.yaml kind-east.yaml kind-west.yaml; do
   kind create cluster --config "$FIXTURES_DIR/$cfg" --wait 90s &
@@ -48,20 +68,25 @@ wait
 log "building local images"
 (
   cd "$REPO_ROOT"
-  docker build -f Dockerfile.apiserver -t berth-apiserver:e2e .
-  docker build -f Dockerfile.operator -t berth-operator:e2e .
+  docker build -f Dockerfile.apiserver -t "$APISERVER_IMG" .
+  docker build -f Dockerfile.operator -t "$OPERATOR_IMG" .
   # berth-acquire is injected into opted-in workload pods by the operator's
   # injection webhook (exercised by injection_test.go).
-  docker build -f Dockerfile.acquire -t berth-acquire:e2e .
+  docker build -f Dockerfile.acquire -t "$ACQUIRE_IMG" .
+  if [ -n "${BERTH_RELEASE_VERSION:-}" ]; then
+    BROKER_IMG=$(grep '/berth-oidc-broker:' "$TMP_DIR/release-charts/images.txt")
+    docker build -f Dockerfile.broker -t "$BROKER_IMG" .
+    docker run --rm "$BROKER_IMG" --help
+  fi
 )
 
 log "loading images into each cluster"
 for cluster in "$COORD_CLUSTER" "$EAST_CLUSTER" "$WEST_CLUSTER"; do
-  kind load docker-image berth-apiserver:e2e --name "$cluster" &
-  kind load docker-image berth-operator:e2e --name "$cluster" &
+  kind load docker-image "$APISERVER_IMG" --name "$cluster" &
+  kind load docker-image "$OPERATOR_IMG" --name "$cluster" &
   # Only the runner clusters inject; coord doesn't need the helper image, but
   # loading everywhere keeps the loop simple and the cost is negligible.
-  kind load docker-image berth-acquire:e2e --name "$cluster" &
+  kind load docker-image "$ACQUIRE_IMG" --name "$cluster" &
 done
 wait
 
@@ -106,9 +131,10 @@ kubectl --context "kind-$COORD_CLUSTER" -n "$NAMESPACE" create secret generic be
   --from-file=api-keys="$TMP_DIR/api-keys"
 
 helm --kube-context "kind-$COORD_CLUSTER" install berth-apiserver \
-  "$REPO_ROOT/deploy/helm/berth-apiserver" \
+  "$API_CHART" \
   -n "$NAMESPACE" \
   -f "$FIXTURES_DIR/apiserver-values.yaml" \
+  "${API_IMAGE_ARGS[@]}" \
   --wait --timeout 3m
 
 log "discovering apiserver address reachable from runner clusters"
@@ -134,9 +160,10 @@ install_operator() {
   kubectl --context "kind-$cluster" -n "$NAMESPACE" create secret tls berth-operator-injection-tls \
     --cert="$TMP_DIR/webhook.crt" --key="$TMP_DIR/webhook.key"
   helm --kube-context "kind-$cluster" install berth-operator \
-    "$REPO_ROOT/deploy/helm/berth-operator" \
+    "$OPERATOR_CHART" \
     -n "$NAMESPACE" \
     -f "$FIXTURES_DIR/operator-values.yaml" \
+    "${OPERATOR_IMAGE_ARGS[@]}" \
     --set "clusterID=$cluster_id" \
     --set "berth.apiServer=$API_URL" \
     --set "injection.webhook.tls.existingSecret=berth-operator-injection-tls" \

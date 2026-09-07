@@ -27,8 +27,10 @@ Releases are produced by release-please:
 2. Merging that PR lets the same `release-please.yml` run push the `vX.Y.Z` tag.
 3. The tag triggers `release.yml`, which builds/pushes images and charts and
    **publishes the GitHub release** using that version's reviewed section from
-   `CHANGELOG.md`. Missing, duplicate or empty sections fail before artifact
-   publication. GitHub's independent auto-generated notes are disabled.
+   `CHANGELOG.md`, followed by any reviewed `docs/releases/X.Y.Z.md` migration
+   supplement. Missing, duplicate or empty changelog sections fail before artifact
+   publication, as do empty supplements. GitHub's independent auto-generated notes
+   are disabled.
 4. The published release triggers `linear-release.yml`, which parses the release
    notes for `SKA-NNN` identifiers and moves each referenced issue to
    `Released` (skipping any that are `Canceled`/`Duplicate`), and leaves a
@@ -42,7 +44,7 @@ long-lived signing keys to manage.
 
 Each released artifact carries:
 
-- **Container images** (`berth-apiserver`, `berth-operator`, `berth-oidc-broker`):
+- **Container images** (`berth-apiserver`, `berth-operator`, `berth-oidc-broker`, `berth-acquire`):
   a BuildKit SBOM + provenance attestation (from `sbom: true` / `provenance:
   true`), a **cosign** signature over the image digest, and a SLSA
   build-provenance attestation pushed to GHCR via `actions/attest-build-provenance`.
@@ -50,7 +52,7 @@ Each released artifact carries:
   over the pushed chart digest.
 - **GitHub release assets**: an SPDX source SBOM (`berth-<version>.spdx.json`), a
   `checksums.txt` over the assets signed with `cosign sign-blob`
-  (`checksums.txt.sig` + `checksums.txt.pem`), and a build-provenance attestation
+  (`checksums.txt.sigstore.json` Sigstore bundle), and a build-provenance attestation
   over the chart tarballs and SBOM.
 
 ### Verifying an image
@@ -63,6 +65,7 @@ cosign verify \
 
 # SLSA build provenance:
 gh attestation verify oci://ghcr.io/skaphos/berth-apiserver@sha256:<digest> --repo skaphos/berth
+```
 
 Pin the issuer, the identity (repo + workflow + tag ref), and verify by digest —
 omitting any of these makes the check meaningless.
@@ -73,7 +76,7 @@ omitting any of these makes the check meaningless.
 cosign verify-blob \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v' \
-  --certificate checksums.txt.pem --signature checksums.txt.sig checksums.txt
+  --bundle checksums.txt.sigstore.json checksums.txt
 sha256sum -c checksums.txt
 ```
 
@@ -159,10 +162,30 @@ its rendered changelog: every merged fix needs an entry, migration requirements
 need release notes, and no unmerged fix may be described as delivered. Keep the
 advisories draft until the patched release and artifacts are available.
 
-The publish workflow extracts this exact version section from the tagged
-changelog with `scripts/release-notes.sh`; it does not replace those entries with
-GitHub's PR-title summary. Test the extraction with
-`scripts/test-release-notes.sh`.
+The publish workflow extracts this version section from the tagged changelog
+with `scripts/release-notes.sh`, appending the matching reviewed migration
+supplement when present. It does not replace those entries with GitHub's PR-title
+summary. Test extraction and supplement handling with `scripts/test-release-notes.sh`.
+
+## Release verification
+
+`scripts/release-images.sh VERSION` defines all four published image references.
+`scripts/package-release-charts.sh VERSION OUTPUT_DIR` packages both charts with
+plain semantic chart versions and `v`-prefixed app versions, renders all optional
+Berth image paths and verifies them against that image list before publication.
+CI checks this using a synthetic version without publishing artifacts.
+
+Before merging a release PR, run the `e2e` workflow on the final candidate branch
+with `release_version` set to the intended release (for example, `0.4.1`). It builds
+the four images locally, checks broker startup, and installs the packaged charts
+into disposable clusters. Fixture tag overrides are cleared, so the injection
+and cross-cluster lifecycle tests exercise the release image references. This
+does not push images or prove registry signatures; the publish workflow signs and
+attests the images and charts by digest afterward.
+
+Require ordinary CI, real Kubernetes tombstone tests and the full cross-cluster
+suite to pass. Review the extracted release notes including migration text before
+tagging. For 0.4.1, follow [the upgrade instructions](releases/0.4.1.md).
 
 ## Dependency refresh baseline
 

@@ -94,6 +94,10 @@ jobs:
         run: go -C tools tool task test
       - name: Check coverage threshold
         run: ./scripts/check-coverage.sh coverage.out
+      - name: Verify Kubernetes release and garbage-collection storage
+        env:
+          BERTH_ENVTEST: "1"
+        run: go test -race ./internal/lease -run TestK8sTombstonesAPIStorage -count=1 -v
       - name: Upload coverage artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -102,6 +106,20 @@ jobs:
           path: coverage.out
           if-no-files-found: error
           retention-days: 30
+
+  release-packaging:
+    name: Release Packaging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
+        with:
+          version: v4.2.4
+      - name: Check release notes and packaged image references
+        run: |
+          ./scripts/test-release-notes.sh
+          ./scripts/package-release-charts.sh 0.0.0-ci "$RUNNER_TEMP/release-charts"
 
   sql-integration:
     name: SQL Integration
@@ -162,7 +180,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-24.04
-    needs: [dco, reuse, generated, lint, test, sql-integration, quality]
+    needs: [dco, reuse, generated, lint, test, sql-integration, quality, release-packaging]
     if: >-
       ${{
         always() &&
@@ -172,6 +190,7 @@ jobs:
         needs.test.result == 'success' &&
         needs.sql-integration.result == 'success' &&
         needs.quality.result == 'success' &&
+        needs.release-packaging.result == 'success' &&
         (needs.dco.result == 'success' || needs.dco.result == 'skipped')
       }}
     steps:
@@ -185,7 +204,7 @@ jobs:
   summary:
     name: CI Summary
     runs-on: ubuntu-24.04
-    needs: [dco, reuse, generated, lint, test, sql-integration, quality, build]
+    needs: [dco, reuse, generated, lint, test, sql-integration, quality, build, release-packaging]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Publish workflow summary
@@ -198,14 +217,15 @@ jobs:
           SQL_INTEGRATION_RESULT: ${{ needs.sql-integration.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
           BUILD_RESULT: ${{ needs.build.result }}
+          PACKAGING_RESULT: ${{ needs.release-packaging.result }}
         run: |
-          total=8
+          total=9
           success=0
           failed=0
           skipped=0
           cancelled=0
 
-          for result in "$DCO_RESULT" "$REUSE_RESULT" "$GENERATED_RESULT" "$LINT_RESULT" "$TEST_RESULT" "$SQL_INTEGRATION_RESULT" "$QUALITY_RESULT" "$BUILD_RESULT"; do
+          for result in "$DCO_RESULT" "$REUSE_RESULT" "$GENERATED_RESULT" "$LINT_RESULT" "$TEST_RESULT" "$SQL_INTEGRATION_RESULT" "$QUALITY_RESULT" "$BUILD_RESULT" "$PACKAGING_RESULT"; do
             case "$result" in
               success) success=$((success + 1)) ;;
               failure) failed=$((failed + 1)) ;;
@@ -228,6 +248,7 @@ jobs:
             echo "| sql-integration | $SQL_INTEGRATION_RESULT |"
             echo "| quality | $QUALITY_RESULT |"
             echo "| build | $BUILD_RESULT |"
+            echo "| release-packaging | $PACKAGING_RESULT |"
             echo
             echo "- Total jobs: $total"
             echo "- Success: $success"
