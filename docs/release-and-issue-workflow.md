@@ -26,7 +26,9 @@ Releases are produced by release-please:
    the changelog and version bump.
 2. Merging that PR lets the same `release-please.yml` run push the `vX.Y.Z` tag.
 3. The tag triggers `release.yml`, which builds/pushes images and charts and
-   **publishes the GitHub release** (with auto-generated notes).
+   **publishes the GitHub release** using that version's reviewed section from
+   `CHANGELOG.md`. Missing, duplicate or empty sections fail before artifact
+   publication. GitHub's independent auto-generated notes are disabled.
 4. The published release triggers `linear-release.yml`, which parses the release
    notes for `SKA-NNN` identifiers and moves each referenced issue to
    `Released` (skipping any that are `Canceled`/`Duplicate`), and leaves a
@@ -125,3 +127,39 @@ These are Linear console changes (not automatable via the API used here):
 The team key and target status name are set in `linear-release.yml` env
 (`TEAM_KEY: SKA`, `RELEASED_STATE: Released`); update them there if the team or
 status name changes.
+
+## Recording fixes merged through a security advisory
+
+Advisory merges may land on `main` as `Merge commit from fork`. Those subjects
+are not Conventional Commits, so release-please cannot infer a bug-fix entry.
+Changing a private PR title does not repair an already-created upstream commit.
+
+After the code is merged, create a normal follow-up PR with approved,
+user-facing summaries and one `fix:` entry per delivered fix. Keep exploit
+instructions and unpublished advisory details out of that public PR. Use
+release-please's supported multi-change override at the end of the PR body:
+
+```text
+BEGIN_COMMIT_OVERRIDE
+fix(component): describe the first delivered behavior change
+
+fix(component): describe the second delivered behavior change
+END_COMMIT_OVERRIDE
+```
+
+Squash-merge that PR so release-please can associate its commit with the PR
+body. Keep the same entries in the signed commit message as a fallback. Do not
+rewrite protected main history or manually edit the generated release PR as the
+only record: regeneration can replace hand edits. The overrides become separate
+changelog entries on the next release-please run. See the upstream
+[release-note override documentation](https://github.com/googleapis/release-please#how-can-i-fix-release-notes).
+
+Before merging the release PR, reconcile the private remediation ledger against
+its rendered changelog: every merged fix needs an entry, migration requirements
+need release notes, and no unmerged fix may be described as delivered. Keep the
+advisories draft until the patched release and artifacts are available.
+
+The publish workflow extracts this exact version section from the tagged
+changelog with `scripts/release-notes.sh`; it does not replace those entries with
+GitHub's PR-title summary. Test the extraction with
+`scripts/test-release-notes.sh`.
