@@ -3,7 +3,7 @@ name: Release
 # Triggered by a tag matching v* (pushed by release-please.yml after a
 # release-please PR merges). Builds and pushes the three Berth container
 # images and the two Helm charts to GHCR, then publishes a GitHub release
-# with auto-generated notes.
+# with the changelog notes reviewed in the release PR.
 #
 # Supply-chain hardening (all keyless — no long-lived signing keys):
 #   * Images carry a BuildKit SBOM + provenance attestation (sbom/provenance: true).
@@ -42,6 +42,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Verify and extract reviewed release notes
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ./scripts/test-release-notes.sh
+          ./scripts/release-notes.sh "${REF_NAME#v}" > "${RUNNER_TEMP}/release-notes.md"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
@@ -247,4 +255,5 @@ jobs:
             dist/charts/berth-${{ steps.vars.outputs.version }}.spdx.json
             dist/charts/checksums.txt
             dist/charts/checksums.txt.sigstore.json
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-notes.md
+          generate_release_notes: false
