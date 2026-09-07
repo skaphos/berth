@@ -10,9 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://skaphos.github.io/berth/main/adr/0003-sidecar-runtime-enforcement-by-container-kill/">
+        <link rel="canonical" href="https://skaphos.github.io/berth/main/releases/0.4.1/">
       
       
+        <link rel="prev" href="../../reference/configuration/">
+      
+      
+        <link rel="next" href="../../release-and-issue-workflow/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>3. Enforce at-most-once by killing the main container; probe default, signal opt-in - Berth</title>
+        <title>Upgrade: 0.4.1 security patch - Berth</title>
       
     
     
@@ -64,7 +68,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#3-enforce-at-most-once-by-killing-the-main-container-probe-default-signal-opt-in" class="md-skip">
+        <a href="#required-upgrade-steps-for-041" class="md-skip">
           Skip to content
         </a>
       
@@ -104,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              3. Enforce at-most-once by killing the main container; probe default, signal opt-in
+              Upgrade: 0.4.1 security patch
             
           </span>
         </div>
@@ -526,8 +530,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -538,11 +544,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -563,7 +569,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -578,10 +584,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../releases/0.4.1/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade: 0.4.1 security patch
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -597,6 +628,35 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#required-upgrade-steps-for-041" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required upgrade steps for 0.4.1
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -738,8 +798,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -748,132 +806,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#context-and-problem-statement" class="md-nav__link">
+  <a href="#required-upgrade-steps-for-041" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Context and Problem Statement
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#decision-drivers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Decision Drivers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#considered-options" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Considered Options
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#decision-outcome" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Decision Outcome
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Decision Outcome">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#consequences" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Consequences
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pros-and-cons-of-the-options" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pros and Cons of the Options
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Pros and Cons of the Options">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#a-probe-injected-liveness-probe-marker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A. probe (injected liveness probe + marker)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#b-signal-shareprocessnamespace-sigkill" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        B. signal (shareProcessNamespace + SIGKILL)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#c-log-only-app-reacts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        C. Log-only / app reacts
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#d-sidecar-deletes-the-pod-via-the-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        D. Sidecar deletes the Pod via the API
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#links" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Links
+        Required upgrade steps for 0.4.1
       
     </span>
   </a>
@@ -897,7 +833,7 @@
 
 
   
-    <a href="https://github.com/skaphos/berth/edit/main/docs/adr/0003-sidecar-runtime-enforcement-by-container-kill.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/skaphos/berth/edit/main/docs/releases/0.4.1.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -905,128 +841,45 @@
   
 
 
-<h1 id="3-enforce-at-most-once-by-killing-the-main-container-probe-default-signal-opt-in">3. Enforce at-most-once by killing the main container; probe default, signal opt-in</h1>
-<ul>
-<li><strong>Status</strong>: accepted — trust model amended by
-  <a href="../0004-state-volume-is-a-trust-boundary/">ADR-0004</a></li>
-<li><strong>Date</strong>: 2026-05-24</li>
-<li><strong>Deciders</strong>: Shawn Stratton</li>
-<li><strong>Consulted</strong>: Skaphos team</li>
-<li><strong>Informed</strong>: Berth contributors</li>
-</ul>
-<h2 id="context-and-problem-statement">Context and Problem Statement</h2>
-<p>In runtime-singleton mode (ADR-0001), the injected sidecar must enforce
-at-most-once for an image that cannot be modified to react to lease loss. Two
-facts force the design:</p>
+  <h1>Upgrade: 0.4.1 security patch</h1>
+
+<h3 id="required-upgrade-steps-for-041">Required upgrade steps for 0.4.1</h3>
+<p>This security patch changes workload admission and cleanup requirements. Updating
+the operator alone does not protect existing Pods. Plan a maintenance window for
+affected workloads and preserve the central lease store and fencing-token history.</p>
 <ol>
-<li>Berth's acquire semantics renew a lease when the incoming holder matches the
-   current unexpired holder (<code>internal/lease/manager.go</code>: <code>case cur.Holder ==
-   holder &amp;&amp; !cur.Expired(now)</code> returns the same fencing token with
-   <code>Acquired: true</code>). So multiple pods sharing a holder identity can all "hold"
-   the same lease — runtime singleton must use a unique per-pod identity, and
-   when a pod loses the lease, <em>something</em> must stop its main container.</li>
-<li>The helper is a separate container. A container cannot, by default, stop the
-   process of another container in the same pod.</li>
+<li>Stop producers, pause/suspend managed targets, and drain their Pods and active
+   Jobs. Confirm the processes have stopped; force deletion is not a substitute.</li>
+<li>For operator-managed targets, delete the drained targets and their BerthLeases,
+   allowing cleanup/finalizers to finish. Upgrade the CRD, operator chart and image
+   together. Helm does not upgrade bundled CRDs automatically: apply the reviewed
+   CRD explicitly. Enable <code>workloadManagement.enabled</code> and configure admission TLS
+   through <code>injection.webhook.tls</code>; confirm the admission webhooks are ready. Create
+   replacement BerthLeases before recreating their targets. Do not copy old status
+   or UID annotations. Lease-only resources do not require target recreation.</li>
+<li>For injected runtime workloads, upgrade <strong>both</strong> injector and <code>berth-acquire</code>
+   images, then recreate Pods. Both probe and signal modes now require Berth's
+   freshness liveness probe on every regular container. Remove conflicting
+   liveness/startup probes or redesign application health checks; readiness probes
+   remain available. Foreign init containers are not supported in runtime mode.
+   Keep admission fail-closed. Finish upgrading every injector replica before
+   relying on the new admission policy.</li>
+<li>Replace slash-containing tenant identifiers with flat identifiers and update
+   client holder roots. Upgrade every API-server replica before restarting those
+   clients. Runtime holder identities now include the Pod UID; replacements must
+   not reuse copied holder/token state.</li>
 </ol>
-<p>The original draft deferred the kill to "future work" and only logged on loss.
-For unmodifiable images that gives no real enforcement, so a concrete mechanism
-must be decided now.</p>
-<h2 id="decision-drivers">Decision Drivers</h2>
-<ul>
-<li>No application or image change.</li>
-<li>A real (if bounded) at-most-once guarantee, not log-only hope.</li>
-<li>Preserve container isolation where possible.</li>
-<li>Work for distroless/scratch images that have no shell.</li>
-<li>Not break Job/CronJob completion.</li>
-</ul>
-<h2 id="considered-options">Considered Options</h2>
-<ul>
-<li><strong>A. <code>probe</code></strong> — the webhook injects an <code>exec</code> liveness probe
-  (<code>cat /berth/healthy</code>, or a static check binary on the shared volume) on each
-  main container, backed by a shared <code>emptyDir</code>. The sidecar removes the marker
-  on lease loss; the kubelet kills the container.</li>
-<li><strong>B. <code>signal</code></strong> — the webhook sets <code>shareProcessNamespace: true</code>; the sidecar
-  finds the main process and sends <code>SIGTERM</code> then <code>SIGKILL</code>.</li>
-<li><strong>C. Log-only / rely on the app to react</strong> (the original draft's deferral).</li>
-<li><strong>D. Sidecar deletes the Pod via the Kubernetes API.</strong></li>
-</ul>
-<h2 id="decision-outcome">Decision Outcome</h2>
-<p>Chosen option: <strong>support A and B, defaulting to A (<code>probe</code>)</strong>, selected by the
-<code>berth.skaphos.io/enforce</code> annotation; reject C and D as the enforcement
-primitive.</p>
-<p><code>probe</code> is the default because the kubelet performs the kill and container
-isolation is preserved. <code>signal</code> is the opt-in for images where probe injection
-is not viable (no shell and the static check binary cannot run, or a liveness
-probe is already in use). The sidecar is injected as a <strong>native sidecar</strong>
-(<code>restartPolicy: Always</code> init container) so Jobs still complete, and it keeps the
-main container gated after a kill — holding the marker absent or re-signalling
-until it re-acquires — because a kubelet restart does <strong>not</strong> re-run completed
-init containers.</p>
-<p>Enforcement is <strong>best-effort within a bounded window</strong>: there is a detection +
-kill latency between lease loss and the container stopping. This strengthens
-at-most-once at the process level but does not replace the fencing token, which
-remains the real boundary for any downstream resource that must reject a stale
-holder.</p>
-<h3 id="consequences">Consequences</h3>
-<ul>
-<li><strong>Positive</strong>: Real at-most-once enforcement with no image change; <code>probe</code>
-  keeps isolation and lets the kubelet own the kill; <code>signal</code> covers shell-less
-  images; native sidecar preserves Job/CronJob completion.</li>
-<li><strong>Negative</strong>: Bounded best-effort, not a hard mutex — a stale holder can run
-  for the detect+kill window, so downstream systems still need token-aware
-  fencing. <code>signal</code> requires <code>shareProcessNamespace: true</code>, letting every
-  container in the pod see and signal every other one (weaker isolation).
-  Restart re-gating adds sidecar complexity (it must hold the gate until
-  reacquire). <code>probe</code> cannot be validated at admission because the webhook
-  cannot introspect image contents, so a probe that can never pass will
-  crashloop the container.</li>
-<li><strong>Update (SKA-449)</strong>: <code>signal</code> enforcement is scoped by the
-  <code>berth.skaphos.io/signal-target</code> annotation (env <code>BERTH_SIGNAL_TARGET</code>),
-  matched against process <code>comm</code>/executable basename, so only the workload
-  process is signaled and co-located sidecars are spared. A later operator-audit
-  fix made the target <strong>required</strong> for <code>signal</code> in <code>runtime-singleton</code>: the
-  webhook rejects an unscoped signal Pod at admission and a directly-run helper
-  fails the same validation, rather than falling back to the broad
-  signal-everything behavior. <code>probe</code> stays the default.</li>
-<li><strong>Neutral</strong>: <code>enforce-grace-seconds</code> tunes the SIGTERM→SIGKILL delay for
-  <code>signal</code>; a static check binary on the shared volume keeps <code>probe</code> viable for
-  distroless/scratch images.</li>
-</ul>
-<h2 id="pros-and-cons-of-the-options">Pros and Cons of the Options</h2>
-<h3 id="a-probe-injected-liveness-probe-marker">A. probe (injected liveness probe + marker)</h3>
-<ul>
-<li>Good, because the kubelet does the kill and container isolation is preserved;
-  no extra RBAC.</li>
-<li>Bad, because it depends on the probe being able to run in the target image and
-  cannot be validated at admission.</li>
-</ul>
-<h3 id="b-signal-shareprocessnamespace-sigkill">B. signal (shareProcessNamespace + SIGKILL)</h3>
-<ul>
-<li>Good, because it is immediate and works without a probe-capable image.</li>
-<li>Bad, because it weakens pod isolation and PID-1 signal semantics vary by
-  image.</li>
-</ul>
-<h3 id="c-log-only-app-reacts">C. Log-only / app reacts</h3>
-<ul>
-<li>Good, because it is trivial to implement.</li>
-<li>Bad, because it provides no enforcement for the exact workloads this path
-  exists to serve (unmodifiable images) — rejected.</li>
-</ul>
-<h3 id="d-sidecar-deletes-the-pod-via-the-api">D. Sidecar deletes the Pod via the API</h3>
-<ul>
-<li>Good, because it removes the whole pod, not just a container.</li>
-<li>Bad, because it needs pod-delete RBAC per workload, races with controllers,
-  and is far heavier than gating the main container — rejected.</li>
-</ul>
-<h2 id="links">Links</h2>
-<ul>
-<li>Design: <code>docs/design/2026-05-workload-gating-injection-model.md</code>
-  ("Active Enforcement (v1)", "Restart Re-Gating")</li>
-<li>Code: <code>internal/lease/manager.go</code> (same-holder acquire/renew semantics)</li>
-<li>Related ADRs: <a href="../0001-pod-level-gating-for-injected-singletons/">ADR-0001</a>,
-  <a href="../0002-label-annotation-opt-in-over-crd/">ADR-0002</a></li>
-<li>Linear: SKA-274, SKA-437, SKA-438 (helper), SKA-439 (webhook), SKA-436</li>
-</ul>
+<p>Kubernetes-backed releases and garbage collection preserve tombstones and token
+history while using a valid, omitted lease-duration field. Released leases remain
+immediately reclaimable. All four runtime images use <code>v0.4.1</code> tags; packaged charts
+use version <code>0.4.1</code> with <code>appVersion: v0.4.1</code> so default image references agree.</p>
+<p>Rollback requires another full drain and recreation under the older contract.
+Do not disable admission, remove finalizers or delete status while managed work
+is active. Kubelet processing and termination grace still contribute to stopping
+time; downstream fencing tokens remain necessary to reject stale writes strictly.</p>
+<p>See the tagged guides for <a href="https://github.com/skaphos/berth/blob/v0.4.1/docs/operations/operator-workload-cleanup.md">operator migration and cleanup</a>,
+<a href="https://github.com/skaphos/berth/blob/v0.4.1/docs/workload-gating-injection.md#required-liveness-probe-and-signal-mode-upgrade">injected workload compatibility</a>
+and <a href="https://github.com/skaphos/berth/blob/v0.4.1/docs/architecture.md#migrating-slash-containing-tenants">tenant migration</a>.</p>
 
 
 

@@ -13,6 +13,10 @@
         <link rel="canonical" href="https://skaphos.github.io/berth/main/release-and-issue-workflow/">
       
       
+        <link rel="prev" href="../releases/0.4.1/">
+      
+      
+        <link rel="next" href="../operations/operator-workload-cleanup/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>Release and Issue Workflow - Berth</title>
+        <title>Release workflow - Berth</title>
       
     
     
@@ -104,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release and Issue Workflow
+              Release workflow
             
           </span>
         </div>
@@ -526,8 +530,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -538,11 +544,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -563,7 +569,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -573,6 +579,247 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/0.4.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade: 0.4.1 security patch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release workflow
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#issue-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-releases-are-cut" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How releases are cut
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-artifact-integrity-signing-sbom-provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release artifact integrity (signing, SBOM, provenance)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Release artifact integrity (signing, SBOM, provenance)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verifying-an-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying an image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-release-blobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying release blobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-released-is-driven-by-the-release-not-the-release-pr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Released is driven by the release, not the release PR
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conventions-that-keep-this-clean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventions that keep this clean
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#required-linear-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Linear configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#required-github-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required GitHub configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recording-fixes-merged-through-a-security-advisory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recording fixes merged through a security advisory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-refresh-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency refresh baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
             
               
                 
@@ -736,6 +983,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#verifying-release-blobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying release blobs
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -790,6 +1048,17 @@
     <span class="md-ellipsis">
       
         Recording fixes merged through a security advisory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release verification
       
     </span>
   </a>
@@ -879,8 +1148,10 @@ from <em>shipped in a release</em>:</p>
 <li>Merging that PR lets the same <code>release-please.yml</code> run push the <code>vX.Y.Z</code> tag.</li>
 <li>The tag triggers <code>release.yml</code>, which builds/pushes images and charts and
    <strong>publishes the GitHub release</strong> using that version's reviewed section from
-   <code>CHANGELOG.md</code>. Missing, duplicate or empty sections fail before artifact
-   publication. GitHub's independent auto-generated notes are disabled.</li>
+   <code>CHANGELOG.md</code>, followed by any reviewed <code>docs/releases/X.Y.Z.md</code> migration
+   supplement. Missing, duplicate or empty changelog sections fail before artifact
+   publication, as do empty supplements. GitHub's independent auto-generated notes
+   are disabled.</li>
 <li>The published release triggers <code>linear-release.yml</code>, which parses the release
    notes for <code>SKA-NNN</code> identifiers and moves each referenced issue to
    <code>Released</code> (skipping any that are <code>Canceled</code>/<code>Duplicate</code>), and leaves a
@@ -892,7 +1163,7 @@ from <em>shipped in a release</em>:</p>
 long-lived signing keys to manage.</p>
 <p>Each released artifact carries:</p>
 <ul>
-<li><strong>Container images</strong> (<code>berth-apiserver</code>, <code>berth-operator</code>, <code>berth-oidc-broker</code>):
+<li><strong>Container images</strong> (<code>berth-apiserver</code>, <code>berth-operator</code>, <code>berth-oidc-broker</code>, <code>berth-acquire</code>):
   a BuildKit SBOM + provenance attestation (from <code>sbom: true</code> / <code>provenance:
   true</code>), a <strong>cosign</strong> signature over the image digest, and a SLSA
   build-provenance attestation pushed to GHCR via <code>actions/attest-build-provenance</code>.</li>
@@ -900,7 +1171,7 @@ long-lived signing keys to manage.</p>
   over the pushed chart digest.</li>
 <li><strong>GitHub release assets</strong>: an SPDX source SBOM (<code>berth-&lt;version&gt;.spdx.json</code>), a
   <code>checksums.txt</code> over the assets signed with <code>cosign sign-blob</code>
-  (<code>checksums.txt.sig</code> + <code>checksums.txt.pem</code>), and a build-provenance attestation
+  (<code>checksums.txt.sigstore.json</code> Sigstore bundle), and a build-provenance attestation
   over the chart tarballs and SBOM.</li>
 </ul>
 <h3 id="verifying-an-image">Verifying an image</h3>
@@ -911,17 +1182,14 @@ long-lived signing keys to manage.</p>
 
 <span class="c1"># SLSA build provenance:</span>
 gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/skaphos/berth-apiserver@sha256:&lt;digest&gt;<span class="w"> </span>--repo<span class="w"> </span>skaphos/berth
-
-Pin<span class="w"> </span>the<span class="w"> </span>issuer,<span class="w"> </span>the<span class="w"> </span>identity<span class="w"> </span><span class="o">(</span>repo<span class="w"> </span>+<span class="w"> </span>workflow<span class="w"> </span>+<span class="w"> </span>tag<span class="w"> </span>ref<span class="o">)</span>,<span class="w"> </span>and<span class="w"> </span>verify<span class="w"> </span>by<span class="w"> </span>digest<span class="w"> </span>—
-omitting<span class="w"> </span>any<span class="w"> </span>of<span class="w"> </span>these<span class="w"> </span>makes<span class="w"> </span>the<span class="w"> </span>check<span class="w"> </span>meaningless.
-
-<span class="c1">### Verifying release blobs</span>
-
-<span class="sb">```</span>sh
-cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
+</code></pre></div>
+<p>Pin the issuer, the identity (repo + workflow + tag ref), and verify by digest —
+omitting any of these makes the check meaningless.</p>
+<h3 id="verifying-release-blobs">Verifying release blobs</h3>
+<div class="highlight"><pre><span></span><code>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/skaphos/berth/\.github/workflows/release\.yml@refs/tags/v'</span><span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--certificate<span class="w"> </span>checksums.txt.pem<span class="w"> </span>--signature<span class="w"> </span>checksums.txt.sig<span class="w"> </span>checksums.txt
+<span class="w">  </span>--bundle<span class="w"> </span>checksums.txt.sigstore.json<span class="w"> </span>checksums.txt
 sha256sum<span class="w"> </span>-c<span class="w"> </span>checksums.txt
 </code></pre></div>
 <h2 id="why-released-is-driven-by-the-release-not-the-release-pr">Why <code>Released</code> is driven by the release, not the release PR</h2>
@@ -994,10 +1262,26 @@ changelog entries on the next release-please run. See the upstream
 its rendered changelog: every merged fix needs an entry, migration requirements
 need release notes, and no unmerged fix may be described as delivered. Keep the
 advisories draft until the patched release and artifacts are available.</p>
-<p>The publish workflow extracts this exact version section from the tagged
-changelog with <code>scripts/release-notes.sh</code>; it does not replace those entries with
-GitHub's PR-title summary. Test the extraction with
-<code>scripts/test-release-notes.sh</code>.</p>
+<p>The publish workflow extracts this version section from the tagged changelog
+with <code>scripts/release-notes.sh</code>, appending the matching reviewed migration
+supplement when present. It does not replace those entries with GitHub's PR-title
+summary. Test extraction and supplement handling with <code>scripts/test-release-notes.sh</code>.</p>
+<h2 id="release-verification">Release verification</h2>
+<p><code>scripts/release-images.sh VERSION</code> defines all four published image references.
+<code>scripts/package-release-charts.sh VERSION OUTPUT_DIR</code> packages both charts with
+plain semantic chart versions and <code>v</code>-prefixed app versions, renders all optional
+Berth image paths and verifies them against that image list before publication.
+CI checks this using a synthetic version without publishing artifacts.</p>
+<p>Before merging a release PR, run the <code>e2e</code> workflow on the final candidate branch
+with <code>release_version</code> set to the intended release (for example, <code>0.4.1</code>). It builds
+the four images locally, checks broker startup, and installs the packaged charts
+into disposable clusters. Fixture tag overrides are cleared, so the injection
+and cross-cluster lifecycle tests exercise the release image references. This
+does not push images or prove registry signatures; the publish workflow signs and
+attests the images and charts by digest afterward.</p>
+<p>Require ordinary CI, real Kubernetes tombstone tests and the full cross-cluster
+suite to pass. Review the extracted release notes including migration text before
+tagging. For 0.4.1, follow <a href="../releases/0.4.1/">the upgrade instructions</a>.</p>
 <h2 id="dependency-refresh-baseline">Dependency refresh baseline</h2>
 <p>The September 2026 refresh requires Go 1.27.1 for both application and development
 tool modules. The Docker builders use that same release. Runtime containers use
