@@ -29,7 +29,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      BERTH_RELEASE_VERSION: ${{ inputs.release_version || '0.0.0-e2e' }}
+      # Scheduled runs have no dispatch inputs; use the nightly candidate version.
+      BERTH_RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_version || '0.0.0-e2e' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
