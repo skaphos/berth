@@ -21,6 +21,16 @@ CHANGELOG
 "$script_dir/release-notes.sh" 0.4.1 "$fixture_dir/CHANGELOG.md" > "$fixture_dir/actual"
 printf '\n### Bug Fixes\n* First reviewed fix.\n* Second reviewed fix.\n\n' > "$fixture_dir/expected"
 diff -u "$fixture_dir/expected" "$fixture_dir/actual"
+mkdir -p "$fixture_dir/docs/releases"
+printf '### Required upgrade\nDrain and recreate affected workloads.\n' > "$fixture_dir/docs/releases/0.4.1.md"
+"$script_dir/release-notes.sh" 0.4.1 "$fixture_dir/CHANGELOG.md" > "$fixture_dir/actual"
+printf '\n### Required upgrade\nDrain and recreate affected workloads.\n' >> "$fixture_dir/expected"
+diff -u "$fixture_dir/expected" "$fixture_dir/actual"
+: > "$fixture_dir/docs/releases/0.4.1.md"
+if "$script_dir/release-notes.sh" 0.4.1 "$fixture_dir/CHANGELOG.md" > /dev/null 2>&1; then
+  echo 'Empty upgrade notes unexpectedly accepted' >&2; exit 1
+fi
+rm "$fixture_dir/docs/releases/0.4.1.md"
 if "$script_dir/release-notes.sh" 0.4.2 "$fixture_dir/CHANGELOG.md" 2>/dev/null; then
   echo 'Missing version unexpectedly accepted' >&2; exit 1
 fi

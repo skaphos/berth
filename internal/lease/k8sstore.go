@@ -204,7 +204,6 @@ func recordFromLease(l *coordinationv1.Lease) (*Record, error) {
 // stored at the given version.
 func leaseFromRecord(rec *Record, namespace string, version int64) *coordinationv1.Lease {
 	holder := rec.Holder
-	ttl := int32(rec.TTL / time.Second)
 	transitions := rec.FencingToken
 	acquired := metav1.NewMicroTime(rec.AcquiredAt)
 	renewed := metav1.NewMicroTime(rec.RenewedAt)
@@ -221,7 +220,7 @@ func leaseFromRecord(rec *Record, namespace string, version int64) *coordination
 		},
 		Spec: coordinationv1.LeaseSpec{
 			HolderIdentity:       &holder,
-			LeaseDurationSeconds: &ttl,
+			LeaseDurationSeconds: leaseDuration(rec),
 			AcquireTime:          &acquired,
 			RenewTime:            &renewed,
 			LeaseTransitions:     &transitions,
@@ -234,12 +233,11 @@ func leaseFromRecord(rec *Record, namespace string, version int64) *coordination
 // Labels and annotations are repaired in case they were stripped externally.
 func applyRecordToLease(l *coordinationv1.Lease, rec *Record, version int64) {
 	holder := rec.Holder
-	ttl := int32(rec.TTL / time.Second)
 	transitions := rec.FencingToken
 	acquired := metav1.NewMicroTime(rec.AcquiredAt)
 	renewed := metav1.NewMicroTime(rec.RenewedAt)
 	l.Spec.HolderIdentity = &holder
-	l.Spec.LeaseDurationSeconds = &ttl
+	l.Spec.LeaseDurationSeconds = leaseDuration(rec)
 	l.Spec.AcquireTime = &acquired
 	l.Spec.RenewTime = &renewed
 	l.Spec.LeaseTransitions = &transitions
@@ -253,4 +251,15 @@ func applyRecordToLease(l *coordinationv1.Lease, rec *Record, version int64) {
 		l.Labels = map[string]string{}
 	}
 	l.Labels[managedByLabel] = managedByValue
+}
+
+// Kubernetes rejects an explicit zero duration. Omit it for tombstones:
+// recordFromLease reads nil as zero, preserving immediate reclaimability
+// without changing the fencing-token or version history.
+func leaseDuration(rec *Record) *int32 {
+	if rec.Tombstone() && rec.TTL == 0 {
+		return nil
+	}
+	ttl := int32(rec.TTL / time.Second)
+	return &ttl
 }

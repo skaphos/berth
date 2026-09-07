@@ -9,6 +9,11 @@ on:
     # 03:00 UTC daily — quiet hours for the org.
     - cron: "0 3 * * *"
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Candidate chart/image version to test without publishing"
+        type: string
+        default: "0.4.1"
 
 permissions:
   contents: read
@@ -23,6 +28,8 @@ jobs:
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      BERTH_RELEASE_VERSION: ${{ inputs.release_version || '0.0.0-e2e' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

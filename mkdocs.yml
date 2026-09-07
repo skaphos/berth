@@ -37,6 +37,8 @@ nav:
       - API Versioning: reference/api-versioning.md
       - Configuration: reference/configuration.md
   - Operations:
+      - "Upgrade: 0.4.1 security patch": releases/0.4.1.md
+      - Release workflow: release-and-issue-workflow.md
       - Operator workload cleanup: operations/operator-workload-cleanup.md
       - Scalability: operations/scalability.md
       - "Upgrade: state-volume trust": operations/upgrade-state-volume-trust.md
