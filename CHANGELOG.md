@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.1](https://github.com/skaphos/berth/compare/v0.4.0...v0.4.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **acquire:** require freshness liveness in runtime signal mode ([f0f5e0e](https://github.com/skaphos/berth/commit/f0f5e0e6e26122d9105f5b8d07671d2148030d17))
+* **api:** enforce lease request and holder size limits ([f0f5e0e](https://github.com/skaphos/berth/commit/f0f5e0e6e26122d9105f5b8d07671d2148030d17))
+* **auth:** require flat tenant identifiers ([f0f5e0e](https://github.com/skaphos/berth/commit/f0f5e0e6e26122d9105f5b8d07671d2148030d17))
+* **deps:** refresh Go, Kubernetes, CI tools and container dependencies ([d54c795](https://github.com/skaphos/berth/commit/d54c795d677180da6ce95aaebd0c2b6c0747c9c6))
+* **injection:** isolate lease holders by Pod UID ([f0f5e0e](https://github.com/skaphos/berth/commit/f0f5e0e6e26122d9105f5b8d07671d2148030d17))
+* **injection:** reject unsupported runtime init workloads ([f0f5e0e](https://github.com/skaphos/berth/commit/f0f5e0e6e26122d9105f5b8d07671d2148030d17))
+* **metrics:** bound HTTP method metric labels ([f0f5e0e](https://github.com/skaphos/berth/commit/f0f5e0e6e26122d9105f5b8d07671d2148030d17))
+* **operator:** drain managed workloads before releasing deleted leases ([5ac78d8](https://github.com/skaphos/berth/commit/5ac78d85c9fed60498903506968ccfbb30687f79))
+* **operator:** stop managed workloads when ownership expires ([5ac78d8](https://github.com/skaphos/berth/commit/5ac78d85c9fed60498903506968ccfbb30687f79))
+* **release:** include required security-patch upgrade instructions ([9f656be](https://github.com/skaphos/berth/commit/9f656be22f33dc6f0a403a3a27bb4b4051750def))
+* **release:** publish the injected helper and align chart image tags ([9f656be](https://github.com/skaphos/berth/commit/9f656be22f33dc6f0a403a3a27bb4b4051750def))
+* **release:** publish the reviewed changelog as release notes ([f0f5e0e](https://github.com/skaphos/berth/commit/f0f5e0e6e26122d9105f5b8d07671d2148030d17))
+* **store:** preserve released Kubernetes leases with valid tombstones ([9f656be](https://github.com/skaphos/berth/commit/9f656be22f33dc6f0a403a3a27bb4b4051750def))
+
 ## [0.4.0](https://github.com/skaphos/berth/compare/v0.3.1...v0.4.0) (2026-08-10)
 
 
