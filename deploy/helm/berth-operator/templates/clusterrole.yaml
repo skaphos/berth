@@ -12,6 +12,14 @@ rules:
   {{- with .Values.rbac.targetVerbs }}
   {{- toYaml . | nindent 2 }}
   {{- end }}
+  {{- if .Values.workloadManagement.enabled }}
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "update", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "update", "delete"]
+  {{- end }}
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]

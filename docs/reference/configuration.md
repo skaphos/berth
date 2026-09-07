@@ -85,6 +85,9 @@ than corrupting lease state.
 | `--berth-ca-bundle-file` | empty | PEM CA bundle appended to system trust for API server TLS verification. |
 | `--berth-server-name` | API server host | SNI and certificate name override. |
 | `--berth-insecure-skip-tls-verify` | `false` | Development-only TLS verification bypass. |
+| `--enable-workload-admission` | `false` | Required for BerthLease targets; serves fail-closed workload admission. |
+| `--workload-operator-user` | empty | Exact Kubernetes service-account username allowed to ungate registered Pods. |
+| `--workload-operator-namespace` | empty | Operator namespace, excluded from target management and admission to permit recovery. |
 | `--enable-injection-webhook` | `false` | Serve the `berth-acquire` pod-injection mutating webhook from the operator. |
 | `--injection-helper-image` | empty | `berth-acquire` image stamped into opted-in Pods. Required when the webhook is enabled. |
 | `--injection-control-plane-namespaces` | `berth-system` | Comma-separated namespaces the webhook never mutates. |
@@ -153,6 +156,7 @@ a repository variable or secret.
 | `berth-operator` | `berth.tokenFile.path` | Token file path written by a sidecar. |
 | `berth-operator` | `berth.tls.*` | CA bundle, server name, and development-only insecure mode. |
 | `berth-operator` | `sidecarBroker.*` | Optional OIDC broker sidecar configuration. |
+| `berth-operator` | `workloadManagement.enabled` | Required for workload targets; uses shared `injection.webhook.tls`, independent of helper injection. See [upgrade and cleanup](../operations/operator-workload-cleanup.md). |
 | `berth-operator` | `injection.enabled` | Serve the `berth-acquire` pod-injection webhook. Off by default. |
 | `berth-operator` | `injection.helper.*` | Injected helper image and pull policy; the bearer-token pair (`apiKeyFile` + `apiKeySecret`) and CA pair (`caBundleFile` + `caBundleConfigMap`) the webhook mounts into the helper containers; and the shared `stateDir` (must be absolute). See [Authenticating injected Pods](../workload-gating-injection.md#authenticating-injected-pods). |
 | `berth-operator` | `injection.defaults.*` | Default `mode`, `enforce`, and `ttlSeconds` for Pods that omit the annotation. |

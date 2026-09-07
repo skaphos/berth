@@ -127,6 +127,7 @@ install_operator() {
   # cluster id, so its --cluster-id holder is owned by that tenant (see the
   # per-cluster key generation above).
   kubectl --context "kind-$cluster" create namespace "$NAMESPACE"
+  kubectl --context "kind-$cluster" create namespace berth-workloads
   kubectl --context "kind-$cluster" -n "$NAMESPACE" create secret generic berth-api-key \
     --from-literal=api-key="$cluster_id"
   # Webhook serving cert for the injection webhook (operator-values enables it).

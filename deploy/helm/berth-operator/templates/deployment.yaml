@@ -56,6 +56,11 @@ spec:
             {{- if .Values.berth.tls.insecureSkipVerify }}
             - --berth-insecure-skip-tls-verify
             {{- end }}
+            {{- if .Values.workloadManagement.enabled }}
+            - --enable-workload-admission
+            - --workload-operator-user=system:serviceaccount:{{ .Release.Namespace }}:{{ include "berth-operator.serviceAccountName" . }}
+            - --workload-operator-namespace={{ .Release.Namespace }}
+            {{- end }}
             {{- if .Values.injection.enabled }}
             - --enable-injection-webhook
             - --injection-helper-image={{ .Values.injection.helper.repository }}:{{ .Values.injection.helper.tag | default .Chart.AppVersion }}
@@ -89,7 +94,7 @@ spec:
             - name: health
               containerPort: {{ trimPrefix ":" .Values.healthProbe.bindAddress | int }}
               protocol: TCP
-            {{- if .Values.injection.enabled }}
+            {{- if or .Values.injection.enabled .Values.workloadManagement.enabled }}
             - name: webhook
               containerPort: 9443
               protocol: TCP
@@ -128,7 +133,7 @@ spec:
               mountPath: {{ include "berth-operator.tokenFilePath" . | dir }}
               readOnly: {{ not .Values.sidecarBroker.enabled }}
             {{- end }}
-            {{- if .Values.injection.enabled }}
+            {{- if or .Values.injection.enabled .Values.workloadManagement.enabled }}
             - name: webhook-certs
               mountPath: {{ include "berth-operator.webhookCertDir" . }}
               readOnly: true
@@ -176,7 +181,7 @@ spec:
           emptyDir:
             medium: Memory
         {{- end }}
-        {{- if .Values.injection.enabled }}
+        {{- if or .Values.injection.enabled .Values.workloadManagement.enabled }}
         - name: webhook-certs
           secret:
             secretName: {{ include "berth-operator.webhookTLSSecretName" . }}

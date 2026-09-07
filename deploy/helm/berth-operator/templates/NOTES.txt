@@ -85,3 +85,12 @@ CRDs:
 Verify the deployment:
   kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ include "berth-operator.fullname" . }}
   kubectl --namespace {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
+
+Workload management:
+{{- if .Values.workloadManagement.enabled }}
+  Required fail-closed admission is enabled. Create BerthLease resources before
+  their targets, outside {{ .Release.Namespace }}. Drain/recreate legacy targets.
+  Do not disable admission while managed workloads are active.
+{{- else }}
+  Lease-only mode. Targets require workloadManagement.enabled=true and webhook TLS.
+{{- end }}

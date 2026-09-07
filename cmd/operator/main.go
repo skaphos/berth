@@ -13,6 +13,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -109,11 +110,29 @@ func run() int {
 
 	leaseClient := client.New(cfg.apiServerURL, clientOpts...)
 
+	directClient, err := ctrlclient.New(mgr.GetConfig(), ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		ctrl.Log.Error(err, "create direct Kubernetes client")
+		return 1
+	}
+	if cfg.managedWorkloads {
+		admissionClient, err := ctrlclient.New(mgr.GetConfig(), ctrlclient.Options{Scheme: scheme})
+		if err != nil {
+			ctrl.Log.Error(err, "create admission Kubernetes client")
+			return 1
+		}
+		if err := operator.SetupWorkloadAdmission(mgr, admissionClient, cfg.operatorUser); err != nil {
+			ctrl.Log.Error(err, "set up required workload admission")
+			return 1
+		}
+	}
 	reconciler := &operator.BerthLeaseReconciler{
-		Client:          mgr.GetClient(),
-		Log:             ctrl.Log.WithName("controllers").WithName("BerthLease"),
-		LeaseClient:     leaseClient,
-		ClusterIdentity: cfg.clusterID,
+		Client:            directClient,
+		ManagedWorkloads:  cfg.managedWorkloads,
+		OperatorNamespace: cfg.operatorNamespace,
+		Log:               ctrl.Log.WithName("controllers").WithName("BerthLease"),
+		LeaseClient:       leaseClient,
+		ClusterIdentity:   cfg.clusterID,
 	}
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		ctrl.Log.Error(err, "unable to create controller", "controller", "BerthLease")
@@ -133,11 +152,14 @@ func run() int {
 		return 1
 	}
 
-	// Readiness gates on reachability of the central Berth API: if the
-	// operator cannot reach it, it cannot reconcile leases and should be
-	// drained rather than reported ready. The probe context bounds a hung
-	// connection so the readyz handler cannot block indefinitely.
+	// Lease-only readiness checks the central API. Managed mode must keep its
+	// admission endpoint and cleanup available during a central API outage, so
+	// it checks the local serving endpoint instead.
 	if err := mgr.AddReadyzCheck("berth-api", func(req *http.Request) error {
+		// Admission and cleanup must stay reachable during central API outages.
+		if cfg.managedWorkloads {
+			return mgr.GetWebhookServer().StartedChecker()(req)
+		}
 		ctx, cancel := context.WithTimeout(req.Context(), readyzPingTimeout)
 		defer cancel()
 		return leaseClient.Ping(ctx)
@@ -169,6 +191,9 @@ type operatorConfig struct {
 	serverName         string
 	insecureSkipVerify bool
 	enableWebhook      bool
+	managedWorkloads   bool
+	operatorUser       string
+	operatorNamespace  string
 	secureMetrics      bool
 
 	leaderElect                 bool
@@ -197,6 +222,9 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		clusterID          string
 		caBundleFile       string
 		enableWebhook      bool
+		managedWorkloads   bool
+		operatorUser       string
+		operatorNamespace  string
 		injHelperImage     string
 		injControlPlaneNS  string
 		injAPIKeyFile      string
@@ -248,6 +276,9 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 	fs.BoolVar(&insecureSkipVerify, "berth-insecure-skip-tls-verify", false,
 		"disable Berth API server TLS certificate verification. Development only — never "+
 			"set this in production.")
+	fs.BoolVar(&managedWorkloads, "enable-workload-admission", false, "enable mandatory fail-closed admission for BerthLease workload targets")
+	fs.StringVar(&operatorUser, "workload-operator-user", "", "Kubernetes service-account username permitted to ungate managed Pods")
+	fs.StringVar(&operatorNamespace, "workload-operator-namespace", "", "operator namespace excluded from workload management to avoid admission bootstrap deadlock")
 	fs.BoolVar(&enableWebhook, "enable-injection-webhook", false,
 		"serve the berth-acquire pod-injection mutating webhook from this operator.")
 	fs.StringVar(&injHelperImage, "injection-helper-image", "",
@@ -302,6 +333,12 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		return nil, errors.New("--berth-api-key and --berth-api-key-file are mutually exclusive")
 	}
 
+	if managedWorkloads {
+		parts := strings.Split(operatorUser, ":")
+		if len(parts) != 4 || parts[0] != "system" || parts[1] != "serviceaccount" || parts[2] != operatorNamespace || parts[2] == "" || parts[3] == "" {
+			return nil, errors.New("workload admission requires its operator namespace and matching service-account username")
+		}
+	}
 	return &operatorConfig{
 		metricsAddr:        metricsAddr,
 		probeAddr:          probeAddr,
@@ -313,6 +350,9 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		serverName:         serverName,
 		insecureSkipVerify: insecureSkipVerify,
 		enableWebhook:      enableWebhook,
+		managedWorkloads:   managedWorkloads,
+		operatorUser:       operatorUser,
+		operatorNamespace:  operatorNamespace,
 		secureMetrics:      secureMetrics,
 
 		leaderElect:                 leaderElect,

@@ -69,7 +69,11 @@ helm install berth-operator deploy/helm/berth-operator \
   --set clusterID=cluster-east \
   --set berth.apiServer=https://berth.example.com:8443 \
   --set berth.apiKey.secretName=berth-api-key \
-  --set berth.tls.caBundleConfigMap=berth-ca-bundle
+  --set berth.tls.caBundleConfigMap=berth-ca-bundle \
+  --set workloadManagement.enabled=true \
+  --set injection.webhook.tls.certManager.enabled=true \
+  --set injection.webhook.tls.certManager.issuerRef.name=berth-ca \
+  --set injection.webhook.tls.certManager.issuerRef.kind=ClusterIssuer
 ```
 
 > **The API key's tenant must own the operator's `clusterID`.** With
@@ -80,6 +84,13 @@ helm install berth-operator deploy/helm/berth-operator \
 > `clusterID` (`cluster-east`, `cluster-west`, …) — distinct tenants contending
 > for the same lease name is the intended cross-cluster model. See
 > [Authorization](docs/architecture.md#authorization).
+
+Managed targets require the fail-closed admission installation above. The issuer
+must exist in each runner cluster. For an existing TLS Secret or an upgrade,
+follow [operator workload cleanup](docs/operations/operator-workload-cleanup.md).
+Create each BerthLease before creating its target; existing targets must be
+drained and recreated. Use an application namespace, outside `berth-system`.
+Lease-only use can leave `workloadManagement.enabled` false.
 
 Apply the same `BerthLease` manifest to each cluster:
 

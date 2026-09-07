@@ -12,6 +12,7 @@ import (
 	"github.com/skaphos/berth/pkg/client"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,6 +23,9 @@ import (
 func newScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	if err := berthv1alpha1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +85,7 @@ func newLease(modifier func(*berthv1alpha1.BerthLease)) *berthv1alpha1.BerthLeas
 	zero := int32(0)
 	l := &berthv1alpha1.BerthLease{
 		ObjectMeta: metav1.ObjectMeta{
+			UID:        "lease-uid",
 			Namespace:  "ns",
 			Name:       "lease-a",
 			Finalizers: []string{FinalizerName},
@@ -96,15 +101,27 @@ func newLease(modifier func(*berthv1alpha1.BerthLease)) *berthv1alpha1.BerthLeas
 			ReleaseAction:            &berthv1alpha1.LeaseAction{Scale: &berthv1alpha1.ScaleAction{Replicas: zero}},
 		},
 	}
+	l.Status.Workload = &berthv1alpha1.WorkloadStatus{TargetUID: "target-uid"}
 	if modifier != nil {
 		modifier(l)
+	}
+	if l.Status.LeaseState == StateHeld && l.Status.Workload != nil {
+		w := l.Status.Workload
+		w.Phase = PhaseActive
+		w.LeaseName = l.Spec.LeaseName
+		w.Holder = l.Status.CurrentHolder
+		w.Token = l.Status.FencingToken
+		w.Deadline = l.Status.ExpiresAt
+		if w.Deadline == nil {
+			w.Deadline = timePtr(time.Now().Add(30 * time.Second))
+		}
 	}
 	return l
 }
 
 func newDeployment(replicas int32) *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "worker"},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "worker", UID: "target-uid", Annotations: map[string]string{ManagedLease: "lease-a", ManagedUID: "lease-uid"}, Labels: map[string]string{ManagedUID: "lease-uid"}},
 		Spec:       appsv1.DeploymentSpec{Replicas: &replicas},
 	}
 }
@@ -117,7 +134,7 @@ func reconcile(t *testing.T, r *BerthLeaseReconciler) (ctrl.Result, error) {
 func TestReconcileMissingObject(t *testing.T) {
 	t.Parallel()
 	scheme := newScheme(t)
-	r := &BerthLeaseReconciler{
+	r := &BerthLeaseReconciler{ManagedWorkloads: true,
 		Client:      fake.NewClientBuilder().WithScheme(scheme).Build(),
 		Log:         logr.Discard(),
 		LeaseClient: &fakeLeaseClient{},
@@ -136,7 +153,7 @@ func TestReconcileAddsFinalizerOnFirstObservation(t *testing.T) {
 	scheme := newScheme(t)
 	lease := newLease(func(l *berthv1alpha1.BerthLease) { l.Finalizers = nil })
 	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&berthv1alpha1.BerthLease{}).WithObjects(lease).Build()
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: &fakeLeaseClient{}}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: &fakeLeaseClient{}}
 
 	res, err := reconcile(t, r)
 	if err != nil {
@@ -177,7 +194,7 @@ func TestReconcileHeldScalesDeploymentUpAndWritesStatus(t *testing.T) {
 			ExpiresAt:    now.Add(30 * time.Second),
 		},
 	}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	res, err := reconcile(t, r)
 	if err != nil {
@@ -232,7 +249,7 @@ func TestReconcileNotHeldScalesDeploymentToZero(t *testing.T) {
 			ExpiresAt:    time.Now().Add(20 * time.Second),
 		},
 	}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	if _, err := reconcile(t, r); err != nil {
 		t.Fatal(err)
@@ -253,8 +270,8 @@ func TestReconcileNotHeldScalesDeploymentToZero(t *testing.T) {
 	if updated.Status.LeaseState != StateWaiting {
 		t.Fatalf("LeaseState = %q, want %q", updated.Status.LeaseState, StateWaiting)
 	}
-	if updated.Status.CurrentHolder != "cluster-west" {
-		t.Fatalf("CurrentHolder = %q, want cluster-west", updated.Status.CurrentHolder)
+	if updated.Status.CurrentHolder != "" {
+		t.Fatalf("CurrentHolder = %q, want cleared after completed cleanup", updated.Status.CurrentHolder)
 	}
 }
 
@@ -275,7 +292,7 @@ func TestReconcileDeletionReleasesAndRemovesFinalizer(t *testing.T) {
 		Build()
 
 	leaseClient := &fakeLeaseClient{}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	if _, err := reconcile(t, r); err != nil {
 		t.Fatal(err)
@@ -312,7 +329,7 @@ func TestReconcileDeletionWithNoTokenSkipsRelease(t *testing.T) {
 		Build()
 
 	leaseClient := &fakeLeaseClient{}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	if _, err := reconcile(t, r); err != nil {
 		t.Fatal(err)
@@ -335,7 +352,7 @@ func TestReconcileInvalidSpecDoesNotCallAcquire(t *testing.T) {
 		Build()
 
 	leaseClient := &fakeLeaseClient{}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	if _, err := reconcile(t, r); err != nil {
 		t.Fatal(err)
@@ -363,7 +380,7 @@ func TestReconcileTargetGoneIsNotAnError(t *testing.T) {
 			ExpiresAt:    time.Now().Add(30 * time.Second),
 		},
 	}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	if _, err := reconcile(t, r); err != nil {
 		t.Fatalf("missing target should not error, got %v", err)
@@ -381,7 +398,7 @@ func TestReconcileAcquireErrorRequeues(t *testing.T) {
 		Build()
 
 	leaseClient := &fakeLeaseClient{acquireErr: errors.New("connection refused")}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	res, err := reconcile(t, r)
 	if err != nil {
@@ -408,7 +425,7 @@ func TestReconcileAcquireErrorDoesNotMutateDeployment(t *testing.T) {
 		Build()
 
 	leaseClient := &fakeLeaseClient{acquireErr: errors.New("connection refused")}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	if _, err := reconcile(t, r); err != nil {
 		t.Fatal(err)
@@ -455,7 +472,7 @@ func TestReconcileLostLeaseScalesDownAndClearsToken(t *testing.T) {
 			ExpiresAt:    time.Now().Add(20 * time.Second),
 		},
 	}
-	r := &BerthLeaseReconciler{
+	r := &BerthLeaseReconciler{ManagedWorkloads: true,
 		Client:          c,
 		Log:             logr.Discard(),
 		LeaseClient:     leaseClient,
@@ -481,8 +498,8 @@ func TestReconcileLostLeaseScalesDownAndClearsToken(t *testing.T) {
 	if updated.Status.LeaseState != StateWaiting {
 		t.Fatalf("LeaseState = %q, want %q", updated.Status.LeaseState, StateWaiting)
 	}
-	if updated.Status.CurrentHolder != "cluster-west" {
-		t.Fatalf("CurrentHolder = %q, want cluster-west", updated.Status.CurrentHolder)
+	if updated.Status.CurrentHolder != "" {
+		t.Fatalf("CurrentHolder = %q, want cleared after completed cleanup", updated.Status.CurrentHolder)
 	}
 	if updated.Status.FencingToken != 0 {
 		t.Fatalf("FencingToken = %d, want 0 (must be cleared after losing lease)", updated.Status.FencingToken)
@@ -534,7 +551,7 @@ func TestReconcileNotHeldRequeueIsBounded(t *testing.T) {
 			ExpiresAt: time.Now().Add(30 * time.Second),
 		},
 	}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	res, err := reconcile(t, r)
 	if err != nil {
@@ -566,7 +583,7 @@ func TestReconcileClusterIdentityOverridesSpecHolder(t *testing.T) {
 			ExpiresAt:    time.Now().Add(30 * time.Second),
 		},
 	}
-	r := &BerthLeaseReconciler{
+	r := &BerthLeaseReconciler{ManagedWorkloads: true,
 		Client:          c,
 		Log:             logr.Discard(),
 		LeaseClient:     leaseClient,
@@ -605,7 +622,7 @@ func TestReconcileFallsBackToSpecHolderWhenClusterIdentityUnset(t *testing.T) {
 			ExpiresAt:    time.Now().Add(30 * time.Second),
 		},
 	}
-	r := &BerthLeaseReconciler{Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Client: c, Log: logr.Discard(), LeaseClient: leaseClient}
 
 	if _, err := reconcile(t, r); err != nil {
 		t.Fatal(err)
@@ -617,7 +634,7 @@ func TestReconcileFallsBackToSpecHolderWhenClusterIdentityUnset(t *testing.T) {
 
 func TestSetupWithManagerRequiresLeaseClient(t *testing.T) {
 	t.Parallel()
-	r := &BerthLeaseReconciler{Log: logr.Discard()}
+	r := &BerthLeaseReconciler{ManagedWorkloads: true, Log: logr.Discard()}
 	if err := r.SetupWithManager(nil); err == nil {
 		t.Fatal("expected error when LeaseClient is nil")
 	}

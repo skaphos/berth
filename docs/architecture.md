@@ -216,75 +216,45 @@ Use explicit `--store-backend`. The legacy heuristic that selects `mem` or
 
 ## Operator Reconcile Flow
 
-The operator watches namespaced `BerthLease` resources.
+The operator watches namespaced BerthLeases. Lease-only resources acquire and
+renew central ownership without admission. Workload targets additionally require
+fail-closed admission and a target UID recorded during CREATE.
 
-1. It adds `berth.skaphos.io/lease-release` as a finalizer.
-2. It validates the small set of invariants the reconciler depends on.
-3. It chooses the holder identity from `--cluster-id` when set, otherwise
-   `spec.holderIdentity`.
-4. It calls the central API server to acquire or renew the lease.
-5. If acquired, it applies `spec.acquireAction` to the target and records
-   `status.leaseState=held`.
-6. If not acquired, it applies `spec.releaseAction`, records
-   `status.leaseState=waiting`, and retries at `min(heartbeat, ttl/3)`.
-7. On deletion, it performs a best-effort release if it still has a current
-   fencing token, then removes the finalizer.
+1. Add the cleanup finalizer and validate the immutable identity/action contract.
+2. Stop expired, deleting or invalid active workloads before attempting Acquire.
+3. Bound central Acquire by the remaining local ownership deadline.
+4. Persist ownership before activating the target.
+5. Register each stored Pod UID before removing its scheduling gate.
+6. On loss/expiry/deletion, commit Stopping, suspend or scale down the target,
+   drain Jobs and Pods, then release central ownership and finish cleanup.
+
+Status conflicts and cleanup failures retain the prior responsibility. See
+[Operator workload admission and cleanup](operations/operator-workload-cleanup.md)
+for supported resources, migration, limits and termination assumptions.
 
 ## Workload Actions
 
-`BerthLease.spec.target` points at a workload in the same namespace as the
-`BerthLease`.
-
-| Action | Behavior | Typical target |
+| Target | Acquire | Release |
 | --- | --- | --- |
-| `suspend` | Patches a target's `spec.suspend`. | `batch/v1` `CronJob` |
-| `scale` | Patches the target scale subresource. | `Deployment`, `StatefulSet`, `ReplicaSet` |
+| `apps/v1` Deployment, StatefulSet, ReplicaSet | Set `spec.replicas` | Require zero replicas |
+| `batch/v1` CronJob | Set `spec.suspend=false` | Require suspend and drain active Jobs/Pods |
 
-Each action may set at most one of `suspend` or `scale`.
+Create the BerthLease before its target in an application namespace. Managed
+targets cannot run in the operator's own namespace. Lease-only resources omit
+both target and actions.
 
 ## Target Convergence and Watch Strategy
 
-The operator reconciles a `BerthLease` on a level-triggered cadence: a held
-lease re-reconciles every `heartbeatIntervalSeconds`, and a standby
-re-reconciles every `min(heartbeatIntervalSeconds, ttlSeconds/3)`. On each
-reconcile it re-reads the `spec.target` workload and re-applies the
-state-appropriate action (`acquireAction` while held, `releaseAction` while
-waiting). A manual edit to a managed target — for example, someone scaling a
-gated Deployment back up by hand — is therefore re-converged on the next
-reconcile, within the heartbeat window (about 10 s at the default
-`ttlSeconds: 30` / `heartbeatIntervalSeconds: 10`). The re-apply is idempotent:
-when the target already matches the desired action the reconciler skips the
-write, so steady-state convergence costs one live read (a single GET to the API
-server — the operator runs no informer over targets) and no write.
+Held leases converge targets at their heartbeat cadence, skipping unchanged
+activation writes. Stopping writes a target version fence even when already
+scaled down, invalidating activation updates that may still be in flight.
 
-The operator deliberately does **not** watch target workloads. It registers
-only `For(&BerthLease{})` and relies on the periodic re-assert above rather than
-mapping Deployment / StatefulSet / ReplicaSet / CronJob events back to their
-owning `BerthLease`. This is an intentional trade-off, not an omission:
-
-- **A cluster-wide workload watch defeats the scale target.** The sizing target
-  is up to 2,000 leases per tenant cluster (see
-  [Scalability](operations/scalability.md)). A broad informer would cache
-  *every* Deployment, StatefulSet, ReplicaSet, and CronJob in the cluster — not
-  just the ones a `BerthLease` references — and ReplicaSets in particular
-  accumulate with every rollout, so the cache grows with total cluster workload
-  rather than with Berth's own footprint. The initial LIST and ongoing WATCH
-  also add load to the API path the `k8s` backend is already throttle-bound on
-  (client-go `QPS=5/Burst=10`).
-- **The watch cannot be cheaply scoped.** Targets are arbitrary user-owned
-  workloads with no Berth-applied label or field, so a `cache.ByObject`
-  selector cannot narrow the informer without the operator first stamping a
-  marker on every user workload — a write beyond the declared action.
-- **The benefit is small.** A watch would cut drift-correction latency from
-  one heartbeat (about 10 s) to sub-second. For a coordination primitive whose
-  failover RTO is already bounded by the lease TTL (tens of seconds), that
-  margin does not justify the cache and API-server cost.
-
-If a future deployment genuinely needs sub-second correction in a small or
-single-tenant cluster, the supported extension would be an **opt-in** flag (for
-example `--watch-targets`) that registers a scoped `Watches` source plus a field
-index on `BerthLease` by target reference — never an always-on cluster-wide
-watch. It is a deliberate non-default.
+Managed mode additionally watches Pods and Jobs to authorize new gated Pods and
+clean up inert late creates after lease deletion. Security-sensitive ownership,
+ancestry and Pod reads use a direct API client. Status updates use resourceVersion
+conflicts to serialize registration with stopping. These reads, watches and
+writes change the previous lease-only capacity assumptions; size managed mode
+from measurements of its workload population.
 
 ## Injected Workload Gating
 
@@ -335,8 +305,7 @@ and the past-expiry self-fence still fires against an unresponsive API.
   API load and racing `BerthLease` status writes.
 - Manual edits to a managed target workload are re-converged on the next
   heartbeat reconcile (bounded by the heartbeat interval, ~10 s at defaults),
-  not via a workload watch — an intentional trade-off for the per-cluster scale
-  target; see [Target Convergence and Watch Strategy](#target-convergence-and-watch-strategy).
+  while Pod/Job admission and cleanup also have their own watches; see [Target Convergence and Watch Strategy](#target-convergence-and-watch-strategy).
 - `at-least-once` is part of the CRD surface, but the current central manager
   implements exclusive holder behavior.
 - The management console package exists as a placeholder.

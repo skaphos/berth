@@ -1,0 +1,66 @@
+{{- if .Values.workloadManagement.enabled -}}
+{{- include "berth-operator.validate" . -}}
+{{- $tls := .Values.injection.webhook.tls -}}
+{{- range $mutate := list true false }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: {{ ternary "MutatingWebhookConfiguration" "ValidatingWebhookConfiguration" $mutate }}
+metadata:
+  name: {{ include "berth-operator.webhookName" $ }}-workloads
+  labels:
+    {{- include "berth-operator.labels" $ | nindent 4 }}
+  {{- if $tls.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ $.Release.Namespace }}/{{ include "berth-operator.webhookName" $ }}
+  {{- end }}
+webhooks:
+  - name: {{ ternary "mutate" "validate" $mutate }}-workloads.berth.skaphos.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: {{ ternary "None" "NoneOnDryRun" $mutate }}
+    failurePolicy: Fail
+    matchPolicy: Equivalent
+    timeoutSeconds: 10
+    {{- if $mutate }}
+    reinvocationPolicy: Never
+    {{- end }}
+    clientConfig:
+      service:
+        name: {{ include "berth-operator.webhookName" $ }}
+        namespace: {{ $.Release.Namespace }}
+        path: /{{ ternary "mutate" "validate" $mutate }}-managed-workloads
+        port: {{ $.Values.injection.webhook.servicePort | int }}
+      {{- if and $tls.existingSecret $tls.caBundle }}
+      caBundle: {{ $tls.caBundle }}
+      {{- end }}
+    # The operator namespace cannot contain managed targets; excluding it
+    # prevents a webhook outage from blocking the operator's own recovery.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [{{ $.Release.Namespace | quote }}]
+    rules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: {{ ternary "[\"CREATE\"]" "[\"CREATE\", \"UPDATE\"]" $mutate }}
+        resources: ["deployments", "statefulsets", "replicasets"]
+        scope: Namespaced
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: {{ ternary "[\"CREATE\"]" "[\"CREATE\", \"UPDATE\"]" $mutate }}
+        resources: ["cronjobs", "jobs"]
+        scope: Namespaced
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: {{ ternary "[\"CREATE\"]" "[\"CREATE\", \"UPDATE\"]" $mutate }}
+        resources: ["pods"]
+        scope: Namespaced
+      {{- if not $mutate }}
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods/binding"]
+        scope: Namespaced
+      {{- end }}
+{{- end }}
+{{- end }}

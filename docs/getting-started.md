@@ -115,45 +115,7 @@ kubectl --context kind-berth-e2e-east  -n berth-system get pods
 kubectl --context kind-berth-e2e-west  -n berth-system get pods
 ```
 
-## Step 2 — Deploy the workload to both runner clusters
-
-`demo-app` is a trivial Deployment (the `pause` container — it starts fast and
-does nothing) that starts at **0 replicas**. Berth, not you, decides when it
-scales up. Apply it to **both** runner clusters:
-
-```bash
-cat <<'EOF' | tee /tmp/demo-app.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: demo-app
-  namespace: berth-system
-spec:
-  replicas: 0
-  selector:
-    matchLabels:
-      app: demo-app
-  template:
-    metadata:
-      labels:
-        app: demo-app
-    spec:
-      containers:
-        - name: pause
-          image: registry.k8s.io/pause:3.9
-      terminationGracePeriodSeconds: 1
-EOF
-
-kubectl --context kind-berth-e2e-east apply -f /tmp/demo-app.yaml
-kubectl --context kind-berth-e2e-west apply -f /tmp/demo-app.yaml
-```
-
-!!! note "Why `berth-system`?"
-    This tutorial reuses the namespace the harness already created. In a real
-    deployment you would target your application's own namespace; the operator
-    watches all namespaces, and just needs RBAC to scale the target there.
-
-## Step 3 — Apply the same lease to both clusters
+## Step 2 — Apply the same lease to both clusters
 
 The `BerthLease` is the declarative request: *"keep `demo-app` at 2 replicas on
 whichever cluster currently holds `demo-lease`, and at 0 everywhere else."*
@@ -165,7 +127,7 @@ apiVersion: berth.skaphos.io/v1alpha1
 kind: BerthLease
 metadata:
   name: demo-lease
-  namespace: berth-system
+  namespace: berth-workloads
 spec:
   leaseName: demo-lease
   # Placeholder — each operator overrides this with its own --cluster-id.
@@ -189,8 +151,45 @@ kubectl --context kind-berth-e2e-east apply -f /tmp/demo-lease.yaml
 kubectl --context kind-berth-e2e-west apply -f /tmp/demo-lease.yaml
 ```
 
-The two operators now race to acquire `demo-lease` from the central API server.
+The operators wait for each target to be created under admission before activating it.
 The race resolves within a few heartbeats.
+
+## Step 3 — Deploy the workload to both runner clusters
+
+`demo-app` is a trivial Deployment (the `pause` container — it starts fast and
+does nothing) that starts at **0 replicas**. Berth, not you, decides when it
+scales up. Apply it to **both** runner clusters:
+
+```bash
+cat <<'EOF' | tee /tmp/demo-app.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  namespace: berth-workloads
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.9
+      terminationGracePeriodSeconds: 1
+EOF
+
+kubectl --context kind-berth-e2e-east apply -f /tmp/demo-app.yaml
+kubectl --context kind-berth-e2e-west apply -f /tmp/demo-app.yaml
+```
+
+The operator namespace is reserved for the control plane. The harness creates
+`berth-workloads` for managed targets and installs required admission. Create
+these targets only after their BerthLease, so CREATE admission records their UID.
 
 ## Step 4 — Observe single-active
 
@@ -199,8 +198,8 @@ other stays at **0**:
 
 ```bash
 watch -n1 '
-  echo "east: $(kubectl --context kind-berth-e2e-east -n berth-system get deploy demo-app -o jsonpath='{.spec.replicas}')"
-  echo "west: $(kubectl --context kind-berth-e2e-west -n berth-system get deploy demo-app -o jsonpath='{.spec.replicas}')"
+  echo "east: $(kubectl --context kind-berth-e2e-east -n berth-workloads get deploy demo-app -o jsonpath='{.spec.replicas}')"
+  echo "west: $(kubectl --context kind-berth-e2e-west -n berth-workloads get deploy demo-app -o jsonpath='{.spec.replicas}')"
 '
 ```
 
@@ -211,9 +210,9 @@ Confirm it from the lease's own status. The holder reports `leaseState: held`
 and names itself in `currentHolder`; the standby reports `leaseState: waiting`:
 
 ```bash
-kubectl --context kind-berth-e2e-east -n berth-system \
+kubectl --context kind-berth-e2e-east -n berth-workloads \
   get berthlease demo-lease -o jsonpath='{.status.leaseState}{" holder="}{.status.currentHolder}{"\n"}'
-kubectl --context kind-berth-e2e-west -n berth-system \
+kubectl --context kind-berth-e2e-west -n berth-workloads \
   get berthlease demo-lease -o jsonpath='{.status.leaseState}{" holder="}{.status.currentHolder}{"\n"}'
 ```
 

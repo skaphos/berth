@@ -67,3 +67,6 @@ injection:
     # injection test asserts the mutation happened, so a non-firing webhook
     # still fails loudly.
     failurePolicy: Ignore
+
+workloadManagement:
+  enabled: true

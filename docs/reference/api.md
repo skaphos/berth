@@ -91,8 +91,8 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `leaseName` _string_ | LeaseName is the unique identifier for this lease within its namespace. |  |  |
-| `holderIdentity` _string_ | HolderIdentity identifies the entity requesting or holding the lease. |  |  |
+| `leaseName` _string_ | LeaseName is the unique identifier for this lease within its namespace. |  | MaxLength: 253 <br /> |
+| `holderIdentity` _string_ | HolderIdentity identifies the entity requesting or holding the lease. |  | MaxLength: 253 <br /> |
 | `ttlSeconds` _integer_ | TTLSeconds is the time-to-live for the lease in seconds. The lease<br />expires if not renewed within this duration. |  |  |
 | `heartbeatIntervalSeconds` _integer_ | HeartbeatIntervalSeconds is the interval at which the holder must<br />renew the lease to prevent TTL expiration. |  |  |
 | `semantics` _string_ | Semantics selects the lease-window behavior. "at-most-once" is the<br />implemented exclusive-holder mode. "at-least-once" is accepted by the<br />schema but currently behaves as exclusive-holder mode until the central<br />API server implements at-least-once lease windows. |  | Enum: [at-most-once at-least-once] <br /> |
@@ -114,6 +114,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `workload` _[WorkloadStatus](#workloadstatus)_ | Workload records admission and cleanup responsibility independently of<br />the last central API response. Only the operator may write status. |  |  |
 | `observedGeneration` _integer_ | ObservedGeneration is the most recent .metadata.generation observed by<br />the operator. It is set on every status write so clients can tell<br />whether status reflects the current spec. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `leaseState` _string_ | LeaseState is the current state of the lease (e.g. "held", "released", "expired"). |  |  |
 | `currentHolder` _string_ | CurrentHolder is the identity of the entity currently holding the lease. |  |  |
@@ -121,7 +122,7 @@ _Appears in:_
 | `acquiredAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ | AcquiredAt is the timestamp when the lease was last acquired. |  |  |
 | `expiresAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ | ExpiresAt is the timestamp when the lease will expire if not renewed. |  |  |
 | `lastHeartbeat` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ | LastHeartbeat is the timestamp of the most recent lease renewal. |  |  |
-| `fencingToken` _integer_ | FencingToken is the monotonic fencing token returned by the central<br />API server on the most recent successful Acquire/Renew. It is used by<br />the reconciler on deletion to perform a best-effort Release. |  |  |
+| `fencingToken` _integer_ | FencingToken is the monotonic fencing token returned by the central<br />API server on the most recent successful Acquire/Renew. Workload cleanup<br />retains its exact release identity separately until Pods have stopped. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta) array_ | Conditions represent the latest observations of the lease's state. |  |  |
 
 
@@ -142,6 +143,23 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `suspend` _boolean_ | Suspend, when non-nil, sets the suspend field on the target workload.<br />Setting this to true pauses the workload; false resumes it. Applies to<br />workload kinds that expose a spec.suspend field, such as CronJob. |  |  |
 | `scale` _[ScaleAction](#scaleaction)_ | Scale, when non-nil, sets the replica count on the target workload's<br />scale subresource. Applies to workload kinds that expose a scale<br />subresource, such as Deployment, StatefulSet, and ReplicaSet. |  |  |
+
+
+#### PermittedPod
+
+
+
+PermittedPod identifies one stored Pod incarnation, never just a name.
+
+
+
+_Appears in:_
+- [WorkloadStatus](#workloadstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ |  |  |  |
+| `uid` _string_ |  |  |  |
 
 
 #### ScaleAction
@@ -175,8 +193,30 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | APIVersion is the API group and version of the target resource (e.g. "apps/v1"). |  |  |
-| `kind` _string_ | Kind is the resource kind of the target (e.g. "Deployment"). |  |  |
-| `name` _string_ | Name is the name of the target resource in the same namespace as the lease. |  |  |
+| `apiVersion` _string_ | APIVersion is the API group and version of the target resource (e.g. "apps/v1"). |  | MaxLength: 63 <br /> |
+| `kind` _string_ | Kind is the resource kind of the target (e.g. "Deployment"). |  | MaxLength: 63 <br /> |
+| `name` _string_ | Name is the name of the target resource in the same namespace as the lease. |  | MaxLength: 253 <br /> |
+
+
+#### WorkloadStatus
+
+
+
+WorkloadStatus serializes activation, Pod registration and cleanup.
+
+
+
+_Appears in:_
+- [BerthLeaseStatus](#berthleasestatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `targetUID` _string_ | TargetUID is recorded during final target CREATE admission. It is not<br />inferred from caller-provided annotations on an existing target. |  |  |
+| `phase` _string_ | Phase is empty before activation, Active while permitting starts, and<br />Stopping until all permitted Pods have terminated. |  | Enum: [ Active Stopping] <br /> |
+| `deadline` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta)_ | Deadline is the conservative local expiry deadline for this activation. |  |  |
+| `leaseName` _string_ | LeaseName and Holder retain the exact central identity used at activation. |  |  |
+| `holder` _string_ |  |  |  |
+| `token` _integer_ |  |  |  |
+| `pods` _[PermittedPod](#permittedpod) array_ | Pods contains every UID whose gate may have been removed. A Pending Pod<br />must remain registered: an earlier ungate request may still be in flight. |  | MaxItems: 1024 <br /> |
 
 

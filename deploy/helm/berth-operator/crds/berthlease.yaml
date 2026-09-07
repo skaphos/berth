@@ -79,10 +79,12 @@ spec:
               holderIdentity:
                 description: HolderIdentity identifies the entity requesting or holding
                   the lease.
+                maxLength: 253
                 type: string
               leaseName:
                 description: LeaseName is the unique identifier for this lease within
                   its namespace.
+                maxLength: 253
                 type: string
               releaseAction:
                 description: |-
@@ -133,13 +135,16 @@ spec:
                   apiVersion:
                     description: APIVersion is the API group and version of the target
                       resource (e.g. "apps/v1").
+                    maxLength: 63
                     type: string
                   kind:
                     description: Kind is the resource kind of the target (e.g. "Deployment").
+                    maxLength: 63
                     type: string
                   name:
                     description: Name is the name of the target resource in the same
                       namespace as the lease.
+                    maxLength: 253
                     type: string
                 required:
                 - apiVersion
@@ -159,6 +164,17 @@ spec:
             - semantics
             - ttlSeconds
             type: object
+            x-kubernetes-validations:
+            - message: leaseName is immutable
+              rule: self.leaseName == oldSelf.leaseName
+            - message: holderIdentity is immutable
+              rule: self.holderIdentity == oldSelf.holderIdentity
+            - message: target is immutable
+              rule: has(self.target) == has(oldSelf.target) && (!has(self.target)
+                || self.target == oldSelf.target)
+            - message: releaseAction is immutable
+              rule: has(self.releaseAction) == has(oldSelf.releaseAction) && (!has(self.releaseAction)
+                || self.releaseAction == oldSelf.releaseAction)
           status:
             description: BerthLeaseStatus reports the observed state of a Berth lease.
             properties:
@@ -239,8 +255,8 @@ spec:
               fencingToken:
                 description: |-
                   FencingToken is the monotonic fencing token returned by the central
-                  API server on the most recent successful Acquire/Renew. It is used by
-                  the reconciler on deletion to perform a best-effort Release.
+                  API server on the most recent successful Acquire/Renew. Workload cleanup
+                  retains its exact release identity separately until Pods have stopped.
                 format: int32
                 type: integer
               lastHeartbeat:
@@ -264,6 +280,63 @@ spec:
                 description: Tenant is the resolved tenant identifier for the current
                   holder.
                 type: string
+              workload:
+                description: |-
+                  Workload records admission and cleanup responsibility independently of
+                  the last central API response. Only the operator may write status.
+                properties:
+                  deadline:
+                    description: Deadline is the conservative local expiry deadline
+                      for this activation.
+                    format: date-time
+                    type: string
+                  holder:
+                    type: string
+                  leaseName:
+                    description: LeaseName and Holder retain the exact central identity
+                      used at activation.
+                    type: string
+                  phase:
+                    description: |-
+                      Phase is empty before activation, Active while permitting starts, and
+                      Stopping until all permitted Pods have terminated.
+                    enum:
+                    - ""
+                    - Active
+                    - Stopping
+                    type: string
+                  pods:
+                    description: |-
+                      Pods contains every UID whose gate may have been removed. A Pending Pod
+                      must remain registered: an earlier ungate request may still be in flight.
+                    items:
+                      description: PermittedPod identifies one stored Pod incarnation,
+                        never just a name.
+                      properties:
+                        name:
+                          type: string
+                        uid:
+                          type: string
+                      required:
+                      - name
+                      - uid
+                      type: object
+                    maxItems: 1024
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - uid
+                    x-kubernetes-list-type: map
+                  targetUID:
+                    description: |-
+                      TargetUID is recorded during final target CREATE admission. It is not
+                      inferred from caller-provided annotations on an existing target.
+                    type: string
+                  token:
+                    format: int32
+                    type: integer
+                required:
+                - targetUID
+                type: object
             type: object
         type: object
     served: true

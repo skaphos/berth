@@ -203,7 +203,7 @@ func TestReconcileHeldSkipsTargetUpdateWhenAlreadyScaled(t *testing.T) {
 	c := newCountingClient(t, scheme, &n, lease, newDeployment(3))
 
 	now := time.Now()
-	r := &BerthLeaseReconciler{
+	r := &BerthLeaseReconciler{ManagedWorkloads: true,
 		Client: c,
 		Log:    logr.Discard(),
 		LeaseClient: &fakeLeaseClient{

@@ -333,3 +333,9 @@ serviceAccount:
   create: true
   name: ""
   annotations: {}
+
+# Required admission for BerthLease workload targets. Disabled means lease-only
+# operation; enabling uses injection.webhook.tls for the shared serving certificate.
+# Install admission before creating targets; drain/recreate legacy workloads.
+workloadManagement:
+  enabled: false

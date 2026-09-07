@@ -66,7 +66,7 @@ func TestReconcileHeldStampsObservedGeneration(t *testing.T) {
 		Build()
 
 	now := time.Now()
-	r := &BerthLeaseReconciler{
+	r := &BerthLeaseReconciler{ManagedWorkloads: true,
 		Client: c,
 		Log:    logr.Discard(),
 		LeaseClient: &fakeLeaseClient{

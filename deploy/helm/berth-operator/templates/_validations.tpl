@@ -78,13 +78,15 @@
   {{- if and $h.caBundleConfigMap.name (not $h.caBundleFile) -}}
   {{- fail "injection.helper.caBundleConfigMap.name is set but injection.helper.caBundleFile is empty — set the in-pod path the CA bundle mounts to." -}}
   {{- end -}}
+{{- end -}}
+{{- if or .Values.injection.enabled .Values.workloadManagement.enabled -}}
   {{- $tls := .Values.injection.webhook.tls -}}
   {{- $cm := $tls.certManager -}}
   {{- if and $cm.enabled $tls.existingSecret -}}
   {{- fail "injection.webhook.tls.certManager.enabled and injection.webhook.tls.existingSecret are mutually exclusive — pick one serving-cert source." -}}
   {{- end -}}
   {{- if and (not $cm.enabled) (not $tls.existingSecret) -}}
-  {{- fail "injection.enabled=true requires a webhook serving certificate. Set injection.webhook.tls.certManager.enabled=true (with an issuerRef) or injection.webhook.tls.existingSecret=<kubernetes.io/tls Secret>." -}}
+  {{- fail "Enabling helper injection or workload management requires a webhook serving certificate. Set injection.webhook.tls.certManager.enabled=true (with an issuerRef) or injection.webhook.tls.existingSecret=<kubernetes.io/tls Secret>." -}}
   {{- end -}}
   {{- if and $cm.enabled (not $cm.issuerRef) -}}
   {{- fail "injection.webhook.tls.certManager.enabled=true but injection.webhook.tls.certManager.issuerRef is empty — set issuerRef to a cert-manager Issuer or ClusterIssuer reference." -}}

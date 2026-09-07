@@ -4,6 +4,11 @@
   "type": "object",
   "required": ["image", "berth", "rbac"],
   "properties": {
+    "workloadManagement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}}
+    },
     "image": {
       "type": "object",
       "required": ["repository"],

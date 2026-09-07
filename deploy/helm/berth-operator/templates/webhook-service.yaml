@@ -1,4 +1,4 @@
-{{- if .Values.injection.enabled -}}
+{{- if or .Values.injection.enabled .Values.workloadManagement.enabled -}}
 {{- include "berth-operator.validate" . -}}
 apiVersion: v1
 kind: Service

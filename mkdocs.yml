@@ -37,5 +37,6 @@ nav:
       - API Versioning: reference/api-versioning.md
       - Configuration: reference/configuration.md
   - Operations:
+      - Operator workload cleanup: operations/operator-workload-cleanup.md
       - Scalability: operations/scalability.md
       - "Upgrade: state-volume trust": operations/upgrade-state-volume-trust.md

@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	leaseName  = "demo-lease"
-	targetName = "demo-app"
+	workloadNamespace = "berth-workloads"
+	leaseName         = "demo-lease"
+	targetName        = "demo-app"
 	// operatorName is the berth-operator Deployment (Helm release name).
 	operatorName = "berth-operator"
 	// pause image starts in <2s and never exits — ideal for replica-count
@@ -49,18 +50,18 @@ func TestHappyPath_SingleHolder(t *testing.T) {
 	ctx := context.Background()
 	t.Cleanup(func() { cleanupFixtures(t, ctx) })
 
-	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
-		t.Fatalf("apply east target: %v", err)
-	}
-	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
-		t.Fatalf("apply west target: %v", err)
-	}
-
 	if err := applyBerthLease(ctx, clusters.east); err != nil {
 		t.Fatalf("apply east lease: %v", err)
 	}
 	if err := applyBerthLease(ctx, clusters.west); err != nil {
 		t.Fatalf("apply west lease: %v", err)
+	}
+
+	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
+		t.Fatalf("apply east target: %v", err)
+	}
+	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
+		t.Fatalf("apply west target: %v", err)
 	}
 
 	waitFor(t, acquireWindow, "exactly one cluster scaled up", func(ctx context.Context) (bool, string) {
@@ -98,7 +99,7 @@ func TestHappyPath_SingleHolder(t *testing.T) {
 // instance so each test starts from a known state.
 func applyTargetDeployment(ctx context.Context, c ctrlclient.Client) error {
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: targetName, Namespace: namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: targetName, Namespace: workloadNamespace},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr.To[int32](0),
 			Selector: &metav1.LabelSelector{
@@ -125,7 +126,7 @@ func applyTargetDeployment(ctx context.Context, c ctrlclient.Client) error {
 // (see cmd/operator/main.go).
 func applyBerthLease(ctx context.Context, c ctrlclient.Client) error {
 	lease := &berthv1alpha1.BerthLease{
-		ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: workloadNamespace},
 		Spec: berthv1alpha1.BerthLeaseSpec{
 			LeaseName:                leaseName,
 			HolderIdentity:           "overridden-by-cluster-id",
@@ -150,7 +151,7 @@ func applyBerthLease(ctx context.Context, c ctrlclient.Client) error {
 
 func getDeploymentReplicas(ctx context.Context, c ctrlclient.Client) (int32, error) {
 	dep := &appsv1.Deployment{}
-	key := types.NamespacedName{Name: targetName, Namespace: namespace}
+	key := types.NamespacedName{Name: targetName, Namespace: workloadNamespace}
 	if err := c.Get(ctx, key, dep); err != nil {
 		return 0, err
 	}
@@ -224,13 +225,13 @@ func cleanupFixtures(t *testing.T, ctx context.Context) {
 		{"west", clusters.west},
 	} {
 		lease := &berthv1alpha1.BerthLease{
-			ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: workloadNamespace},
 		}
 		if err := pair.c.Delete(ctx, lease); err != nil && !apierrors.IsNotFound(err) {
 			t.Logf("cleanup %s lease: %v", pair.name, err)
 		}
 		dep := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Name: targetName, Namespace: namespace},
+			ObjectMeta: metav1.ObjectMeta{Name: targetName, Namespace: workloadNamespace},
 		}
 		if err := pair.c.Delete(ctx, dep); err != nil && !apierrors.IsNotFound(err) {
 			t.Logf("cleanup %s deployment: %v", pair.name, err)
@@ -312,17 +313,18 @@ func TestHolderFailover(t *testing.T) {
 	ctx := context.Background()
 	t.Cleanup(func() { cleanupFixtures(t, ctx) })
 
-	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
-		t.Fatalf("apply east target: %v", err)
-	}
-	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
-		t.Fatalf("apply west target: %v", err)
-	}
 	if err := applyBerthLease(ctx, clusters.east); err != nil {
 		t.Fatalf("apply east lease: %v", err)
 	}
 	if err := applyBerthLease(ctx, clusters.west); err != nil {
 		t.Fatalf("apply west lease: %v", err)
+	}
+
+	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
+		t.Fatalf("apply east target: %v", err)
+	}
+	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
+		t.Fatalf("apply west target: %v", err)
 	}
 
 	holder, standby := waitForHolder(t, ctx)
@@ -368,17 +370,18 @@ func TestHolderRejoin(t *testing.T) {
 	ctx := context.Background()
 	t.Cleanup(func() { cleanupFixtures(t, ctx) })
 
-	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
-		t.Fatalf("apply east target: %v", err)
-	}
-	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
-		t.Fatalf("apply west target: %v", err)
-	}
 	if err := applyBerthLease(ctx, clusters.east); err != nil {
 		t.Fatalf("apply east lease: %v", err)
 	}
 	if err := applyBerthLease(ctx, clusters.west); err != nil {
 		t.Fatalf("apply west lease: %v", err)
+	}
+
+	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
+		t.Fatalf("apply east target: %v", err)
+	}
+	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
+		t.Fatalf("apply west target: %v", err)
 	}
 
 	original, newHolder := waitForHolder(t, ctx)
@@ -438,17 +441,18 @@ func TestAPIServerRestart(t *testing.T) {
 	ctx := context.Background()
 	t.Cleanup(func() { cleanupFixtures(t, ctx) })
 
-	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
-		t.Fatalf("apply east target: %v", err)
-	}
-	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
-		t.Fatalf("apply west target: %v", err)
-	}
 	if err := applyBerthLease(ctx, clusters.east); err != nil {
 		t.Fatalf("apply east lease: %v", err)
 	}
 	if err := applyBerthLease(ctx, clusters.west); err != nil {
 		t.Fatalf("apply west lease: %v", err)
+	}
+
+	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
+		t.Fatalf("apply east target: %v", err)
+	}
+	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
+		t.Fatalf("apply west target: %v", err)
 	}
 
 	holder, standby := waitForHolder(t, ctx)
@@ -506,17 +510,18 @@ func TestCoordinationLost(t *testing.T) {
 	ctx := context.Background()
 	t.Cleanup(func() { cleanupFixtures(t, ctx) })
 
-	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
-		t.Fatalf("apply east target: %v", err)
-	}
-	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
-		t.Fatalf("apply west target: %v", err)
-	}
 	if err := applyBerthLease(ctx, clusters.east); err != nil {
 		t.Fatalf("apply east lease: %v", err)
 	}
 	if err := applyBerthLease(ctx, clusters.west); err != nil {
 		t.Fatalf("apply west lease: %v", err)
+	}
+
+	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
+		t.Fatalf("apply east target: %v", err)
+	}
+	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
+		t.Fatalf("apply west target: %v", err)
 	}
 
 	waitForHolder(t, ctx)
@@ -569,12 +574,6 @@ func TestLeaseDeletion(t *testing.T) {
 	ctx := context.Background()
 	t.Cleanup(func() { cleanupFixtures(t, ctx) })
 
-	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
-		t.Fatalf("apply east target: %v", err)
-	}
-	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
-		t.Fatalf("apply west target: %v", err)
-	}
 	if err := applyBerthLease(ctx, clusters.east); err != nil {
 		t.Fatalf("apply east lease: %v", err)
 	}
@@ -582,11 +581,18 @@ func TestLeaseDeletion(t *testing.T) {
 		t.Fatalf("apply west lease: %v", err)
 	}
 
+	if err := applyTargetDeployment(ctx, clusters.east); err != nil {
+		t.Fatalf("apply east target: %v", err)
+	}
+	if err := applyTargetDeployment(ctx, clusters.west); err != nil {
+		t.Fatalf("apply west target: %v", err)
+	}
+
 	holder, standby := waitForHolder(t, ctx)
 	t.Logf("steady state: %s holds, %s waits", holder.name, standby.name)
 
 	lease := &berthv1alpha1.BerthLease{
-		ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: workloadNamespace},
 	}
 	if err := holder.c.Delete(ctx, lease); err != nil {
 		t.Fatalf("delete lease on %s: %v", holder.name, err)
@@ -596,7 +602,7 @@ func TestLeaseDeletion(t *testing.T) {
 	// Release call to apiserver + finalizer patch).
 	waitFor(t, 30*time.Second, "holder lease CR finalizer removed", func(ctx context.Context) (bool, string) {
 		got := &berthv1alpha1.BerthLease{}
-		err := holder.c.Get(ctx, types.NamespacedName{Name: leaseName, Namespace: namespace}, got)
+		err := holder.c.Get(ctx, types.NamespacedName{Name: leaseName, Namespace: workloadNamespace}, got)
 		if apierrors.IsNotFound(err) {
 			return true, ""
 		}

@@ -1,4 +1,4 @@
-{{- if and .Values.injection.enabled .Values.injection.webhook.tls.certManager.enabled -}}
+{{- if and (or .Values.injection.enabled .Values.workloadManagement.enabled) .Values.injection.webhook.tls.certManager.enabled -}}
 {{- $cm := .Values.injection.webhook.tls.certManager -}}
 apiVersion: cert-manager.io/v1
 kind: Certificate

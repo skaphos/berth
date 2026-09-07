@@ -23,6 +23,14 @@ import (
 // at least one differs. This keeps held-state heartbeats from re-writing an
 // unchanged target on every reconcile.
 func applyAction(ctx context.Context, c client.Client, ns string, ref *berthv1alpha1.TargetRef, action *berthv1alpha1.LeaseAction) error {
+	return applyActionForUID(ctx, c, ns, ref, action, "")
+}
+
+func applyActionForUID(ctx context.Context, c client.Client, ns string, ref *berthv1alpha1.TargetRef, action *berthv1alpha1.LeaseAction, uid string) error {
+	return applyFencedAction(ctx, c, ns, ref, action, uid, "")
+}
+
+func applyFencedAction(ctx context.Context, c client.Client, ns string, ref *berthv1alpha1.TargetRef, action *berthv1alpha1.LeaseAction, uid, fence string) error {
 	if ref == nil || action == nil {
 		return nil
 	}
@@ -39,6 +47,10 @@ func applyAction(ctx context.Context, c client.Client, ns string, ref *berthv1al
 			return nil
 		}
 		return fmt.Errorf("get target %s: %w", key, err)
+	}
+
+	if uid != "" && string(obj.GetUID()) != uid {
+		return errors.New("target UID changed")
 	}
 
 	mutated := false // action selected a field to manage
@@ -72,6 +84,17 @@ func applyAction(ctx context.Context, c client.Client, ns string, ref *berthv1al
 	}
 	if !mutated {
 		return errors.New("apply action: action specifies no mutation")
+	}
+	if fence != "" {
+		annotations := obj.GetAnnotations()
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		if annotations["berth.skaphos.io/stop-fence"] != fence {
+			annotations["berth.skaphos.io/stop-fence"] = fence
+			obj.SetAnnotations(annotations)
+			changed = true
+		}
 	}
 	if !changed {
 		// Target already at the desired state. Skipping the write keeps held-state

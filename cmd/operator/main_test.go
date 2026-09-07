@@ -184,3 +184,23 @@ func TestSplitCSV(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedAdmissionRequiresOperatorIdentity(t *testing.T) {
+	for _, args := range [][]string{
+		{"--enable-workload-admission"},
+		{"--enable-workload-admission", "--workload-operator-namespace=ops", "--workload-operator-user=system:serviceaccount:other:operator"},
+	} {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		if _, err := parseConfig(fs, append([]string{"--berth-api-server=https://berth.example"}, args...)); err == nil {
+			t.Fatal("invalid managed admission identity accepted")
+		}
+	}
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cfg, err := parseConfig(fs, []string{"--berth-api-server=https://berth.example", "--enable-workload-admission", "--workload-operator-namespace=ops", "--workload-operator-user=system:serviceaccount:ops:operator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.managedWorkloads || cfg.enableWebhook {
+		t.Fatal("managed admission must be independent of helper injection")
+	}
+}
