@@ -796,6 +796,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#dependency-refresh-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency refresh baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -987,6 +998,78 @@ advisories draft until the patched release and artifacts are available.</p>
 changelog with <code>scripts/release-notes.sh</code>; it does not replace those entries with
 GitHub's PR-title summary. Test the extraction with
 <code>scripts/test-release-notes.sh</code>.</p>
+<h2 id="dependency-refresh-baseline">Dependency refresh baseline</h2>
+<p>The September 2026 refresh requires Go 1.27.1 for both application and development
+tool modules. The Docker builders use that same release. Runtime containers use
+Debian 13 distroless static images with numeric UID/GID 65532. This updates build
+inputs; it does not migrate deployed databases or publish application images.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Baseline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Go</td>
+<td>1.27.1</td>
+</tr>
+<tr>
+<td>Kubernetes libraries / controller-runtime</td>
+<td>0.37.0 / 0.25.0</td>
+</tr>
+<tr>
+<td>controller-gen / staticcheck / golangci-lint</td>
+<td>0.22.0 / 0.8.1 / 2.13.2</td>
+</tr>
+<tr>
+<td>govulncheck / goimports</td>
+<td>1.7.0 / 0.49.0</td>
+</tr>
+<tr>
+<td>CI Python / stable Ubuntu runner</td>
+<td>3.14.7 / 24.04</td>
+</tr>
+<tr>
+<td>Helm / kind / Kubernetes test nodes</td>
+<td>4.2.4 / 0.33.0 / 1.37.0</td>
+</tr>
+<tr>
+<td>cert-manager / kube-prometheus-stack test infrastructure</td>
+<td>1.21.1 / 90.0.0</td>
+</tr>
+<tr>
+<td>Disposable load-test PostgreSQL</td>
+<td>18.6 Alpine</td>
+</tr>
+<tr>
+<td>Buildx / BuildKit / cosign / Syft</td>
+<td>0.37.0 / 0.33.0 / 3.1.3 / 1.51.1</td>
+</tr>
+</tbody>
+</table>
+<p>Action references and container images remain pinned to immutable commits and
+image digests. Recheck publisher releases when refreshing; release-please owns
+Berth application release numbers and chart <code>appVersion</code> packaging.</p>
+<p>Kubernetes is a coordinated dependency family. Keep <code>k8s.io/kube-openapi</code> at
+<code>v0.0.0-20260721132016-d427ff9ee9ad</code>, the revision selected by Kubernetes 1.37
+and controller-runtime 0.25. Its newer development revision changes
+structured-merge-diff schema types from v6 to v7 and does not compile with these
+released clients. Revisit this exception when the Kubernetes family supports it.</p>
+<p>The existing <code>github.com/google/cel-go</code> import family stays at v0.31.0. Its
+v0.32.0 tag declares the new <code>cel.dev/cel-go</code> module path and cannot be upgraded
+under the old path; migrate with the Kubernetes clients when they adopt it.</p>
+<p>PostgreSQL's load fixture uses an emptyDir at <code>/var/lib/postgresql</code> and the
+PostgreSQL 18 data path beneath it. Recreate disposable load fixtures when
+upgrading. This is not an in-place PostgreSQL 16 data upgrade; production database
+upgrades require their own migration. Existing benchmark snapshots describe
+the versions originally measured and are not rewritten as new measurements.</p>
+<p>Before merging a refresh, verify both module graphs, race tests, SQL integration,
+generated artifacts, image builds, Helm renders and workflow syntax. Check
+<code>govulncheck</code> using the repository's pinned Go version. Reverting the dependency
+PR and rebuilding restores the previous code/toolchain inputs; it does not
+reverse an external database upgrade.</p>
 
 
 
