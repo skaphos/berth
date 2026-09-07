@@ -348,10 +348,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-deploy-the-workload-to-both-runner-clusters" class="md-nav__link">
+  <a href="#step-2-apply-the-same-lease-to-both-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2 — Deploy the workload to both runner clusters
+        Step 2 — Apply the same lease to both clusters
       
     </span>
   </a>
@@ -359,10 +359,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-apply-the-same-lease-to-both-clusters" class="md-nav__link">
+  <a href="#step-3-deploy-the-workload-to-both-runner-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3 — Apply the same lease to both clusters
+        Step 3 — Deploy the workload to both runner clusters
       
     </span>
   </a>
@@ -753,6 +753,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/operator-workload-cleanup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator workload cleanup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/scalability/" class="md-nav__link">
         
   
@@ -869,10 +897,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-deploy-the-workload-to-both-runner-clusters" class="md-nav__link">
+  <a href="#step-2-apply-the-same-lease-to-both-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2 — Deploy the workload to both runner clusters
+        Step 2 — Apply the same lease to both clusters
       
     </span>
   </a>
@@ -880,10 +908,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-apply-the-same-lease-to-both-clusters" class="md-nav__link">
+  <a href="#step-3-deploy-the-workload-to-both-runner-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3 — Apply the same lease to both clusters
+        Step 3 — Deploy the workload to both runner clusters
       
     </span>
   </a>
@@ -1103,42 +1131,7 @@ kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-w
 kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w">  </span>-n<span class="w"> </span>berth-system<span class="w"> </span>get<span class="w"> </span>pods
 kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w">  </span>-n<span class="w"> </span>berth-system<span class="w"> </span>get<span class="w"> </span>pods
 </code></pre></div>
-<h2 id="step-2-deploy-the-workload-to-both-runner-clusters">Step 2 — Deploy the workload to both runner clusters</h2>
-<p><code>demo-app</code> is a trivial Deployment (the <code>pause</code> container — it starts fast and
-does nothing) that starts at <strong>0 replicas</strong>. Berth, not you, decides when it
-scales up. Apply it to <strong>both</strong> runner clusters:</p>
-<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;'EOF' | tee /tmp/demo-app.yaml</span>
-<span class="s">apiVersion: apps/v1</span>
-<span class="s">kind: Deployment</span>
-<span class="s">metadata:</span>
-<span class="s">  name: demo-app</span>
-<span class="s">  namespace: berth-system</span>
-<span class="s">spec:</span>
-<span class="s">  replicas: 0</span>
-<span class="s">  selector:</span>
-<span class="s">    matchLabels:</span>
-<span class="s">      app: demo-app</span>
-<span class="s">  template:</span>
-<span class="s">    metadata:</span>
-<span class="s">      labels:</span>
-<span class="s">        app: demo-app</span>
-<span class="s">    spec:</span>
-<span class="s">      containers:</span>
-<span class="s">        - name: pause</span>
-<span class="s">          image: registry.k8s.io/pause:3.9</span>
-<span class="s">      terminationGracePeriodSeconds: 1</span>
-<span class="s">EOF</span>
-
-kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-app.yaml
-kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-app.yaml
-</code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Why <code>berth-system</code>?</p>
-<p>This tutorial reuses the namespace the harness already created. In a real
-deployment you would target your application's own namespace; the operator
-watches all namespaces, and just needs RBAC to scale the target there.</p>
-</div>
-<h2 id="step-3-apply-the-same-lease-to-both-clusters">Step 3 — Apply the same lease to both clusters</h2>
+<h2 id="step-2-apply-the-same-lease-to-both-clusters">Step 2 — Apply the same lease to both clusters</h2>
 <p>The <code>BerthLease</code> is the declarative request: <em>"keep <code>demo-app</code> at 2 replicas on
 whichever cluster currently holds <code>demo-lease</code>, and at 0 everywhere else."</em>
 Apply the <strong>identical</strong> manifest to both runner clusters:</p>
@@ -1147,7 +1140,7 @@ Apply the <strong>identical</strong> manifest to both runner clusters:</p>
 <span class="s">kind: BerthLease</span>
 <span class="s">metadata:</span>
 <span class="s">  name: demo-lease</span>
-<span class="s">  namespace: berth-system</span>
+<span class="s">  namespace: berth-workloads</span>
 <span class="s">spec:</span>
 <span class="s">  leaseName: demo-lease</span>
 <span class="s">  # Placeholder — each operator overrides this with its own --cluster-id.</span>
@@ -1170,23 +1163,55 @@ Apply the <strong>identical</strong> manifest to both runner clusters:</p>
 kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-lease.yaml
 kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-lease.yaml
 </code></pre></div>
-<p>The two operators now race to acquire <code>demo-lease</code> from the central API server.
+<p>The operators wait for each target to be created under admission before activating it.
 The race resolves within a few heartbeats.</p>
+<h2 id="step-3-deploy-the-workload-to-both-runner-clusters">Step 3 — Deploy the workload to both runner clusters</h2>
+<p><code>demo-app</code> is a trivial Deployment (the <code>pause</code> container — it starts fast and
+does nothing) that starts at <strong>0 replicas</strong>. Berth, not you, decides when it
+scales up. Apply it to <strong>both</strong> runner clusters:</p>
+<div class="highlight"><pre><span></span><code>cat<span class="w"> </span><span class="s">&lt;&lt;'EOF' | tee /tmp/demo-app.yaml</span>
+<span class="s">apiVersion: apps/v1</span>
+<span class="s">kind: Deployment</span>
+<span class="s">metadata:</span>
+<span class="s">  name: demo-app</span>
+<span class="s">  namespace: berth-workloads</span>
+<span class="s">spec:</span>
+<span class="s">  replicas: 0</span>
+<span class="s">  selector:</span>
+<span class="s">    matchLabels:</span>
+<span class="s">      app: demo-app</span>
+<span class="s">  template:</span>
+<span class="s">    metadata:</span>
+<span class="s">      labels:</span>
+<span class="s">        app: demo-app</span>
+<span class="s">    spec:</span>
+<span class="s">      containers:</span>
+<span class="s">        - name: pause</span>
+<span class="s">          image: registry.k8s.io/pause:3.9</span>
+<span class="s">      terminationGracePeriodSeconds: 1</span>
+<span class="s">EOF</span>
+
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-app.yaml
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>/tmp/demo-app.yaml
+</code></pre></div>
+<p>The operator namespace is reserved for the control plane. The harness creates
+<code>berth-workloads</code> for managed targets and installs required admission. Create
+these targets only after their BerthLease, so CREATE admission records their UID.</p>
 <h2 id="step-4-observe-single-active">Step 4 — Observe single-active</h2>
 <p>Watch the replica counts on both clusters. Exactly one side goes to <strong>2</strong>; the
 other stays at <strong>0</strong>:</p>
 <div class="highlight"><pre><span></span><code>watch<span class="w"> </span>-n1<span class="w"> </span><span class="s1">'</span>
-<span class="s1">  echo "east: $(kubectl --context kind-berth-e2e-east -n berth-system get deploy demo-app -o jsonpath='</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">')"</span>
-<span class="s1">  echo "west: $(kubectl --context kind-berth-e2e-west -n berth-system get deploy demo-app -o jsonpath='</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">')"</span>
+<span class="s1">  echo "east: $(kubectl --context kind-berth-e2e-east -n berth-workloads get deploy demo-app -o jsonpath='</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">')"</span>
+<span class="s1">  echo "west: $(kubectl --context kind-berth-e2e-west -n berth-workloads get deploy demo-app -o jsonpath='</span><span class="o">{</span>.spec.replicas<span class="o">}</span><span class="s1">')"</span>
 <span class="s1">'</span>
 </code></pre></div>
 <p>Within ~15 seconds you should see a stable split such as <code>east: 2 / west: 0</code>.
 That is the whole guarantee: one active workload across two clusters.</p>
 <p>Confirm it from the lease's own status. The holder reports <code>leaseState: held</code>
 and names itself in <code>currentHolder</code>; the standby reports <code>leaseState: waiting</code>:</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span><span class="se">\</span>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-east<span class="w"> </span>-n<span class="w"> </span>berth-workloads<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.leaseState}{" holder="}{.status.currentHolder}{"\n"}'</span>
-kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>-n<span class="w"> </span>berth-system<span class="w"> </span><span class="se">\</span>
+kubectl<span class="w"> </span>--context<span class="w"> </span>kind-berth-e2e-west<span class="w"> </span>-n<span class="w"> </span>berth-workloads<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>get<span class="w"> </span>berthlease<span class="w"> </span>demo-lease<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.leaseState}{" holder="}{.status.currentHolder}{"\n"}'</span>
 </code></pre></div>
 <p>You can also peek at the authoritative record in the coordination cluster — the

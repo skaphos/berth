@@ -594,6 +594,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#permittedpod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PermittedPod
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scaleaction" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -609,6 +620,17 @@
     <span class="md-ellipsis">
       
         TargetRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workloadstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WorkloadStatus
       
     </span>
   </a>
@@ -748,6 +770,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/operator-workload-cleanup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator workload cleanup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -929,6 +979,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#permittedpod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PermittedPod
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scaleaction" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -944,6 +1005,17 @@
     <span class="md-ellipsis">
       
         TargetRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workloadstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WorkloadStatus
       
     </span>
   </a>
@@ -1118,13 +1190,13 @@ via [SchemeBuilder] and [AddToScheme]. The API group is "berth.skaphos.io".</p>
 <td><code>leaseName</code> <em>string</em></td>
 <td>LeaseName is the unique identifier for this lease within its namespace.</td>
 <td></td>
-<td></td>
+<td>MaxLength: 253 <br /></td>
 </tr>
 <tr>
 <td><code>holderIdentity</code> <em>string</em></td>
 <td>HolderIdentity identifies the entity requesting or holding the lease.</td>
 <td></td>
-<td></td>
+<td>MaxLength: 253 <br /></td>
 </tr>
 <tr>
 <td><code>ttlSeconds</code> <em>integer</em></td>
@@ -1179,6 +1251,12 @@ via [SchemeBuilder] and [AddToScheme]. The API group is "berth.skaphos.io".</p>
 </thead>
 <tbody>
 <tr>
+<td><code>workload</code> <em><a href="#workloadstatus">WorkloadStatus</a></em></td>
+<td>Workload records admission and cleanup responsibility independently of<br />the last central API response. Only the operator may write status.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
 <td><code>observedGeneration</code> <em>integer</em></td>
 <td>ObservedGeneration is the most recent .metadata.generation observed by<br />the operator. It is set on every status write so clients can tell<br />whether status reflects the current spec.</td>
 <td></td>
@@ -1222,7 +1300,7 @@ via [SchemeBuilder] and [AddToScheme]. The API group is "berth.skaphos.io".</p>
 </tr>
 <tr>
 <td><code>fencingToken</code> <em>integer</em></td>
-<td>FencingToken is the monotonic fencing token returned by the central<br />API server on the most recent successful Acquire/Renew. It is used by<br />the reconciler on deletion to perform a best-effort Release.</td>
+<td>FencingToken is the monotonic fencing token returned by the central<br />API server on the most recent successful Acquire/Renew. Workload cleanup<br />retains its exact release identity separately until Pods have stopped.</td>
 <td></td>
 <td></td>
 </tr>
@@ -1259,6 +1337,34 @@ be set on a single action.</p>
 <tr>
 <td><code>scale</code> <em><a href="#scaleaction">ScaleAction</a></em></td>
 <td>Scale, when non-nil, sets the replica count on the target workload's<br />scale subresource. Applies to workload kinds that expose a scale<br />subresource, such as Deployment, StatefulSet, and ReplicaSet.</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="permittedpod">PermittedPod</h4>
+<p>PermittedPod identifies one stored Pod incarnation, never just a name.</p>
+<p><em>Appears in:</em>
+- <a href="#workloadstatus">WorkloadStatus</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code> <em>string</em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>uid</code> <em>string</em></td>
+<td></td>
 <td></td>
 <td></td>
 </tr>
@@ -1306,19 +1412,77 @@ to lease state transitions. All three fields are required.</p>
 <td><code>apiVersion</code> <em>string</em></td>
 <td>APIVersion is the API group and version of the target resource (e.g. "apps/v1").</td>
 <td></td>
-<td></td>
+<td>MaxLength: 63 <br /></td>
 </tr>
 <tr>
 <td><code>kind</code> <em>string</em></td>
 <td>Kind is the resource kind of the target (e.g. "Deployment").</td>
 <td></td>
-<td></td>
+<td>MaxLength: 63 <br /></td>
 </tr>
 <tr>
 <td><code>name</code> <em>string</em></td>
 <td>Name is the name of the target resource in the same namespace as the lease.</td>
 <td></td>
+<td>MaxLength: 253 <br /></td>
+</tr>
+</tbody>
+</table>
+<h4 id="workloadstatus">WorkloadStatus</h4>
+<p>WorkloadStatus serializes activation, Pod registration and cleanup.</p>
+<p><em>Appears in:</em>
+- <a href="#berthleasestatus">BerthLeaseStatus</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>targetUID</code> <em>string</em></td>
+<td>TargetUID is recorded during final target CREATE admission. It is not<br />inferred from caller-provided annotations on an existing target.</td>
 <td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>phase</code> <em>string</em></td>
+<td>Phase is empty before activation, Active while permitting starts, and<br />Stopping until all permitted Pods have terminated.</td>
+<td></td>
+<td>Enum: [ Active Stopping] <br /></td>
+</tr>
+<tr>
+<td><code>deadline</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta">Time</a></em></td>
+<td>Deadline is the conservative local expiry deadline for this activation.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>leaseName</code> <em>string</em></td>
+<td>LeaseName and Holder retain the exact central identity used at activation.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>holder</code> <em>string</em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>token</code> <em>integer</em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>pods</code> <em><a href="#permittedpod">PermittedPod</a> array</em></td>
+<td>Pods contains every UID whose gate may have been removed. A Pending Pod<br />must remain registered: an earlier ungate request may still be in flight.</td>
+<td></td>
+<td>MaxItems: 1024 <br /></td>
 </tr>
 </tbody>
 </table>

@@ -49,7 +49,15 @@
          <lastmod>2026-09-07</lastmod>
     </url>
     <url>
+         <loc>https://skaphos.github.io/berth/main/adr/0005-register-managed-pods-before-scheduling/</loc>
+         <lastmod>2026-09-07</lastmod>
+    </url>
+    <url>
          <loc>https://skaphos.github.io/berth/main/design/2026-05-workload-gating-injection-model/</loc>
+         <lastmod>2026-09-07</lastmod>
+    </url>
+    <url>
+         <loc>https://skaphos.github.io/berth/main/operations/operator-workload-cleanup/</loc>
          <lastmod>2026-09-07</lastmod>
     </url>
     <url>

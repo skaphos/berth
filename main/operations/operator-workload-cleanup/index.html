@@ -10,9 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://skaphos.github.io/berth/main/operations/results/">
+        <link rel="canonical" href="https://skaphos.github.io/berth/main/operations/operator-workload-cleanup/">
       
       
+        <link rel="prev" href="../../reference/configuration/">
+      
+      
+        <link rel="next" href="../scalability/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>Index - Berth</title>
+        <title>Operator workload cleanup - Berth</title>
       
     
     
@@ -64,7 +68,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#load-harness-results" class="md-skip">
+        <a href="#operator-workload-admission-and-cleanup" class="md-skip">
           Skip to content
         </a>
       
@@ -104,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Index
+              Operator workload cleanup
             
           </span>
         </div>
@@ -526,8 +530,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -538,11 +544,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -563,7 +569,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -578,10 +584,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../operator-workload-cleanup/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator workload cleanup
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -597,6 +630,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#activation-and-stopping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activation and stopping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrade-and-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade and rollback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -692,10 +789,43 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#schema" class="md-nav__link">
+  <a href="#supported-resources" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schema
+        Supported resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#activation-and-stopping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activation and stopping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrade-and-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade and rollback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
       
     </span>
   </a>
@@ -719,7 +849,7 @@
 
 
   
-    <a href="https://github.com/skaphos/berth/edit/main/docs/operations/results/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/skaphos/berth/edit/main/docs/operations/operator-workload-cleanup.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -727,56 +857,119 @@
   
 
 
-<!--
-SPDX-FileCopyrightText: 2026 Rillan AI LLC
-SPDX-License-Identifier: MIT
--->
-
-<h1 id="load-harness-results">Load harness results</h1>
-<p>JSON latency summaries produced by the scalability load harness
-(<code>test/load/fixtures/</code>, SKA-445). Each file is one run of the Phase 3 load
-driver against a deployed Berth API server.</p>
-<p><code>test/load/fixtures/run.sh</code> writes files here named
-<code>&lt;scenario&gt;-&lt;backend&gt;-&lt;UTC&gt;.json</code> (e.g. <code>steady-k8s-20260530T184500Z.json</code>).
-Most runs are throwaway — <strong>commit only curated, representative runs</strong> that
-back a number in <a href="../scalability/"><code>../scalability.md</code></a>, and note the
-hardware/cluster they came from in the PR.</p>
-<h2 id="schema">Schema</h2>
-<p>Each file is the driver's <code>load.Summary</code> (see <code>internal/load/summary.go</code>)
-<strong>plus</strong> a <code>resources</code> block that <code>run.sh</code> adds from a Prometheus query over the
-run window:</p>
-<div class="highlight"><pre><span></span><code>{
-  "scenario": "steady",        // steady | coldstart | failover | churn
-  "backend": "k8s",            // store backend driven (k8s | sql)
-  "leases": 500,
-  "pairs": 8,
-  "ttlMs": 30000,
-  "elapsedMs": 60012.3,
-  "ops": {                     // keyed by operation: acquire | renew | release
-    "acquire": {
-      "count": 4000,
-      "errors": 0,
-      "minMs": 0.8, "maxMs": 42.1, "meanMs": 3.2,
-      "p50Ms": 2.7, "p95Ms": 7.9, "p99Ms": 14.0, "p999Ms": 31.5
-    }
-  },
-  "resources": {               // API server pod, over [startTs, endTs]
-    "window": { "startTs": 1748620800, "endTs": 1748620860, "seconds": 60 },
-    "cpuCoresAvg": 0.31, "cpuCoresPeak": 0.58,   // cores (1.0 = one vCPU)
-    "memBytesPeak": 96468992,
-    "cpuRequestCores": 0.1, "cpuLimitCores": 1.0,
-    "memRequestBytes": 134217728, "memLimitBytes": 268435456
-  }
-}
-</code></pre></div>
-<p>Latencies are <strong>client-observed</strong> (driver → HTTP → API server → store);
-percentiles are nearest-rank. <code>resources</code> is what answers the sizing question:
-compare <code>cpuCoresPeak</code>/<code>memBytesPeak</code> against <code>*RequestCores</code>/<code>*RequestBytes</code>. A
-<code>null</code> resource field means the Prometheus query returned no samples (e.g.
-kube-state-metrics not yet scraped). For finer server-side and store-call
-breakdowns, query the harness Prometheus live during the run
-(<code>berth_apiserver_request_duration_seconds</code>,
-<code>berth_lease_store_call_duration_seconds{backend="…"}</code>).</p>
+<h1 id="operator-workload-admission-and-cleanup">Operator workload admission and cleanup</h1>
+<p>Operator-managed workloads require <code>workloadManagement.enabled: true</code> in the
+operator chart and a serving certificate configured through
+<code>injection.webhook.tls</code>. This TLS configuration is shared with helper injection;
+<code>injection.enabled</code> can remain false. Lease-only BerthLeases need neither webhook
+nor TLS. Chart 0.8.0 defaults to lease-only operation until admission is enabled.</p>
+<p>The chart installs separate, fail-closed registrations for managed workloads.
+They do not inherit injection's failure policy or opt-in selectors. They inspect
+workload and Pod requests across namespaces, except the operator's own namespace,
+which cannot contain managed targets. Admission outages can therefore delay
+unmanaged controller requests too. The operator's namespace is excluded so its
+own recovery does not depend on its webhook. In managed mode, readiness checks
+local webhook availability; a central API outage must not remove the admission
+service's endpoints or prevent local cleanup.</p>
+<h2 id="supported-resources">Supported resources</h2>
+<p>Create a BerthLease <strong>before</strong> creating its target, in the application's namespace.
+The target must be a new Kubernetes object admitted under the installed guard.
+An existing target cannot become admitted through an annotation or UPDATE.
+Managed controllers cannot adopt existing unadmitted Pods or controllers;
+create their Pods from the admitted template instead.</p>
+<table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Acquire action</th>
+<th>Required release action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apps/v1</code> Deployment, StatefulSet, ReplicaSet</td>
+<td><code>scale.replicas</code> &gt;= 0</td>
+<td><code>scale.replicas: 0</code></td>
+</tr>
+<tr>
+<td><code>batch/v1</code> CronJob</td>
+<td><code>suspend: false</code></td>
+<td><code>suspend: true</code></td>
+</tr>
+</tbody>
+</table>
+<p>Arbitrary target kinds, missing/empty actions and nonzero release replicas are
+rejected. Lease name, holder identity, target reference and release action are
+immutable. Delete and fully drain the old resource before changing those
+identities. There may be only one BerthLease for a target.</p>
+<p>Admission stamps the lease name/UID and scheduling gate into controller
+Pod templates, including CronJob Job templates. Final target CREATE admission
+records the API-assigned target UID in status before allowing storage. Dry runs
+do not write status. If a create is subsequently denied or aborted, its unused
+UID can be replaced by a later CREATE while no activation/cleanup is active.
+Do not grant ordinary workload users write access to BerthLease status.</p>
+<h2 id="activation-and-stopping">Activation and stopping</h2>
+<p>The operator persists central holder, fencing token and conservative expiry
+before activating the target. Every Pod starts with the Berth scheduling gate.
+The operator records the stored Pod UID before removing that gate. Only its
+configured Kubernetes service account may ungate a registered Pod. Prebound
+<code>spec.nodeName</code> Pods are rejected; binding requests must carry the Pod UID.</p>
+<p>Expiry, loss of ownership and deletion commit a <code>Stopping</code> phase in the same
+status object used for Pod registration. Optimistic updates prevent a stale
+heartbeat or registration from overwriting that transition. Cleanup scales
+controllers to zero or suspends CronJobs, suspends/deletes their active Jobs,
+and normally deletes their Pods. Even registered Pending/gated Pods must be
+confirmed stopped: an earlier ungate request may still be in flight.</p>
+<p>The central lease is released and the finalizer removed only after registered
+Pods have terminated/disappeared and the observed Jobs are gone. Cleanup errors
+retain identity, token and finalizer for retry. Late creates remain gated and
+carry the old lease UID; Pod/Job reconciliation removes inert arrivals after the
+lease is deleted. Recreating the same lease name cannot authorize old Pods.
+During standby, harmless gated Pods can await a future acquisition of the same
+lease incarnation; scheduling gates do not provide exactly-once Job semantics.</p>
+<p>Central RPCs and local reconciliation have deadlines. The local deadline never
+extends past the earlier of the request start plus TTL and the server-reported
+expiry. API errors do not preserve workload activation beyond that recorded
+deadline. Process termination still takes detection time plus Kubernetes grace
+and kubelet processing. A stopped operator, unreachable local API/kubelet, force
+deletion, or administrator removal of admission/status protections defeats this
+controller-based guarantee. Enforce fencing tokens at downstream storage for
+strict rejection of stale writes.</p>
+<p>Registration is capped at 1,024 concurrent nonterminal Pod UIDs per BerthLease;
+further Pods remain gated until completed entries are pruned. Managed mode adds
+Pod/Job watches, direct Kubernetes reads and status writes. Re-measure capacity
+for this mode rather than assuming prior lease-only scalability measurements.</p>
+<h2 id="upgrade-and-rollback">Upgrade and rollback</h2>
+<ol>
+<li>Stop producers and pause/suspend targets. Drain all old Pods and active Jobs,
+   including orphaned work; confirm processes have stopped. Do not force-delete
+   objects as a substitute for stopping their processes.</li>
+<li>Delete old workload targets and BerthLeases after draining, allowing existing
+   cleanup/finalizers to complete. Preserve the central lease store and fencing
+   token history.</li>
+<li>Upgrade the CRD, operator image and chart together. Helm does not upgrade CRDs
+   from a chart's <code>crds/</code> directory automatically; apply the reviewed bundled CRD
+   explicitly. Enable workload management with a valid TLS Secret/CA bundle or
+   cert-manager issuer. Confirm both required webhook registrations are ready.</li>
+<li>Create replacement BerthLeases in an application namespace, then recreate
+   their targets. Confirm target UID admission records, gated Pods, registered
+   Pod UIDs and eventual activation. Do not copy old status or UID annotations.</li>
+</ol>
+<p>Do not disable admission, downgrade the operator, delete status records or
+remove finalizers while managed work is active. Rollback requires another full
+drain and recreation under the older deployment contract. Lease-only resources
+are unaffected by target migration.</p>
+<h2 id="verification">Verification</h2>
+<p>Run <code>go test -race ./internal/operator ./cmd/operator</code> for lifecycle and admission
+regressions. Set <code>KUBEBUILDER_ASSETS</code> to Kubernetes envtest assets to include the
+real API-server/etcd admission, dry-run, UID and conflict tests.</p>
+<p><code>TestManagedExecution</code> is an opt-in execution test for a <strong>disposable kind node</strong>.
+It installs test admission and CRDs, rejects normal ReplicaSet adoption of an
+unadmitted running orphan, runs Deployment and CronJob containers,
+and checks kubelet/runtime termination using <code>crictl</code> and the recorded process
+PID. It requires <code>BERTH_TEST_KUBECONFIG</code> and must never target a shared cluster.
+See <a href="../../adr/0005-register-managed-pods-before-scheduling/">ADR-0005</a> for the
+ordering and tradeoffs behind the design.</p>
 
 
 

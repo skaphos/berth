@@ -16,7 +16,7 @@
         <link rel="prev" href="../api-versioning/">
       
       
-        <link rel="next" href="../../operations/scalability/">
+        <link rel="next" href="../../operations/operator-workload-cleanup/">
       
       
         
@@ -711,6 +711,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/operator-workload-cleanup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator workload cleanup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/scalability/" class="md-nav__link">
         
   
@@ -1130,6 +1158,21 @@ than corrupting lease state.</p>
 <td>Development-only TLS verification bypass.</td>
 </tr>
 <tr>
+<td><code>--enable-workload-admission</code></td>
+<td><code>false</code></td>
+<td>Required for BerthLease targets; serves fail-closed workload admission.</td>
+</tr>
+<tr>
+<td><code>--workload-operator-user</code></td>
+<td>empty</td>
+<td>Exact Kubernetes service-account username allowed to ungate registered Pods.</td>
+</tr>
+<tr>
+<td><code>--workload-operator-namespace</code></td>
+<td>empty</td>
+<td>Operator namespace, excluded from target management and admission to permit recovery.</td>
+</tr>
+<tr>
 <td><code>--enable-injection-webhook</code></td>
 <td><code>false</code></td>
 <td>Serve the <code>berth-acquire</code> pod-injection mutating webhook from the operator.</td>
@@ -1379,6 +1422,11 @@ a repository variable or secret.</p>
 <td><code>berth-operator</code></td>
 <td><code>sidecarBroker.*</code></td>
 <td>Optional OIDC broker sidecar configuration.</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>workloadManagement.enabled</code></td>
+<td>Required for workload targets; uses shared <code>injection.webhook.tls</code>, independent of helper injection. See <a href="../../operations/operator-workload-cleanup/">upgrade and cleanup</a>.</td>
 </tr>
 <tr>
 <td><code>berth-operator</code></td>
