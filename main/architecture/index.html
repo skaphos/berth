@@ -433,6 +433,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Authorization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#migrating-slash-containing-tenants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating slash-containing tenants
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -939,6 +956,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Authorization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#migrating-slash-containing-tenants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating slash-containing tenants
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -1232,6 +1266,30 @@ claim):</p>
   holder after that holder's lease expires). A holder outside the caller's tenant
   returns <code>403</code>.</li>
 </ul>
+<p>Tenant IDs must not contain <code>/</code>, which separates the tenant root from nested
+holder names. Static key files with slash-containing key IDs fail to load or
+reload; a failed reload retains the previous key set. Static and OIDC
+credentials resolving to such a tenant return <code>401</code>. The default authorizer
+also rejects slash-containing tenants from other authenticators with <code>403</code>.
+OIDC validates the resolved claim (the first element for an array), including
+JSON-escaped slashes. IDs are compared exactly, without URL decoding or Unicode
+normalization. Nested <strong>holders</strong>, such as <code>team/worker/pod</code>, remain valid for
+tenant <code>team</code>.</p>
+<h4 id="migrating-slash-containing-tenants">Migrating slash-containing tenants</h4>
+<p>Before upgrading a deployment that used IDs such as <code>team/subteam</code>, stop lease
+clients and workloads for that tenant <strong>and any overlapping parent tenant</strong>
+(such as <code>team</code>). Prevent all of them from acquiring or renewing leases, and
+wait for their existing leases to expire before resuming operation. Change
+static key IDs or configure the OIDC tenant claim to return distinct IDs
+without <code>/</code>, and update the corresponding client holder roots. Upgrade every
+API server before restarting those clients; mixed server versions can still
+admit the old tenant IDs.</p>
+<p>Lease records store only the holder string, not an independently authenticated
+tenant owner. The server cannot distinguish a legacy holder owned by
+<code>team/subteam</code> from a nested holder owned by <code>team</code>, so rejection alone does
+not protect legacy live leases. Do not treat this as a rolling rename while
+those clients or workloads remain active. Preserve stored fencing tokens;
+deleting lease records to migrate can reset their monotonic sequence.</p>
 <p>Under <code>--auth-mode=none</code> no identity is established and both checks are skipped;
 this is a development-only mode and the API server warns loudly at startup.</p>
 <h2 id="lease-model">Lease Model</h2>

@@ -1017,7 +1017,7 @@ manifests explicitly map them into container arguments or Secrets.</p>
 <tr>
 <td><code>--oidc-tenant-claim</code></td>
 <td><code>sub</code></td>
-<td>Claim copied into the tenant identity.</td>
+<td>Claim copied into the tenant identity; its resolved value must not contain <code>/</code>.</td>
 </tr>
 <tr>
 <td><code>--oidc-jwks-url</code></td>
@@ -1417,7 +1417,11 @@ a repository variable or secret.</p>
 <div class="highlight"><pre><span></span><code>team-a:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 </code></pre></div>
 <p>The value after <code>:</code> is the SHA-256 hex digest of the raw token. The raw token
-is only distributed to clients.</p>
+is only distributed to clients. The key ID must be nonempty and must not contain
+<code>/</code>; that character is reserved for holder names beneath a tenant. Invalid key
+files fail startup or reload, with the previous keys retained on reload failure.
+See <a href="../../architecture/#migrating-slash-containing-tenants">tenant migration</a>
+before upgrading a deployment with slash-containing tenant IDs.</p>
 
 
 
