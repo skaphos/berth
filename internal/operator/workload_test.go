@@ -57,6 +57,57 @@ func readLease(t *testing.T, c ctrlclient.Client) *berthv1alpha1.BerthLease {
 	return &l
 }
 
+func TestFailedStopRetainsUnhealthyOwnership(t *testing.T) {
+	for _, deleting := range []bool{false, true} {
+		name := "ownership-lost"
+		if deleting {
+			name = "deletion"
+		}
+		t.Run(name, func(t *testing.T) {
+			l := heldLease()
+			if deleting {
+				l.DeletionTimestamp = timePtr(time.Now())
+			}
+			base := testClient(t, l, newDeployment(3))
+			stopErr := errors.New("target update denied")
+			fail := true
+			c := interceptor.NewClient(base, interceptor.Funcs{Update: func(ctx context.Context, c ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.UpdateOption) error {
+				if fail && obj.GetObjectKind().GroupVersionKind().Kind == "Deployment" {
+					return stopErr
+				}
+				return c.Update(ctx, obj, opts...)
+			}})
+			lc := &fakeLeaseClient{acquireResult: berthclient.AcquireResult{Holder: "cluster-west"}}
+			r := testReconciler(c, lc)
+			for range 2 {
+				if _, err := reconcile(t, r); !errors.Is(err, stopErr) {
+					t.Fatalf("cleanup failure was swallowed: %v", err)
+				}
+				got := readLease(t, base)
+				if got.Status.Workload.Phase != PhaseStopping || got.Status.Workload.Holder != "cluster-east" || got.Status.Workload.Token != 7 || len(got.Finalizers) == 0 || len(lc.releaseCalls) != 0 {
+					t.Fatalf("failed cleanup discarded ownership: %+v, release calls: %v", got.Status, lc.releaseCalls)
+				}
+				unhealthy := false
+				for _, condition := range got.Status.Conditions {
+					if condition.Type == ConditionHeartbeatHealthy && condition.Status == metav1.ConditionFalse && condition.Reason == "Stopping" {
+						unhealthy = true
+					}
+				}
+				if !unhealthy {
+					t.Fatalf("failed cleanup reported healthy: %+v", got.Status.Conditions)
+				}
+			}
+			fail = false
+			if _, err := reconcile(t, r); err != nil {
+				t.Fatal(err)
+			}
+			if len(lc.releaseCalls) != 1 {
+				t.Fatalf("cleanup did not recover: %v", lc.releaseCalls)
+			}
+		})
+	}
+}
+
 func TestRegistrationFailureCannotUngatePod(t *testing.T) {
 	l := heldLease()
 	p := managedPod("worker")
