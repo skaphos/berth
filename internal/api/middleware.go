@@ -23,7 +23,10 @@ func ChainMiddleware(handler http.Handler, middleware ...func(http.Handler) http
 // using authn. The token is extracted from the Authorization header
 // (Bearer scheme). On success, the resulting [auth.Identity] is attached
 // to the request context (retrievable via [IdentityFromContext]). On any
-// failure the middleware short-circuits with a 401 JSON envelope.
+// failure the middleware short-circuits with a 401 JSON envelope. A nil
+// identity returned without an error is treated as a failure too: downstream
+// authorization reads a nil identity as "no-auth mode", so letting one through
+// would silently bypass tenant checks.
 //
 // Pass a non-nil Authenticator to produce a working middleware. To
 // disable authentication entirely (dev mode), pass `nil` for the
@@ -38,9 +41,10 @@ func AuthMiddleware(authn auth.Authenticator) func(http.Handler) http.Handler {
 				return
 			}
 			id, err := authn.Authenticate(r.Context(), token)
-			if err != nil {
+			if err != nil || id == nil {
 				// Deliberately generic so the response can't be used as an
-				// oracle to enumerate valid key ids.
+				// oracle to enumerate valid key ids. Fail closed on a nil
+				// identity as well; see the doc comment above.
 				recordOutcome(r.Context(), outcomeUnauthorized)
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
