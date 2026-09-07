@@ -490,6 +490,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#pod-identity-and-upgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pod identity and upgrades
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1075,6 +1086,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#pod-identity-and-upgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pod identity and upgrades
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1475,6 +1497,32 @@ keeps it gated until it re-acquires. This is the at-most-once mode.</p>
 <p>A kubelet restart does <strong>not</strong> re-run init containers, so the sidecar is what
 keeps a stopped main container gated after enforcement fires — "lease lost"
 becomes a controlled crashloop, not an unguarded restart.</p>
+<h3 id="pod-identity-and-upgrades">Pod identity and upgrades</h3>
+<p>The default runtime holder ends with <code>:uid:&lt;metadata.uid&gt;</code>. The webhook injects
+<code>POD_UID</code> through the downward API into both the acquire init container and the
+renew sidecar, so they use the same identity throughout a Pod's lifetime.
+Container restarts preserve that identity; a replacement Pod gets a different
+UID even when its name is unchanged. Direct helper invocations must supply
+<code>POD_UID</code> or <code>--pod-uid</code>; missing UIDs fail configuration validation.</p>
+<p>The complete runtime holder must fit the API's 253-byte limit, including the UID.
+Oversized defaults fail immediately: shorten the cluster, workload or Pod names.
+The UID and tenant root are never truncated. Startup-gate identities remain
+workload-scoped. Explicit <code>holder-identity</code> overrides retain their exact value;
+users remain responsible for making overrides unique across concurrent candidates.</p>
+<p>Upgrade the injector and helper image together, then recreate affected Pods to
+receive the new downward-API environment. Existing Pods retain their old
+injected images and environment; upgrading the operator alone does not fix them.
+Confirm that old or force-deleted Pod processes have actually stopped before
+relying on incarnation isolation; do not use force deletion as proof of shutdown.
+Wait for the old lease to expire or be released, preserving its fencing-token
+history. A newer helper in an old spec without <code>POD_UID</code> fails closed instead of
+falling back to a name-only identity.</p>
+<p>The renew sidecar accepts saved state only when the saved holder exactly matches
+its current configured holder and the token is positive. Legacy or mismatched
+state is gated before acquisition is attempted under the new identity; the
+sidecar never renews or releases the foreign saved holder. Use the same updated
+helper image for both injected containers. This change separates fencing epochs;
+downstream enforcement is still needed to reject writes from expired holders.</p>
 <h2 id="enforcement-runtime-singleton">Enforcement (<code>runtime-singleton</code>)</h2>
 <p>Selected by <code>berth.skaphos.io/enforce</code>:</p>
 <ul>
@@ -1593,8 +1641,9 @@ mechanism, tracked in
 </code></pre></div>
 <h3 id="statefulset-runtime-singleton">StatefulSet — runtime singleton</h3>
 <p>Identical opt-in on <code>spec.template.metadata</code>. The holder identity defaults to a
-unique per-Pod value, so the stable StatefulSet Pod name is folded in; only one
-ordinal runs behind the lease at a time.</p>
+unique per-Pod-incarnation value containing both the stable Pod name and its
+API-assigned UID. A same-name replacement therefore waits for the old holder's
+lease to expire or be released, then receives a higher fencing token.</p>
 <h3 id="job-startup-gate-recommended-for-run-to-completion">Job — startup gate (recommended for run-to-completion)</h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">batch/v1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Job</span>
