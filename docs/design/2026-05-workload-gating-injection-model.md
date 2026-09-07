@@ -355,8 +355,8 @@ segment — e.g. key id == `--cluster-id`.
 
 **Runtime singleton default (v1)**:
 - Derive a unique candidate identity from cluster identity, namespace, owner
-  reference lineage where discoverable, and pod name.
-- Example: `east/prod:deployment:checkout-service:pod:checkout-service-7f6c9b9d8d-j4n8x`
+  reference lineage where discoverable, pod name, and the API-assigned Pod UID.
+- Example: `east/prod:deployment:checkout-service:pod:checkout-service-7f6c9b9d8d-j4n8x:uid:8c21b044-49ae-4db6-9fe3-530fb06cb5ea`
   (tenant `east` owns it).
 - If cluster identity is not configured, the webhook or helper must still
   include pod identity so replicas do not share a holder by accident, and the

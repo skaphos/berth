@@ -3,6 +3,7 @@ package acquire
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -42,13 +43,15 @@ func NewRenewer(cfg *Config, lc LeaseClient, state *State, log *slog.Logger) *Re
 }
 
 // loadHandoff reads the holder/token the init container persisted. When
-// the state is missing (e.g. the sidecar restarted and the volume was
-// wiped, or it is run standalone) it falls back to the configured holder
-// and an unheld state so the first tick reacquires.
+// the state is missing or belongs to another identity (including an older
+// holder format), it uses the configured holder and an unheld state. Run
+// enforces the gate before attempting acquisition under the current identity.
 func (r *Renewer) loadHandoff() {
+	r.holder, r.token, r.held = r.cfg.Holder(), 0, false
+	r.expiresAt = time.Time{}
 	holder, herr := r.state.ReadHolder()
 	token, terr := r.state.ReadToken()
-	if herr == nil && terr == nil {
+	if herr == nil && terr == nil && holder == r.holder && token > 0 {
 		r.holder, r.token, r.held = holder, token, true
 		// We do not know the exact expiry from the handoff; assume one TTL
 		// from now and let the first Renew correct it. This is safe: a too-
@@ -57,14 +60,18 @@ func (r *Renewer) loadHandoff() {
 		r.expiresAt = r.now().Add(r.cfg.TTL)
 		return
 	}
-	r.holder = r.cfg.Holder()
-	r.held = false
+	r.log.Warn("no matching lease handoff; gating before acquiring as the configured holder")
 }
 
 // Run renews until the context is canceled, then performs a best-effort
 // release when configured. It returns nil on graceful shutdown.
 func (r *Renewer) Run(ctx context.Context) error {
 	r.loadHandoff()
+	if !r.held {
+		if err := r.enforcer.Hold(ctx); err != nil {
+			return fmt.Errorf("enforce without a valid lease handoff: %w", err)
+		}
+	}
 	r.log = r.log.With("holder", r.holder)
 	r.log.Info("sidecar starting", "held", r.held, "heartbeat", r.cfg.HeartbeatInterval, "ttl", r.cfg.TTL)
 

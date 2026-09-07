@@ -57,7 +57,7 @@ func (s *State) ReadHolder() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(b)), nil
+	return string(b), nil
 }
 
 // ReadToken returns the fencing token the init container persisted.

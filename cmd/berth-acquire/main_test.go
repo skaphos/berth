@@ -59,6 +59,7 @@ func TestRunRenewWrongModeReturns1(t *testing.T) {
 		acquire.EnvAPIServer:    "https://berth:8443",
 		acquire.EnvTTLSeconds:   "30",
 		acquire.EnvPodNamespace: "prod",
+		acquire.EnvPodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 		acquire.EnvMode:         string(acquire.ModeStartupGate),
 	})
 	if code := run([]string{"renew"}, getenv, &bytes.Buffer{}); code != 1 {
@@ -74,6 +75,7 @@ func TestRunAcquireTimesOutReturns1(t *testing.T) {
 		acquire.EnvAPIServer:    "http://127.0.0.1:1",
 		acquire.EnvTTLSeconds:   "30",
 		acquire.EnvPodNamespace: "prod",
+		acquire.EnvPodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 		acquire.EnvMode:         string(acquire.ModeStartupGate),
 	})
 	done := make(chan int, 1)
@@ -110,6 +112,7 @@ func TestConfigFlagOverridesEnv(t *testing.T) {
 		acquire.EnvTTLSeconds:   "30",
 		acquire.EnvAPIServer:    "https://env:8443",
 		acquire.EnvPodNamespace: "prod",
+		acquire.EnvPodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 		acquire.EnvMode:         string(acquire.ModeRuntimeSingleton),
 	})
 	cfg, err := f.config(root, getenv)
@@ -144,6 +147,7 @@ func TestConfigFromEnvNoOverrides(t *testing.T) {
 		acquire.EnvTTLSeconds:   "30",
 		acquire.EnvAPIServer:    "https://env:8443",
 		acquire.EnvPodNamespace: "prod",
+		acquire.EnvPodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 	})
 	cfg, err := f.config(root, getenv)
 	if err != nil {
@@ -151,5 +155,38 @@ func TestConfigFromEnvNoOverrides(t *testing.T) {
 	}
 	if cfg.LeaseName != "from-env" || cfg.TTL != 30*time.Second {
 		t.Errorf("env base not used: %+v", cfg)
+	}
+}
+
+func TestPodUIDFlagOverridesEnv(t *testing.T) {
+	for _, tc := range []struct {
+		flags   []string
+		want    string
+		wantErr bool
+	}{
+		{want: "env-uid"},
+		{flags: []string{"--pod-uid=flag-uid"}, want: "flag-uid"},
+		{flags: []string{"--pod-uid="}, wantErr: true},
+	} {
+		root := &cobra.Command{Use: "x"}
+		var f cliFlags
+		f.bind(root)
+		if err := root.ParseFlags(tc.flags); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := f.config(root, envFrom(map[string]string{
+			acquire.EnvLeaseName: "test", acquire.EnvPodNamespace: "prod",
+			acquire.EnvAPIServer: "https://berth:8443", acquire.EnvTTLSeconds: "30",
+			acquire.EnvPodUID: "env-uid",
+		}))
+		if tc.wantErr {
+			if err == nil {
+				t.Fatal("explicit empty UID did not fail closed")
+			}
+			continue
+		}
+		if err != nil || cfg.PodUID != tc.want {
+			t.Fatalf("UID precedence: %+v %v", cfg, err)
+		}
 	}
 }

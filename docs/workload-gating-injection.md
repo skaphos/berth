@@ -122,6 +122,37 @@ A kubelet restart does **not** re-run init containers, so the sidecar is what
 keeps a stopped main container gated after enforcement fires — "lease lost"
 becomes a controlled crashloop, not an unguarded restart.
 
+### Pod identity and upgrades
+
+The default runtime holder ends with `:uid:<metadata.uid>`. The webhook injects
+`POD_UID` through the downward API into both the acquire init container and the
+renew sidecar, so they use the same identity throughout a Pod's lifetime.
+Container restarts preserve that identity; a replacement Pod gets a different
+UID even when its name is unchanged. Direct helper invocations must supply
+`POD_UID` or `--pod-uid`; missing UIDs fail configuration validation.
+
+The complete runtime holder must fit the API's 253-byte limit, including the UID.
+Oversized defaults fail immediately: shorten the cluster, workload or Pod names.
+The UID and tenant root are never truncated. Startup-gate identities remain
+workload-scoped. Explicit `holder-identity` overrides retain their exact value;
+users remain responsible for making overrides unique across concurrent candidates.
+
+Upgrade the injector and helper image together, then recreate affected Pods to
+receive the new downward-API environment. Existing Pods retain their old
+injected images and environment; upgrading the operator alone does not fix them.
+Confirm that old or force-deleted Pod processes have actually stopped before
+relying on incarnation isolation; do not use force deletion as proof of shutdown.
+Wait for the old lease to expire or be released, preserving its fencing-token
+history. A newer helper in an old spec without `POD_UID` fails closed instead of
+falling back to a name-only identity.
+
+The renew sidecar accepts saved state only when the saved holder exactly matches
+its current configured holder and the token is positive. Legacy or mismatched
+state is gated before acquisition is attempted under the new identity; the
+sidecar never renews or releases the foreign saved holder. Use the same updated
+helper image for both injected containers. This change separates fencing epochs;
+downstream enforcement is still needed to reject writes from expired holders.
+
 ## Enforcement (`runtime-singleton`)
 
 Selected by `berth.skaphos.io/enforce`:
@@ -245,8 +276,9 @@ spec:
 ### StatefulSet — runtime singleton
 
 Identical opt-in on `spec.template.metadata`. The holder identity defaults to a
-unique per-Pod value, so the stable StatefulSet Pod name is folded in; only one
-ordinal runs behind the lease at a time.
+unique per-Pod-incarnation value containing both the stable Pod name and its
+API-assigned UID. A same-name replacement therefore waits for the old holder's
+lease to expire or be released, then receives a higher fencing token.
 
 ### Job — startup gate (recommended for run-to-completion)
 

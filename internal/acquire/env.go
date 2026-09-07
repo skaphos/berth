@@ -35,6 +35,7 @@ const (
 	// Downward-API env used for holder-identity defaulting.
 	EnvPodNamespace = "POD_NAMESPACE"
 	EnvPodName      = "POD_NAME"
+	EnvPodUID       = "POD_UID"
 )
 
 // ConfigFromEnv builds a Config from the BERTH_*/POD_* environment using
@@ -54,6 +55,7 @@ func ConfigFromEnv(get func(string) string) (*Config, error) {
 		ClusterID:      get(EnvClusterID),
 		PodNamespace:   get(EnvPodNamespace),
 		PodName:        get(EnvPodName),
+		PodUID:         get(EnvPodUID),
 		WorkloadKind:   get(EnvWorkloadKind),
 		WorkloadName:   get(EnvWorkloadName),
 		StateDir:       get(EnvStateDir),

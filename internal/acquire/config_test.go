@@ -11,6 +11,7 @@ func baseConfig() *Config {
 		LeaseName:    "checkout",
 		PodNamespace: "prod",
 		PodName:      "checkout-7f6c-j4n8x",
+		PodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 		TTL:          30 * time.Second,
 		APIServer:    "https://berth.example:8443",
 	}
@@ -93,7 +94,7 @@ func TestHolderRuntimeSingletonIncludesPodName(t *testing.T) {
 	// The cluster id ("east") is the tenant-owning root, separated from the rest
 	// of the hierarchy by "/" so it passes holder authorization under a tenant
 	// equal to the cluster id (see TestHolderIsOwnedByClusterTenant).
-	want := "east/prod:deployment:checkout:pod:checkout-7f6c-j4n8x"
+	want := "east/prod:deployment:checkout:pod:checkout-7f6c-j4n8x:uid:8c21b044-49ae-4db6-9fe3-530fb06cb5ea"
 	if got != want {
 		t.Errorf("Holder() = %q, want %q", got, want)
 	}
@@ -107,7 +108,7 @@ func TestHolderRuntimeSingletonWithoutClusterStillUnique(t *testing.T) {
 	// so replicas never share a holder. The namespace becomes the "/"-rooted
 	// tenant owner in the cluster-id's absence.
 	got := c.Holder()
-	want := "prod/pod:checkout-7f6c-j4n8x"
+	want := "prod/pod:checkout-7f6c-j4n8x:uid:8c21b044-49ae-4db6-9fe3-530fb06cb5ea"
 	if got != want {
 		t.Errorf("Holder() = %q, want %q", got, want)
 	}
@@ -179,5 +180,54 @@ func TestNewClientWithAPIKeyFileMissing(t *testing.T) {
 	c.APIKeyFile = "/nonexistent/token"
 	if _, err := c.NewClient(); err == nil {
 		t.Error("expected error for missing api key file")
+	}
+}
+
+func TestRuntimePodUIDValidation(t *testing.T) {
+	for _, uid := range []string{"", "other/uid", "other:uid", "uid ", " uid", "uid\n", "\u00a0uid"} {
+		c := baseConfig()
+		c.PodUID = uid
+		if err := c.Validate(); err == nil {
+			t.Fatalf("invalid UID %q accepted in default runtime mode", uid)
+		}
+	}
+	for _, mode := range []Mode{ModeStartupGate, ModeRuntimeSingleton} {
+		c := baseConfig()
+		c.Mode, c.PodUID = mode, ""
+		if mode == ModeRuntimeSingleton {
+			c.HolderIdentity = "explicit-holder"
+		}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("mode/override compatibility: %v", err)
+		}
+	}
+}
+
+func TestRuntimeHolderByteLimit(t *testing.T) {
+	for _, size := range []int{253, 254} {
+		c := baseConfig()
+		c.ApplyDefaults()
+		// Multibyte names must count bytes, and the UID must remain complete.
+		c.WorkloadName = "é"
+		c.WorkloadName += strings.Repeat("a", size-len(c.Holder()))
+		if len(c.Holder()) != size {
+			t.Fatal("invalid boundary fixture")
+		}
+		if err := c.Validate(); (err != nil) != (size > 253) {
+			t.Fatalf("%d-byte holder: %v", size, err)
+		}
+		if !strings.HasSuffix(c.Holder(), ":uid:"+c.PodUID) {
+			t.Fatal("UID was truncated")
+		}
+	}
+}
+
+func TestStartupHolderIgnoresPodIncarnation(t *testing.T) {
+	c := baseConfig()
+	c.Mode = ModeStartupGate
+	first := c.Holder()
+	c.PodUID = "replacement-uid"
+	if c.Holder() != first {
+		t.Fatal("startup-gate holder changed across Pod UIDs")
 	}
 }

@@ -208,6 +208,7 @@ func TestValidationGuaranteesHeartbeatMarginUnderTTL(t *testing.T) {
 			LeaseName:         "checkout",
 			PodNamespace:      "prod",
 			PodName:           "checkout-x",
+			PodUID:            "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 			Mode:              ModeRuntimeSingleton,
 			Enforce:           EnforceProbe,
 			TTL:               30 * time.Second,

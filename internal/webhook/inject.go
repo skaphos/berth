@@ -677,6 +677,7 @@ func (i *PodInjector) buildEnv(r resolved) []corev1.EnvVar {
 		{Name: acquire.EnvStateDir, Value: i.cfg.StateDir},
 		{Name: acquire.EnvPodNamespace, ValueFrom: fieldRef("metadata.namespace")},
 		{Name: acquire.EnvPodName, ValueFrom: fieldRef("metadata.name")},
+		{Name: acquire.EnvPodUID, ValueFrom: fieldRef("metadata.uid")},
 	}
 	env = appendIf(env, r.signalTarget != "" && r.enforce == acquire.EnforceSignal, acquire.EnvSignalTarget, r.signalTarget)
 	env = appendIf(env, r.heartbeatSeconds > 0, acquire.EnvHeartbeatSecs, strconv.Itoa(r.heartbeatSeconds))

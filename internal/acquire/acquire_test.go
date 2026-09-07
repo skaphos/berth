@@ -11,6 +11,7 @@ func holdTestConfig() *Config {
 		LeaseName:    "checkout",
 		PodNamespace: "prod",
 		PodName:      "checkout-x",
+		PodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 		Mode:         ModeRuntimeSingleton,
 		TTL:          30 * time.Second,
 		// Tiny heartbeat so the retry between Acquire attempts is fast.

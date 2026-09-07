@@ -181,6 +181,7 @@ type cliFlags struct {
 	clusterID      string
 	podNamespace   string
 	podName        string
+	podUID         string
 	workloadKind   string
 	workloadName   string
 	stateDir       string
@@ -206,6 +207,7 @@ func (f *cliFlags) bind(cmd *cobra.Command) {
 	pf.StringVar(&f.clusterID, "cluster-id", "", "cluster-distinct identity folded into the runtime-singleton holder default")
 	pf.StringVar(&f.podNamespace, "pod-namespace", "", "pod namespace (downward API)")
 	pf.StringVar(&f.podName, "pod-name", "", "pod name (downward API)")
+	pf.StringVar(&f.podUID, "pod-uid", "", "pod UID (downward API metadata.uid; required for the runtime holder default)")
 	pf.StringVar(&f.workloadKind, "workload-kind", "", "owning workload kind (used in the holder default)")
 	pf.StringVar(&f.workloadName, "workload-name", "", "owning workload name (used in the holder default)")
 	pf.StringVar(&f.stateDir, "state-dir", "", "shared volume mount for lease state and the health marker")
@@ -263,6 +265,9 @@ func (f *cliFlags) config(cmd *cobra.Command, getenv func(string) string) (*acqu
 	}
 	if changed("pod-name") {
 		cfg.PodName = f.podName
+	}
+	if changed("pod-uid") {
+		cfg.PodUID = f.podUID
 	}
 	if changed("workload-kind") {
 		cfg.WorkloadKind = f.workloadKind

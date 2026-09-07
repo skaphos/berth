@@ -15,6 +15,7 @@ func newTestRenewer(t *testing.T, lc LeaseClient) (*Renewer, *State) {
 		LeaseName:    "checkout",
 		PodNamespace: "prod",
 		PodName:      "checkout-x",
+		PodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
 		Mode:         ModeRuntimeSingleton,
 		Enforce:      EnforceProbe,
 		TTL:          30 * time.Second,
@@ -340,13 +341,13 @@ func TestShutdownSkipsReleaseWhenNotHeld(t *testing.T) {
 func TestLoadHandoffFromState(t *testing.T) {
 	fc := &fakeClient{}
 	r, state := newTestRenewer(t, fc)
-	if err := state.WriteAcquired("east:prod:pod:x", 11); err != nil {
+	if err := state.WriteAcquired(r.cfg.Holder(), 11); err != nil {
 		t.Fatal(err)
 	}
 
 	r.loadHandoff()
 
-	if !r.held || r.holder != "east:prod:pod:x" || r.token != 11 {
+	if !r.held || r.holder != r.cfg.Holder() || r.token != 11 {
 		t.Errorf("loadHandoff = {held:%v holder:%q token:%d}, want the persisted handoff", r.held, r.holder, r.token)
 	}
 }
@@ -399,5 +400,69 @@ func TestRunRenewsAndReleasesOnCancel(t *testing.T) {
 	}
 	if fc.releaseCalls != 1 {
 		t.Errorf("release calls = %d, want 1 on graceful shutdown", fc.releaseCalls)
+	}
+}
+
+func TestRenewerRejectsForeignHandoff(t *testing.T) {
+	for _, tc := range []struct {
+		name, holder string
+		token        int32
+	}{
+		{"legacy format", "prod/pod:checkout-x", 7},
+		{"other incarnation", "prod/pod:checkout-x:uid:other", 7},
+		{"invalid token", "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fc := &fakeClient{}
+			r, state := newTestRenewer(t, fc)
+			holder := tc.holder
+			if holder == "" {
+				holder = r.cfg.Holder()
+			}
+			if err := state.WriteAcquired(holder, tc.token); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			if err := r.Run(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if r.held || r.holder != r.cfg.Holder() || r.token != 0 {
+				t.Fatal("foreign handoff adopted")
+			}
+			if state.IsHealthy() {
+				t.Fatal("invalid handoff left the workload gate open")
+			}
+			if fc.renewCalls != 0 || fc.releaseCalls != 0 {
+				t.Fatal("old handoff was renewed or released")
+			}
+			fc.acquireFn = func(holder string) (acquireResult, error) {
+				if holder != r.cfg.Holder() {
+					t.Fatal("reacquired foreign holder")
+				}
+				return heldByOther("old"), nil
+			}
+			r.tickReacquire(context.Background())
+			if fc.acquireCalls != 1 {
+				t.Fatal("current holder not used for reacquisition")
+			}
+		})
+	}
+}
+
+func TestRenewerPreservesExactExplicitHolder(t *testing.T) {
+	fc := &fakeClient{}
+	r, state := newTestRenewer(t, fc)
+	r.cfg.HolderIdentity = " explicit holder "
+	if err := state.WriteAcquired(r.cfg.Holder(), 11); err != nil {
+		t.Fatal(err)
+	}
+	r.loadHandoff()
+	if !r.held || r.holder != r.cfg.Holder() || r.token != 11 {
+		t.Fatal("exact explicit holder was normalized")
+	}
+	r.shutdown()
+	if fc.lastRelease.holder != r.cfg.Holder() || fc.lastRelease.token != 11 {
+		t.Fatal("shutdown changed holder or epoch")
 	}
 }

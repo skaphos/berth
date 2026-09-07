@@ -82,6 +82,7 @@ type Config struct {
 	ClusterID      string
 	PodNamespace   string
 	PodName        string
+	PodUID         string
 	WorkloadKind   string
 	WorkloadName   string
 
@@ -150,6 +151,20 @@ func (c *Config) Validate() error {
 			"comm or executable basename (e.g. \"nginx\"); an empty target signals every process in the "+
 			"shared PID namespace, which can terminate co-located sidecars", EnforceSignal, ModeRuntimeSingleton, EnvSignalTarget)
 	}
+	if c.Mode == ModeRuntimeSingleton && c.HolderIdentity == "" {
+		if c.PodUID == "" {
+			return errors.New("pod UID is required for the runtime-singleton holder (set --pod-uid or POD_UID from metadata.uid)")
+		}
+		if strings.ContainsAny(c.PodUID, ":/ \t\r\n") || strings.TrimSpace(c.PodUID) != c.PodUID {
+			return errors.New("pod UID must be a non-whitespace identity component without ':' or '/'")
+		}
+		// The lease API limits decoded holders to 253 bytes. Check before the
+		// Acquire retry loop so adding the UID cannot leave an oversized holder
+		// retrying forever. Preserve the full UID and tenant root.
+		if len(c.Holder()) > 253 {
+			return errors.New("runtime holder exceeds the API limit of 253 bytes; shorten cluster, workload or pod names")
+		}
+	}
 	if c.TTL <= 0 {
 		return errors.New("ttl must be positive")
 	}
@@ -175,8 +190,8 @@ func (c *Config) Validate() error {
 // explicit HolderIdentity wins; otherwise the default is mode-specific
 // (see the design doc "Holder Identity Defaulting").
 //
-// Runtime-singleton always folds in the pod name so replicas never share
-// a holder by accident. Startup-gate prefers a workload-level identity
+// Runtime-singleton folds in the Pod UID so different Pod incarnations never
+// share a holder by accident. Startup-gate prefers a workload-level identity
 // because it only proves startup admission.
 func (c *Config) Holder() string {
 	if c.HolderIdentity != "" {
@@ -208,6 +223,7 @@ func (c *Config) Holder() string {
 		if c.PodName != "" {
 			parts = append(parts, "pod", c.PodName)
 		}
+		parts = append(parts, "uid", c.PodUID)
 	}
 
 	// The first segment is the tenant-owning root, separated from the rest of
