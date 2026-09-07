@@ -757,6 +757,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#recording-fixes-merged-through-a-security-advisory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recording fixes merged through a security advisory
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -828,7 +839,9 @@ from <em>shipped in a release</em>:</p>
    the changelog and version bump.</li>
 <li>Merging that PR lets the same <code>release-please.yml</code> run push the <code>vX.Y.Z</code> tag.</li>
 <li>The tag triggers <code>release.yml</code>, which builds/pushes images and charts and
-   <strong>publishes the GitHub release</strong> (with auto-generated notes).</li>
+   <strong>publishes the GitHub release</strong> using that version's reviewed section from
+   <code>CHANGELOG.md</code>. Missing, duplicate or empty sections fail before artifact
+   publication. GitHub's independent auto-generated notes are disabled.</li>
 <li>The published release triggers <code>linear-release.yml</code>, which parses the release
    notes for <code>SKA-NNN</code> identifiers and moves each referenced issue to
    <code>Released</code> (skipping any that are <code>Canceled</code>/<code>Duplicate</code>), and leaves a
@@ -918,6 +931,34 @@ has no such side effect, instead of the release PR.</p>
 <p>The team key and target status name are set in <code>linear-release.yml</code> env
 (<code>TEAM_KEY: SKA</code>, <code>RELEASED_STATE: Released</code>); update them there if the team or
 status name changes.</p>
+<h2 id="recording-fixes-merged-through-a-security-advisory">Recording fixes merged through a security advisory</h2>
+<p>Advisory merges may land on <code>main</code> as <code>Merge commit from fork</code>. Those subjects
+are not Conventional Commits, so release-please cannot infer a bug-fix entry.
+Changing a private PR title does not repair an already-created upstream commit.</p>
+<p>After the code is merged, create a normal follow-up PR with approved,
+user-facing summaries and one <code>fix:</code> entry per delivered fix. Keep exploit
+instructions and unpublished advisory details out of that public PR. Use
+release-please's supported multi-change override at the end of the PR body:</p>
+<div class="highlight"><pre><span></span><code>BEGIN_COMMIT_OVERRIDE
+fix(component): describe the first delivered behavior change
+
+fix(component): describe the second delivered behavior change
+END_COMMIT_OVERRIDE
+</code></pre></div>
+<p>Squash-merge that PR so release-please can associate its commit with the PR
+body. Keep the same entries in the signed commit message as a fallback. Do not
+rewrite protected main history or manually edit the generated release PR as the
+only record: regeneration can replace hand edits. The overrides become separate
+changelog entries on the next release-please run. See the upstream
+<a href="https://github.com/googleapis/release-please#how-can-i-fix-release-notes">release-note override documentation</a>.</p>
+<p>Before merging the release PR, reconcile the private remediation ledger against
+its rendered changelog: every merged fix needs an entry, migration requirements
+need release notes, and no unmerged fix may be described as delivered. Keep the
+advisories draft until the patched release and artifacts are available.</p>
+<p>The publish workflow extracts this exact version section from the tagged
+changelog with <code>scripts/release-notes.sh</code>; it does not replace those entries with
+GitHub's PR-title summary. Test the extraction with
+<code>scripts/test-release-notes.sh</code>.</p>
 
 
 
