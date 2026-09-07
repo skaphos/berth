@@ -12,6 +12,7 @@ package acquire
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -165,8 +166,8 @@ func (c *Config) Validate() error {
 			return errors.New("runtime holder exceeds the API limit of 253 bytes; shorten cluster, workload or pod names")
 		}
 	}
-	if c.TTL <= 0 {
-		return errors.New("ttl must be positive")
+	if c.TTL <= 0 || c.TTL > time.Duration(math.MaxInt32)*time.Second {
+		return errors.New("ttl must be positive and at most 2147483647 seconds (the API limit)")
 	}
 	if c.HeartbeatInterval <= 0 {
 		return errors.New("heartbeat interval must be positive")

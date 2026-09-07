@@ -172,10 +172,7 @@ func TestInjectSignalSharesProcessNamespace(t *testing.T) {
 	}
 }
 
-// The backstop is not universally injectable: preflight steers users to
-// signal mode precisely when their container already defines a
-// livenessProbe, and Kubernetes allows one per container. Overwriting the
-// workload's own health check would be a worse defect than the gap.
+// Signal mode rejects an occupied liveness slot without rewriting the caller probe.
 func TestInjectSignalDoesNotClobberAnExistingLivenessProbe(t *testing.T) {
 	pod := optInPod("prod", map[string]string{
 		AnnLeaseName:    "checkout",
@@ -188,8 +185,8 @@ func TestInjectSignalDoesNotClobberAnExistingLivenessProbe(t *testing.T) {
 	}
 	pod.Spec.Containers[0].LivenessProbe = own
 
-	if err := testInjector().Default(context.Background(), pod); err != nil {
-		t.Fatalf("Default: %v", err)
+	if err := testInjector().Default(context.Background(), pod); err == nil {
+		t.Fatal("signal mode must reject an occupied liveness slot")
 	}
 
 	app := findContainer(pod.Spec.Containers, "app")

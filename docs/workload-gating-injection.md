@@ -203,10 +203,12 @@ Selected by `berth.skaphos.io/enforce`:
   helper ships a static `check` binary onto the shared volume, so the probe does
   **not** require a shell in the target image.
 - **`signal`** — the webhook sets `shareProcessNamespace: true`; the sidecar
-  sends `SIGTERM`/`SIGKILL` to the main process on lease loss. More immediate,
-  but every container in the Pod can then see and signal every other one (weaker
-  isolation), and PID-1 signal handling varies by image. Reserve it for images
-  where the probe cannot run.
+  attempts `SIGTERM`/`SIGKILL` on lease loss, in addition to the mandatory
+  freshness liveness probe on every main container. Signals may stop a matching
+  process sooner when Linux permissions allow it. A different workload UID,
+  an unmatched target, or a dead helper does not remove the kubelet fallback.
+  Berth does not grant `CAP_KILL`. Sharing the PID namespace weakens process
+  isolation; prefer `probe` unless the extra signal attempt is needed.
 
   > **Multi-sidecar hazard.** An unscoped signal enforcer signals **every**
   > process in the shared PID namespace except PID 1 and berth's own — so on
@@ -267,23 +269,44 @@ A correctly-renewing holder never trips this: validation requires the heartbeat
 to be strictly shorter than the TTL, so a healthy sidecar refreshes the marker
 well inside the bound.
 
-### Known limitation — `signal` mode and a dead sidecar
+### Required liveness probe and signal-mode upgrade
 
-`signal` enforcement is carried out by the sidecar, so a dead sidecar cannot
-signal anything. Where a main container defines **no** `livenessProbe` of its
-own, the webhook injects the freshness probe as a backstop and the behaviour
-matches `probe` mode.
+Both runtime enforcement modes require Berth's unmodified freshness liveness
+probe on **every** regular container. Admission rejects a pre-existing liveness
+probe instead of overwriting it, and rejects startup probes because
+[Kubernetes defers liveness checks until startup succeeds](https://kubernetes.io/docs/concepts/workloads/pods/probes/).
+Readiness probes remain available for application readiness checks. Startup-gate
+retains its existing probe behavior and provides no runtime enforcement.
 
-Where the container **already defines a `livenessProbe`**, it does not. A
-container may have only one, and overwriting the workload's own health check
-would be a worse failure than the gap. That case is exactly why `preflight`
-steers people to `signal` in the first place, so it is not rare.
+The final validating webhook checks this contract after all mutating webhooks.
+It rejects missing or changed probes, newly added ungated containers, and mounts
+that hide the trusted state directory, marker, or check binary. State-root
+mounts must expose the full read-only volume; subpath mounts are unsupported.
+Both admission registrations must be installed with `failurePolicy: Fail`.
+The injector and helper reject TTLs above 2,147,483,647 seconds so the probe
+and the API use the same value without integer wraparound.
 
-**For those Pods, a dead sidecar still leaves the workload running unleased.**
-If you need the guarantee unconditionally, use `enforce: probe` and let Berth
-own the liveness slot. Closing this for `signal` requires a separate watchdog
-mechanism, tracked in
-[#142](https://github.com/skaphos/berth/issues/142).
+On lease loss, signal mode removes the health marker before discovering or
+signalling processes. Permission and discovery errors are returned and logged;
+an already-exited process is harmless. Successful renewals refresh the marker
+in both modes. If the helper dies, the marker eventually becomes stale instead.
+Kubelet detection, probe scheduling and the Pod's termination grace period still
+contribute to the stop delay. A restarted process can run until its next failed
+probe; use downstream fencing tokens to reject stale writes throughout that
+window. This requires a functioning kubelet, as in probe mode.
+
+Before upgrading, drain affected workloads, remove conflicting liveness/startup
+probes (or redesign their health checks), and recreate the Pods using the patched
+injector **and** helper images. Existing Pods are not retroactively protected.
+Signal mode is no longer an escape for images that cannot execute the check
+binary. Mixed injector versions can reject admission during rollout; upgrade all
+replicas before relying on the new policy.
+
+Manual/direct helper deployments must install the same freshness exec probe and
+read-only state mount on every workload container and avoid startup probes. The
+helper cannot inspect an external Pod spec or install kubelet probes itself;
+running it with `enforce=signal` alone is not a supported runtime fencing setup.
+
 
 ## Examples
 
@@ -482,9 +505,9 @@ container and the `berth-sidecar` sidecar. They are separate from the shared
 | --- | --- | --- |
 | Opted-in Pod stuck in `Init` | Another candidate holds the lease (expected for a standby), or the helper can't reach/authenticate to the API server | Check `kubectl logs <pod> -c berth-acquire`; verify the API URL, and that the token Secret named by `injection.helper.apiKeySecret` exists **in this Pod's namespace**. |
 | Opted-in Pod fails to start with a volume/mount error naming a Secret or ConfigMap | The token Secret or CA ConfigMap does not exist in the workload's namespace | The webhook mounts them by name from the Pod's own namespace and never copies them there; create the object in that namespace (see [Authenticating injected Pods](#authenticating-injected-pods)). |
-| Main container CrashLoopBackOff right after start (probe mode) | The injected `exec` probe can't run, or the marker is absent | Confirm the helper's static `check` binary is on the shared volume; for images where the probe can't run, switch to `berth.skaphos.io/enforce: signal`. |
+| Main container CrashLoopBackOff right after start (probe mode) | The injected `exec` probe can't run, or the marker is absent | Confirm the helper's static `check` binary is on the shared volume; both runtime modes require an image that can execute that binary. |
 | Webhook never fires (no injection) | Label not on the **pod template**, CronJob label at the wrong depth, or the Pod is in a skipped namespace | Put the label on `spec.template.metadata` (CronJob: `spec.jobTemplate.spec.template.metadata`); the release and `injection.controlPlaneNamespaces` namespaces are never mutated. |
-| Pod create rejected with a webhook error | A reserved name/volume collision (`berth-acquire`/`berth-sidecar`/`berth-state`), an existing `livenessProbe` in probe mode, a foreign volume already mounted at the state dir, or a **writable mount of the reserved `berth-state` volume** | Read the admission error — the webhook rejects these up front with a clear message naming the container, volume, and path; rename the conflicting resource, mark the mount `readOnly: true`, use a separate volume, or switch enforcement mode. |
+| Pod create rejected with a webhook error | A reserved name/volume collision (`berth-acquire`/`berth-sidecar`/`berth-state`), an existing `livenessProbe` or `startupProbe` in either runtime mode, a foreign volume already mounted at the state dir, or a **writable mount of the reserved `berth-state` volume** | Read the admission error — the webhook rejects these up front with a clear message naming the container, volume, and path; rename the conflicting resource, mark the mount `readOnly: true`, use a separate volume, or redesign the application health checks to leave Berth the liveness slot. |
 | `kubectl debug` refused on a healthy gated Pod | The debug container mounts `berth-state` writably | Attach with the mount marked `readOnly: true`, or without mounting `berth-state` at all — the Pod itself is unaffected. |
 | `x509`/TLS errors calling the webhook | `caBundle` doesn't match the serving cert | Use cert-manager (auto-injects the CA) or set `injection.webhook.tls.caBundle` to the serving CA. |
 | Multiple replicas all run | A shared `holder-identity` override in runtime-singleton | Remove the override; let the per-Pod identity default apply. |

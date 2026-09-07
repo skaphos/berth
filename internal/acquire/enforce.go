@@ -2,6 +2,7 @@ package acquire
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -40,6 +41,7 @@ func (p probeEnforcer) Release(context.Context) error { return p.state.MarkHealt
 // state so the next Hold starts a fresh SIGTERM rather than jumping
 // straight to SIGKILL.
 type signalEnforcer struct {
+	state    *State // Mandatory probe fallback for the configured helper. Raw signal tests may omit it.
 	grace    time.Duration
 	now      func() time.Time
 	find     func() ([]int, error)
@@ -67,9 +69,14 @@ func newSignalEnforcer(grace time.Duration, target string, log *slog.Logger) *si
 }
 
 func (s *signalEnforcer) Hold(context.Context) error {
+	// Gate the kubelet probe even if process discovery or signalling fails.
+	var failures error
+	if s.state != nil {
+		failures = s.state.MarkUnhealthy()
+	}
 	pids, err := s.find()
 	if err != nil {
-		return fmt.Errorf("find main process: %w", err)
+		return errors.Join(failures, fmt.Errorf("find main process: %w", err))
 	}
 	now := s.now()
 	for _, pid := range pids {
@@ -78,31 +85,42 @@ func (s *signalEnforcer) Hold(context.Context) error {
 		case !termed:
 			s.termedAt[pid] = now
 			if err := s.signal(pid, syscall.SIGTERM); err != nil {
-				s.log.Warn("SIGTERM failed", "pid", pid, "error", err)
+				if !errors.Is(err, syscall.ESRCH) {
+					failures = errors.Join(failures, fmt.Errorf("SIGTERM pid %d: %w", pid, err))
+					s.log.Warn("SIGTERM failed", "pid", pid, "error", err)
+				}
 			} else {
 				s.log.Info("sent SIGTERM to main process", "pid", pid)
 			}
 		case now.Sub(termedAt) >= s.grace:
 			if err := s.signal(pid, syscall.SIGKILL); err != nil {
-				s.log.Warn("SIGKILL failed", "pid", pid, "error", err)
+				if !errors.Is(err, syscall.ESRCH) {
+					failures = errors.Join(failures, fmt.Errorf("SIGKILL pid %d: %w", pid, err))
+					s.log.Warn("SIGKILL failed", "pid", pid, "error", err)
+				}
 			} else {
 				s.log.Info("sent SIGKILL to main process", "pid", pid)
 			}
 		}
 	}
-	return nil
+	return failures
 }
 
 func (s *signalEnforcer) Release(context.Context) error {
 	// Forget escalation state so a future Hold starts a fresh SIGTERM.
 	s.termedAt = map[int]time.Time{}
+	if s.state != nil {
+		return s.state.MarkHealthy()
+	}
 	return nil
 }
 
 // newEnforcer builds the enforcer selected by cfg.Enforce.
 func newEnforcer(cfg *Config, state *State, log *slog.Logger) Enforcer {
 	if cfg.Enforce == EnforceSignal {
-		return newSignalEnforcer(cfg.EnforceGrace, cfg.SignalTarget, log)
+		e := newSignalEnforcer(cfg.EnforceGrace, cfg.SignalTarget, log)
+		e.state = state
+		return e
 	}
 	return probeEnforcer{state: state}
 }

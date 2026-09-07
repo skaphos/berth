@@ -233,8 +233,10 @@ guarantee at the pod level. Two mechanisms are supported, selected by the
   finds the main process and sends `SIGTERM` then `SIGKILL`, re-signalling on
   every restart until it re-acquires. More immediate, but every container in the
   pod can see and signal every other one (weaker isolation) and PID-1 signal
-  semantics vary by image. Reserved for cases where probe injection is not
-  viable (no shell in the image, or a liveness probe is already in use).
+  semantics vary by image. The same freshness liveness probe is mandatory on every main container:
+  signals are additional best-effort termination attempts, and permission errors
+  must not leave the probe healthy. Both modes reject occupied liveness slots
+  and startup probes; the static check binary does not require a shell.
 
 Both are **best-effort within a bounded window**: there is a detection +
 kill latency between lease loss and the main container actually stopping. This
@@ -382,7 +384,7 @@ The webhook must enforce the following in v1:
 - If `berth.skaphos.io/inject=acquire` is present but `berth.skaphos.io/lease-name` is missing or empty → **Fail the Pod** (or configurable failure policy).
 - Unknown values for `berth.skaphos.io/mode` → reject the Pod in fail-closed mode, or skip mutation only when the Helm-configured failure policy is explicitly `Ignore`.
 - Unknown values for `berth.skaphos.io/enforce` → reject the Pod (same fail-policy handling as `mode`).
-- `enforce=probe` assumes the main container image can run the marker check (a shell or a static check binary the webhook injects via the shared volume). The webhook **cannot** introspect image contents at admission, so it cannot reject a shell-less image; it must document that a probe that can never pass will crashloop the main container, and recommend `enforce=signal` for such images. Injecting a small static check binary onto the shared volume (so the probe does not depend on a shell in the target image) is the preferred way to keep `probe` viable for distroless/scratch images and should be the default helper behavior.
+- `enforce=probe` assumes the main container image can run the marker check (a shell or a static check binary the webhook injects via the shared volume). The webhook **cannot** introspect image contents at admission, so it cannot reject a shell-less image; it must document that a probe that can never pass will crashloop the main container, and require a compatible image in both enforcement modes. Injecting a small static check binary onto the shared volume (so the probe does not depend on a shell in the target image) is the preferred way to keep `probe` viable for distroless/scratch images and should be the default helper behavior.
 - `enforce=signal` requires `shareProcessNamespace: true`; the webhook sets it and must reject the Pod if a conflicting explicit `shareProcessNamespace: false` is already set rather than silently overriding it.
 - Negative or zero `berth.skaphos.io/ttl-seconds` / `berth.skaphos.io/heartbeat-interval-seconds` → reject the Pod.
 - Runtime singleton mode with an explicitly shared holder identity should warn
@@ -416,7 +418,7 @@ The webhook will inject:
 - `enforce=probe`: an injected `exec` liveness probe on each main container, plus
   a static check binary on the shared volume so the probe does not require a
   shell in the target image.
-- `enforce=signal`: `shareProcessNamespace: true` on the pod spec.
+- `enforce=signal`: `shareProcessNamespace: true` on the pod spec, plus the same mandatory freshness liveness probe and read-only state mount on every main container.
 - Environment variables and volume mounts for auth/config.
 - Any required service account token or projected volumes.
 
@@ -434,7 +436,7 @@ The webhook will inject:
   token, holder identity, and health marker to the shared volume.
 - Sidecar performs continuous heartbeats while the main container runs.
 - If `Renew` reports lease loss, the sidecar **enforces** per `enforce`: removes
-  the marker (`probe`) or signals the main process (`signal`), records a clear
+  the marker in both modes and additionally attempts to signal the main process (`signal`), records a clear
   log/event, keeps the main container stopped, and retries `Acquire`. It
   restores the marker / stops signalling only after re-acquiring. (See
   "Restart Re-Gating".)
@@ -578,8 +580,8 @@ spec:
         - {name: berth-state, mountPath: /berth, readOnly: true}
 ```
 
-(With `enforce=signal`, drop the injected probe, set
-`spec.shareProcessNamespace: true`, and the sidecar signals the main PID.)
+(With `enforce=signal`, keep the injected freshness probe, set
+`spec.shareProcessNamespace: true`, and the sidecar also attempts to signal the main PID.)
 
 ## Decision Record: Labels/Annotations vs. Wrapper CRD
 
@@ -640,7 +642,7 @@ explicit re-open criteria, and may be extracted into an ADR if pursued.
 - `enforce=signal` requires `shareProcessNamespace: true`, which lets every
   container in the pod see and signal every other container's processes and
   read `/proc`. Prefer `enforce=probe` (kubelet does the kill, isolation
-  preserved); reserve `signal` for images where the probe cannot run.
+  preserved). Both modes require the injected freshness probe to run.
 - Enforcement is bounded best-effort: a detection+kill window exists between
   lease loss and the main container stopping. Fencing token usage remains
   critical for safe release on deletion/shutdown.

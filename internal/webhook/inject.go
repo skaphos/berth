@@ -3,8 +3,10 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"math"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -71,8 +73,8 @@ func (c *InjectorConfig) Validate() error {
 	default:
 		return fmt.Errorf("injection webhook: invalid default enforce %q", c.DefaultEnforce)
 	}
-	if c.DefaultTTLSeconds <= 0 {
-		return fmt.Errorf("injection webhook: default ttl-seconds must be positive, got %d", c.DefaultTTLSeconds)
+	if c.DefaultTTLSeconds <= 0 || int64(c.DefaultTTLSeconds) > math.MaxInt32 {
+		return fmt.Errorf("injection webhook: default ttl-seconds must be between 1 and 2147483647 seconds, got %d", c.DefaultTTLSeconds)
 	}
 	// StateDir becomes a Pod volumeMount.mountPath and the base for the probe
 	// marker paths (<StateDir>/healthy, <StateDir>/check). Kubernetes requires
@@ -339,7 +341,7 @@ func (i *PodInjector) rejectStateMount(reason RejectReason, container string, m 
 // surfaces as a clear admission error rather than a silently-broken pod or a
 // generic API-server validation rejection. It guards against: a collision
 // with an injected container name; a pre-existing berth-state volume that is
-// not the emptyDir the helper relies on; and (in probe mode) a main container
+// not the emptyDir the helper relies on; and a runtime main container
 // that already defines a livenessProbe we would otherwise clobber.
 func (i *PodInjector) preflight(pod *corev1.Pod, r resolved) error {
 	reserved := []string{InitContainerName}
@@ -375,19 +377,17 @@ func (i *PodInjector) preflight(pod *corev1.Pod, r resolved) error {
 		return fmt.Errorf("cannot inject: pod already has a volume named %q (reserved for the injected CA bundle)", AuthCABundleVolume)
 	}
 
-	if r.mode == acquire.ModeRuntimeSingleton && r.enforce == acquire.EnforceProbe {
+	if r.mode == acquire.ModeRuntimeSingleton {
 		for idx := range pod.Spec.Containers {
 			c := &pod.Spec.Containers[idx]
 			if c.LivenessProbe != nil {
-				return fmt.Errorf("cannot inject probe enforcement: container %q already defines a livenessProbe; set %s=%s to enforce by signal instead", c.Name, AnnEnforce, acquire.EnforceSignal)
+				return fmt.Errorf("cannot inject runtime enforcement: container %q already defines a livenessProbe; Berth must own the liveness probe in both probe and signal modes", c.Name)
 			}
-			// We add a read-only state mount at StateDir for the probe; a
-			// different volume already mounted there would make the PodSpec
-			// invalid (duplicate mountPath), so reject it up front.
-			for _, m := range c.VolumeMounts {
-				if m.MountPath == i.cfg.StateDir && m.Name != VolumeName {
-					return fmt.Errorf("cannot inject probe enforcement: container %q already mounts volume %q at the state dir %s", c.Name, m.Name, i.cfg.StateDir)
-				}
+			if c.StartupProbe != nil {
+				return fmt.Errorf("cannot inject runtime enforcement: container %q defines a startupProbe that can delay Berth liveness enforcement", c.Name)
+			}
+			if err := i.validateProbeMounts(c, false); err != nil {
+				return err
 			}
 		}
 	}
@@ -482,8 +482,8 @@ func (r resolved) validate() error {
 			"PID namespace, which can terminate co-located sidecars; set it to the workload's process name "+
 			"(comm or executable basename)", AnnSignalTarget, AnnMode, acquire.ModeRuntimeSingleton, AnnEnforce, acquire.EnforceSignal)
 	}
-	if r.ttlSeconds <= 0 {
-		return fmt.Errorf("%s must be positive", AnnTTLSeconds)
+	if r.ttlSeconds <= 0 || int64(r.ttlSeconds) > math.MaxInt32 {
+		return fmt.Errorf("%s must be between 1 and 2147483647 seconds", AnnTTLSeconds)
 	}
 	if r.heartbeatSeconds < 0 {
 		return fmt.Errorf("%s must not be negative", AnnHeartbeatSeconds)
@@ -616,59 +616,51 @@ func (i *PodInjector) freshnessProbe(r resolved) *corev1.Probe {
 			Exec: &corev1.ExecAction{Command: []string{check, "check", marker, "--max-age", maxAge}},
 		},
 		PeriodSeconds:    2,
+		TimeoutSeconds:   1,
+		SuccessThreshold: 1,
 		FailureThreshold: 1,
 	}
 }
 
 // applyEnforcement wires the runtime-singleton kill mechanism.
 func (i *PodInjector) applyEnforcement(pod *corev1.Pod, r resolved) {
-	switch r.enforce {
-	case acquire.EnforceSignal:
-		// shareProcessNamespace lets the sidecar signal the main process.
-		t := true
-		pod.Spec.ShareProcessNamespace = &t
-
-		// Signal enforcement depends on a live sidecar to do the signalling,
-		// so a dead sidecar would otherwise leave the workload running
-		// unleased (#98). Add the freshness probe purely as a backstop —
-		// enforcement stays signal-driven.
-		//
-		// Only where the liveness slot is free. preflight routes users here
-		// precisely when a container already defines its own livenessProbe,
-		// and Kubernetes allows one per container; overwriting the
-		// workload's health check would be a worse defect than the one being
-		// fixed. Those pods keep the gap, which is documented rather than
-		// implied.
-		roMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir, ReadOnly: true}
-		for idx := range pod.Spec.Containers {
-			c := &pod.Spec.Containers[idx]
-			if c.LivenessProbe != nil {
-				continue
-			}
-			c.LivenessProbe = i.freshnessProbe(r)
-			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
-				c.VolumeMounts = append(c.VolumeMounts, roMount)
-			}
-		}
-	default: // probe
-		roMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir, ReadOnly: true}
-		for idx := range pod.Spec.Containers {
-			c := &pod.Spec.Containers[idx]
-			c.LivenessProbe = i.freshnessProbe(r)
-			if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
-				c.VolumeMounts = append(c.VolumeMounts, roMount)
-			} else {
-				// Ensure the existing state mount is read-only so the workload
-				// cannot recreate the health marker and bypass enforcement.
-				for mi := range c.VolumeMounts {
-					m := &c.VolumeMounts[mi]
-					if m.Name == VolumeName && m.MountPath == i.cfg.StateDir {
-						m.ReadOnly = true
-					}
-				}
-			}
+	if r.enforce == acquire.EnforceSignal {
+		shared := true
+		pod.Spec.ShareProcessNamespace = &shared
+	}
+	// Signals are an additional termination attempt. Every runtime workload
+	// needs the same kubelet fallback for permission errors or a dead helper.
+	roMount := corev1.VolumeMount{Name: VolumeName, MountPath: i.cfg.StateDir, ReadOnly: true}
+	for idx := range pod.Spec.Containers {
+		c := &pod.Spec.Containers[idx]
+		c.LivenessProbe = i.freshnessProbe(r)
+		if !containerHasMountAt(c, VolumeName, i.cfg.StateDir) {
+			c.VolumeMounts = append(c.VolumeMounts, roMount)
 		}
 	}
+}
+
+// validateProbeMounts ensures the probe sees the complete trusted state volume.
+// A subpath or a nested mount could replace the marker or the check executable.
+func (i *PodInjector) validateProbeMounts(c *corev1.Container, required bool) error {
+	root := path.Clean(i.cfg.StateDir)
+	found := false
+	for _, m := range c.VolumeMounts {
+		mount := path.Clean(m.MountPath)
+		if mount == root || strings.HasPrefix(mount, strings.TrimSuffix(root, "/")+"/") {
+			if m.MountPath != i.cfg.StateDir || m.Name != VolumeName || m.SubPath != "" || m.SubPathExpr != "" || !m.ReadOnly {
+				return fmt.Errorf("cannot enforce runtime container %q: mount %q at %q hides or alters the required read-only Berth state mount", c.Name, m.Name, m.MountPath)
+			}
+			found = true
+		}
+		if m.Name == VolumeName && !m.ReadOnly {
+			return fmt.Errorf("cannot enforce runtime container %q: writable Berth state mount", c.Name)
+		}
+	}
+	if required && !found {
+		return fmt.Errorf("cannot enforce runtime container %q: missing Berth state mount", c.Name)
+	}
+	return nil
 }
 
 // buildEnv assembles the BERTH_*/POD_* environment the helper reads.
