@@ -18,7 +18,7 @@ import (
 // initContainer could therefore keep write access and tamper with the marker
 // and the verifier before the app container ever started.
 func TestWritableStateDirMountOnInitContainerIsRepaired(t *testing.T) {
-	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout", AnnMode: string(acquire.ModeStartupGate)})
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 		Name:         "setup",
 		Image:        "vendor/setup:1",

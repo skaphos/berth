@@ -157,7 +157,7 @@ a repository variable or secret.
 | `berth-operator` | `injection.helper.*` | Injected helper image and pull policy; the bearer-token pair (`apiKeyFile` + `apiKeySecret`) and CA pair (`caBundleFile` + `caBundleConfigMap`) the webhook mounts into the helper containers; and the shared `stateDir` (must be absolute). See [Authenticating injected Pods](../workload-gating-injection.md#authenticating-injected-pods). |
 | `berth-operator` | `injection.defaults.*` | Default `mode`, `enforce`, and `ttlSeconds` for Pods that omit the annotation. |
 | `berth-operator` | `injection.controlPlaneNamespaces` | Namespaces the webhook never mutates (the release namespace is always added). |
-| `berth-operator` | `injection.webhook.*` | `failurePolicy`, `timeoutSeconds`, service port, object/namespace selectors. |
+| `berth-operator` | `injection.webhook.*` | Shared mutating/validating admission `failurePolicy`, `timeoutSeconds`, service port, and object/namespace selectors. |
 | `berth-operator` | `injection.webhook.tls.certManager.*`, `injection.webhook.tls.existingSecret` + `caBundle` | Exactly one serving-cert source is required when injection is enabled. |
 
 ## Static API Key File

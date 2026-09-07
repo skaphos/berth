@@ -192,7 +192,10 @@ Holder identity:
 
 ### Runtime Singleton
 
-Runtime singleton mode injects both an init container and a sidecar.
+Runtime singleton mode injects both an init container and a sidecar. Workload
+init containers (including native sidecars) are rejected in runtime mode because
+the helper cannot reliably fence them. Both preflight mutation and final
+validating admission enforce this restriction; startup-gate remains unchanged.
 
 The sidecar is injected as a **native sidecar** (an init container with
 `restartPolicy: Always`) so it starts before the main containers, runs

@@ -352,6 +352,12 @@ func (i *PodInjector) preflight(pod *corev1.Pod, r resolved) error {
 		}
 	}
 
+	// The helper's enforcement covers regular workload containers only.
+	// Every init container here belongs to the workload; trusted Berth helpers
+	// are added later by mutate. Do not exempt caller-chosen helper names.
+	if r.mode == acquire.ModeRuntimeSingleton && len(pod.Spec.InitContainers) > 0 {
+		return fmt.Errorf("cannot inject runtime-singleton: workload init container %q is unsupported; init containers and native sidecars cannot be reliably fenced", pod.Spec.InitContainers[0].Name)
+	}
 	for _, v := range pod.Spec.Volumes {
 		if v.Name == VolumeName && v.EmptyDir == nil {
 			return fmt.Errorf("cannot inject: pod already has a volume named %q that is not an emptyDir", VolumeName)
@@ -545,10 +551,9 @@ func (i *PodInjector) mutate(pod *corev1.Pod, r resolved) {
 		})
 	}
 
-	// Prepend so the hold (and, for runtime-singleton, the renew sidecar)
-	// run ahead of any workload init containers: gating must cover the
-	// entire pod startup, and renewal must be live during long init
-	// sequences so the lease TTL cannot lapse before the app starts.
+	// Startup-gate holds run before workload init containers. Runtime mode
+	// admits no workload init containers; its only init entries are the
+	// trusted hold and renew helpers created above.
 	pod.Spec.InitContainers = append(injected, pod.Spec.InitContainers...)
 
 	if r.mode == acquire.ModeRuntimeSingleton {

@@ -1,5 +1,5 @@
 # Exercises the berth-acquire injection webhook path (SKA-440): webhook
-# Service, cert-manager Certificate, and MutatingWebhookConfiguration.
+# Service, cert-manager Certificate, and mutating/validating webhook configurations.
 image:
   repository: berth-operator
   tag: ci

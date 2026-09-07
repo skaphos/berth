@@ -149,7 +149,7 @@ injection:
     ttlSeconds: 30
 
   webhook:
-    # MutatingWebhookConfiguration behavior.
+    # Shared MutatingWebhookConfiguration / ValidatingWebhookConfiguration behavior.
     #
     # failurePolicy=Fail (default) because this webhook enforces a safety
     # rule, not only a convenience mutation: it reserves the Berth state
@@ -180,8 +180,8 @@ injection:
     # `certManager.enabled` or `existingSecret` must be set when injection
     # is enabled. Mirrors the berth-apiserver TLS convention.
     tls:
-      # cert-manager-issued Certificate. The MutatingWebhookConfiguration's
-      # caBundle is populated automatically by cert-manager's ca-injector
+      # cert-manager-issued Certificate. Both webhook configurations
+      # have their caBundle populated automatically by cert-manager's ca-injector
       # via the cert-manager.io/inject-ca-from annotation.
       certManager:
         enabled: false

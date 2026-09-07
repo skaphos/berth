@@ -9,11 +9,9 @@ import (
 	"github.com/skaphos/berth/internal/acquire"
 )
 
-// TestInjectPrependsAheadOfExistingInitContainers verifies the hold and renew
-// sidecar run before any workload init containers, so gating covers the whole
-// startup and renewal is live during long init sequences.
-func TestInjectPrependsAheadOfExistingInitContainers(t *testing.T) {
-	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout"})
+// Startup-gate preserves initialization ordering without promising runtime fencing.
+func TestStartupGatePrependsAheadOfExistingInitContainers(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout", AnnMode: string(acquire.ModeStartupGate)})
 	pod.Spec.InitContainers = []corev1.Container{{Name: "schema-migrate", Image: "vendor/migrate:1"}}
 
 	if err := testInjector().Default(context.Background(), pod); err != nil {
@@ -24,7 +22,7 @@ func TestInjectPrependsAheadOfExistingInitContainers(t *testing.T) {
 	for _, c := range pod.Spec.InitContainers {
 		got = append(got, c.Name)
 	}
-	want := []string{InitContainerName, SidecarContainerName, "schema-migrate"}
+	want := []string{InitContainerName, "schema-migrate"}
 	if len(got) != len(want) {
 		t.Fatalf("init container order = %v, want %v", got, want)
 	}

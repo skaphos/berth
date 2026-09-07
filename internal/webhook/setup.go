@@ -7,7 +7,7 @@ import (
 
 // SetupWithManager registers the pod-injection mutating webhook with the
 // manager's webhook server. It serves at the controller-runtime default
-// path for core/v1 Pods (/mutate--v1-pod); the MutatingWebhookConfiguration
+// paths for core/v1 Pods (/mutate--v1-pod and /validate--v1-pod); the webhook configurations
 // (SKA-440) points the API server there and scopes it with object and
 // namespace selectors.
 func SetupWithManager(mgr ctrl.Manager, cfg InjectorConfig) error {
@@ -17,5 +17,6 @@ func SetupWithManager(mgr ctrl.Manager, cfg InjectorConfig) error {
 	}
 	return ctrl.NewWebhookManagedBy(mgr, &corev1.Pod{}).
 		WithDefaulter(injector).
+		WithValidator(injector).
 		Complete()
 }

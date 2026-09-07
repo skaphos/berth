@@ -122,6 +122,45 @@ A kubelet restart does **not** re-run init containers, so the sidecar is what
 keeps a stopped main container gated after enforcement fires — "lease lost"
 becomes a controlled crashloop, not an unguarded restart.
 
+### Supported initialization and admission
+
+`runtime-singleton` rejects Pods with workload `initContainers`, including
+restartable init containers (native sidecars). This applies to both `probe` and
+`signal` enforcement. Only Berth's injected acquire and renew helpers may occupy
+that list. Regular init containers cannot use liveness probes, and adding probes
+to native sidecars does not by itself fence their complete startup lifecycle.
+See the [Kubernetes init-container rules](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/).
+
+Startup-gate still accepts ordinary init containers and native sidecars, with the
+Berth acquisition init placed first. Use it only when startup-only admission is
+sufficient; it provides no protection once the initial acquisition completes.
+Work requiring singleton execution during initialization needs its own lease and
+downstream fencing or a supported workload design before opting into runtime mode.
+Changing enforcement to `signal` does not make workload init containers supported.
+
+The operator now serves `/validate--v1-pod` as well as `/mutate--v1-pod`.
+The final validating webhook runs after all mutators, so service-mesh or other
+injectors cannot append workload init containers after Berth's preflight check.
+Keep both webhook registrations installed and `failurePolicy: Fail` for the
+admission guarantee. Their TLS, selectors, timeout, and service port use the same
+`injection.webhook.*` settings. Final validation applies only to Pod creation;
+existing Pods remain updateable and deletable.
+
+Operator chart **0.7.0** installs the additional ValidatingWebhookConfiguration.
+Deploy an operator image containing this fix and wait for all webhook replicas
+to serve the new endpoint before relying on the new registration. During an
+upgrade, opted-in Pod creates may be denied while an old replica or missing
+certificate serves the request. The chart's image tag must select the patched
+operator; a new chart with an older operator image is not a supported combination.
+For manually managed admission, install the matching validating registration too.
+
+Existing admitted Pods are not retroactively protected. Inventory workloads and
+other injectors that add init containers, drain affected processes, and redesign
+or remove the unsupported init work before recreating runtime-singleton Pods.
+A webhook upgrade alone does not stop an already-running migration or sidecar.
+Do not disable validation or switch to startup-gate merely to bypass rejection
+when the workload still requires a runtime singleton guarantee.
+
 ### Pod identity and upgrades
 
 The default runtime holder ends with `:uid:<metadata.uid>`. The webhook injects
