@@ -50,6 +50,17 @@ The API server exposes three lease lifecycle endpoints:
 | `POST` | `/v1alpha1/namespaces/{namespace}/leases/{name}/renew` | Extend a held lease after validating holder and fencing token. |
 | `POST` | `/v1alpha1/namespaces/{namespace}/leases/{name}/release` | Release a held lease after validating holder and fencing token. |
 
+Lease request bodies are limited to 4,096 bytes, including whitespace, and must
+contain exactly one JSON object. Larger bodies return HTTP 413; malformed or
+multiple JSON values return HTTP 400. Acquire and renew accept nonempty holders
+of at most 253 decoded UTF-8 bytes across every backend; longer holders return
+HTTP 400. Holder identities are never truncated or rewritten.
+
+Before upgrading, shorten configurations that generate longer holder identities.
+Existing oversized holders cannot renew but can still release if the request
+fits the body limit. Larger legacy records must expire and be reclaimed or
+cleared by TTL collection, which preserves their fencing-token high-water mark.
+
 All three validate the key after authorization: `{namespace}` must be an RFC
 1123 DNS label (no dots), `{name}` an RFC 1123 DNS subdomain, joined length
 at most 253 characters. Malformed keys get a `400` naming the field — they

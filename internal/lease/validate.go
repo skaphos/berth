@@ -11,6 +11,22 @@ import (
 // k8s backend encodes the pair as a single Lease object name.
 const maxEncodedKeyLength = validation.DNS1123SubdomainMaxLength
 
+// MaxHolderBytes is the maximum decoded holder size for acquisition and renewal.
+// This conservative byte limit fits every supported backend's holder column.
+const MaxHolderBytes = 253
+
+// ValidateHolder validates a live holder without changing its identity. Release
+// deliberately accepts older oversized holders so they can be tombstoned.
+func ValidateHolder(holder string) error {
+	if holder == "" {
+		return fmt.Errorf("holder is required")
+	}
+	if len(holder) > MaxHolderBytes {
+		return fmt.Errorf("holder must be at most %d bytes", MaxHolderBytes)
+	}
+	return nil
+}
+
 // ValidateKey reports whether key is well-formed. The namespace must be an
 // RFC 1123 DNS label (lowercase alphanumerics and '-', at most 63
 // characters — notably, no dots), the name an RFC 1123 DNS subdomain, and

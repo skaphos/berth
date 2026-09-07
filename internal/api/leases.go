@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -117,8 +119,8 @@ func handleAcquire(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		if !decodeJSON(w, r, &req) {
 			return
 		}
-		if req.Holder == "" {
-			writeError(w, http.StatusBadRequest, "holder is required")
+		if err := lease.ValidateHolder(req.Holder); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		if req.TTLSeconds <= 0 {
@@ -152,8 +154,8 @@ func handleRenew(mgr LeaseManager, authz tenant.Authorizer) http.HandlerFunc {
 		if !decodeJSON(w, r, &req) {
 			return
 		}
-		if req.Holder == "" {
-			writeError(w, http.StatusBadRequest, "holder is required")
+		if err := lease.ValidateHolder(req.Holder); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		if req.FencingToken == 0 {
@@ -232,11 +234,29 @@ func validateKey(w http.ResponseWriter, r *http.Request, key lease.Key) bool {
 	return true
 }
 
+// maxLeaseBodyBytes bounds allocations before JSON decoding and authorization.
+// It includes trailing data and whitespace, independent of Content-Length.
+const maxLeaseBodyBytes = 4096
+
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	dec := json.NewDecoder(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxLeaseBodyBytes))
+	if err != nil {
+		var sizeErr *http.MaxBytesError
+		if errors.As(err, &sizeErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body must be at most 4096 bytes")
+		} else {
+			writeError(w, http.StatusBadRequest, "could not read request body")
+		}
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
+		return false
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "request body must contain one JSON object")
 		return false
 	}
 	return true

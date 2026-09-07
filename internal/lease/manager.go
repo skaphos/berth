@@ -74,8 +74,8 @@ func (m *Manager) Acquire(ctx context.Context, key Key, holder string, ttl time.
 	if err := ValidateKey(key); err != nil {
 		return AcquireResult{}, fmt.Errorf("acquire: %w", err)
 	}
-	if holder == "" {
-		return AcquireResult{}, errors.New("acquire: holder is required")
+	if err := ValidateHolder(holder); err != nil {
+		return AcquireResult{}, fmt.Errorf("acquire: %w", err)
 	}
 	if ttl <= 0 {
 		return AcquireResult{}, errors.New("acquire: ttl must be positive")
@@ -162,8 +162,8 @@ func (m *Manager) Renew(ctx context.Context, key Key, holder string, token int32
 	if err := ValidateKey(key); err != nil {
 		return AcquireResult{}, fmt.Errorf("renew: %w", err)
 	}
-	if holder == "" {
-		return AcquireResult{}, errors.New("renew: holder is required")
+	if err := ValidateHolder(holder); err != nil {
+		return AcquireResult{}, fmt.Errorf("renew: %w", err)
 	}
 	if token <= 0 {
 		return AcquireResult{}, errors.New("renew: token must be positive")
