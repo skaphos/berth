@@ -20,7 +20,8 @@ type Identity struct {
 
 // Authenticator validates a bearer token and returns the corresponding
 // [Identity]. Implementations return a non-nil error when authentication
-// fails.
+// fails and must never return (nil, nil); callers treat a nil identity as
+// an authentication failure regardless of the error value.
 type Authenticator interface {
 	Authenticate(ctx context.Context, token string) (*Identity, error)
 }

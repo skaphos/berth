@@ -157,6 +157,26 @@ func TestAuthMiddlewareRejectsAuthenticatorError(t *testing.T) {
 	}
 }
 
+func TestAuthMiddlewareRejectsNilIdentityWithoutError(t *testing.T) {
+	t.Parallel()
+
+	// An authenticator that violates its contract by returning (nil, nil)
+	// must fail closed: authorize() reads a nil identity as no-auth mode and
+	// would otherwise skip every tenant check.
+	authn := &fakeAuthenticator{}
+	req := httptest.NewRequest(http.MethodPost, "/x", nil)
+	req.Header.Set("Authorization", "Bearer whatever")
+	rec := httptest.NewRecorder()
+
+	AuthMiddleware(authn)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("downstream must not be called")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
 func TestIdentityFromContextWithoutMiddlewareReturnsNil(t *testing.T) {
 	t.Parallel()
 	if got := IdentityFromContext(context.Background()); got != nil {
