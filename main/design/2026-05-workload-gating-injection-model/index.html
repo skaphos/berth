@@ -1415,7 +1415,10 @@ as interchangeable.</p>
   mode does not claim singleton runtime behavior.</li>
 </ul>
 <h3 id="runtime-singleton">Runtime Singleton</h3>
-<p>Runtime singleton mode injects both an init container and a sidecar.</p>
+<p>Runtime singleton mode injects both an init container and a sidecar. Workload
+init containers (including native sidecars) are rejected in runtime mode because
+the helper cannot reliably fence them. Both preflight mutation and final
+validating admission enforce this restriction; startup-gate remains unchanged.</p>
 <p>The sidecar is injected as a <strong>native sidecar</strong> (an init container with
 <code>restartPolicy: Always</code>) so it starts before the main containers, runs
 alongside them, and — critically — does not block Job/CronJob completion.</p>
