@@ -180,6 +180,19 @@ The UID and tenant root are never truncated. Startup-gate identities remain
 workload-scoped. Explicit `holder-identity` overrides retain their exact value;
 users remain responsible for making overrides unique across concurrent candidates.
 
+Both modes share the same tenant root: the operator's `clusterID` when set,
+otherwise the Pod namespace. A credential whose tenant equals `clusterID`
+therefore authorizes injected acquires in every namespace for both modes.
+Earlier releases rooted the startup-gate default at the namespace regardless of
+`clusterID`, so a cluster-scoped credential was rejected with `403` at startup
+unless the namespace happened to equal the cluster identity. When upgrading a
+deployment that sets `clusterID`, the startup-gate default changes from
+`<namespace>/<kind>:<name>` to `<clusterID>/<namespace>:<kind>:<name>`. A lease
+still held under the old holder blocks the new one until it expires, so either
+wait one TTL before rolling startup-gate workloads, or pin the previous value
+with a `berth.skaphos.io/holder-identity` annotation and a credential whose
+tenant matches that namespace.
+
 Upgrade the injector and helper image together, then recreate affected Pods to
 receive the new downward-API environment. Existing Pods retain their old
 injected images and environment; upgrading the operator alone does not fix them.
