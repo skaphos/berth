@@ -47,6 +47,11 @@ func TestChartPassesHelperPullPolicy(t *testing.T) {
 				if err == nil {
 					t.Fatalf("schema accepted pullPolicy=%q", tc.set)
 				}
+				// The failure must come from the schema rejecting this key,
+				// not from some unrelated render error.
+				if !strings.Contains(string(out), "pullPolicy") {
+					t.Fatalf("render failed for a reason other than pullPolicy validation:\n%s", out)
+				}
 				return
 			}
 			if err != nil {

@@ -78,6 +78,25 @@ Usage:
 {{- end -}}
 
 {{/*
+Normalized bind address for the operator's --*-bind-address flags, built on
+bindPort so the flag and the container port always agree. Yields "0" when
+disabled, ":<port>" for a bare port (controller-runtime's listener needs the
+colon), and "<host>:<port>" with the port normalized otherwise. Usage:
+  {{ include "berth-operator.bindAddress" (dict "name" "metrics.bindAddress" "addr" .Values.metrics.bindAddress) }}
+*/}}
+{{- define "berth-operator.bindAddress" -}}
+{{- $port := include "berth-operator.bindPort" . -}}
+{{- $addr := .addr | toString | trim -}}
+{{- if eq $port "0" -}}
+0
+{{- else if contains ":" $addr -}}
+{{- regexReplaceAll ":[0-9]+$" $addr "" -}}:{{ $port }}
+{{- else -}}
+:{{ $port }}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Path the operator reads the bearer token from. Defaults to the sidecar
 broker's tokenPath when the sidecar is enabled; otherwise honors an
 explicit berth.tokenFile.path.

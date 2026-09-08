@@ -32,9 +32,9 @@ spec:
           args:
             - --berth-api-server={{ .Values.berth.apiServer }}
             - --cluster-id={{ .Values.clusterID }}
-            - --metrics-bind-address={{ .Values.metrics.bindAddress }}
+            - --metrics-bind-address={{ include "berth-operator.bindAddress" (dict "name" "metrics.bindAddress" "addr" .Values.metrics.bindAddress) }}
             - --metrics-secure={{ .Values.metrics.secure }}
-            - --health-probe-bind-address={{ .Values.healthProbe.bindAddress }}
+            - --health-probe-bind-address={{ include "berth-operator.bindAddress" (dict "name" "healthProbe.bindAddress" "addr" .Values.healthProbe.bindAddress) }}
             {{- if .Values.leaderElection.enabled }}
             - --leader-elect
             - --leader-election-id={{ .Values.leaderElection.id | default (printf "%s-leader" (include "berth-operator.fullname" .)) }}
