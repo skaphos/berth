@@ -165,7 +165,7 @@ a repository variable or secret.
 | `berth-apiserver` | `metrics.serviceMonitor.*` | Prometheus Operator `ServiceMonitor` (requires the `monitoring.coreos.com` CRDs): `enabled`, `interval`, `scrapeTimeout`, `additionalLabels`, relabelings. |
 | `berth-apiserver` | `metrics.podAnnotations.enabled` | Alternative to a ServiceMonitor: render `prometheus.io/*` scrape annotations on the pod. |
 | `berth-operator` | `clusterID` | Required for cross-cluster singleton deployments. Must differ per cluster. |
-| `berth-operator` | `metrics.bindAddress` | `:<port>`, `<host>:<port>`, or `0` to disable the listener, which also omits the metrics container port. Unsupported syntax fails rendering. |
+| `berth-operator` | `metrics.bindAddress` | `:<port>`, `<host>:<port>`, `[<ipv6>]:<port>`, a bare `<port>` (string or integer), or `0` to disable the listener, which also omits the metrics container port. Anything else, including URLs and unbracketed IPv6, fails rendering. |
 | `berth-operator` | CRDs | The BerthLease CRD ships in `crds/`; Helm installs it on first install and never upgrades it. Pass `--skip-crds` to manage it out-of-band. There is no chart value for this. |
 | `berth-operator` | `berth.apiServer` | Central API server URL. |
 | `berth-operator` | `berth.apiKey.*` | Static token Secret source. |

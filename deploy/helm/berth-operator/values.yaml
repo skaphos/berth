@@ -239,9 +239,11 @@ rbac:
 # -- Observability and the metrics endpoint (passed to the controller-runtime
 # manager).
 metrics:
-  # ":<port>", "<host>:<port>", or "0" to disable the listener (the metrics
-  # container port is then omitted; incompatible with serviceMonitor and
-  # secure). Unsupported syntax fails rendering.
+  # Accepted forms: ":<port>", "<host>:<port>", "[<ipv6>]:<port>", a bare
+  # "<port>" (which is why the schema also allows an integer), or "0" to
+  # disable the listener (the metrics container port is then omitted;
+  # incompatible with serviceMonitor and secure). Anything else, including
+  # URLs and unbracketed IPv6, fails rendering.
   bindAddress: ":8080"
   # -- Serve /metrics over HTTPS, authenticated via Kubernetes TokenReview and
   # authorized via SubjectAccessReview. Off by default: the endpoint stays plain

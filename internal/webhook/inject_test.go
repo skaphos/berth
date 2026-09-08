@@ -375,7 +375,11 @@ func TestInjectInvalidConfig(t *testing.T) {
 // and an unset policy must default to IfNotPresent.
 func TestInjectHelperPullPolicyPropagates(t *testing.T) {
 	for _, policy := range []corev1.PullPolicy{"", corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever} {
-		t.Run(string(policy), func(t *testing.T) {
+		name := string(policy)
+		if name == "" {
+			name = "default"
+		}
+		t.Run(name, func(t *testing.T) {
 			cfg := InjectorConfig{
 				HelperImage:            "ghcr.io/skaphos/berth-acquire:test",
 				ImagePullPolicy:        policy,

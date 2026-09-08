@@ -43,10 +43,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
-Port number from a controller-runtime bind address. Accepts ":<port>",
-"<host>:<port>" (including "[::]:<port>"), a bare "<port>", and "0" or ""
-(both disable the listener and yield "0"). Anything else fails rendering:
-a silent misparse would otherwise render an invalid containerPort.
+Port number from a controller-runtime bind address. Accepts exactly these
+forms: ":<port>", "<host>:<port>" (host without colons or brackets),
+"[<ipv6>]:<port>", a bare "<port>", and "0" or "" (both disable the listener
+and yield "0"). Anything else fails rendering: a URL, an unbracketed IPv6
+address, or any other shape that happens to end in ":<digits>" would render
+a plausible containerPort and then fail to bind at runtime.
 Usage:
   {{ include "berth-operator.bindPort" (dict "name" "metrics.bindAddress" "addr" .Values.metrics.bindAddress) }}
 */}}
@@ -55,10 +57,10 @@ Usage:
 {{- if or (eq $addr "") (eq $addr "0") -}}
 0
 {{- else -}}
-{{- $port := regexReplaceAll "^.*:" $addr "" -}}
-{{- if not (regexMatch "^[0-9]+$" $port) -}}
-{{- fail (printf "%s=%q is not a supported bind address: use \":<port>\", \"<host>:<port>\", or \"0\" to disable the listener" .name $addr) -}}
+{{- if not (regexMatch `^(\[[^\]]*\]|[^:\[\]]*)?:[0-9]+$|^[0-9]+$` $addr) -}}
+{{- fail (printf "%s=%q is not a supported bind address: use \":<port>\", \"<host>:<port>\", \"[<ipv6>]:<port>\", a bare \"<port>\", or \"0\" to disable the listener" .name $addr) -}}
 {{- end -}}
+{{- $port := regexReplaceAll "^.*:" $addr "" -}}
 {{- if or (lt (int $port) 1) (gt (int $port) 65535) -}}
 {{- fail (printf "%s=%q: port %s is outside 1-65535" .name $addr $port) -}}
 {{- end -}}
