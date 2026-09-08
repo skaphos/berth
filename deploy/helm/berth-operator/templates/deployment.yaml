@@ -64,6 +64,7 @@ spec:
             {{- if .Values.injection.enabled }}
             - --enable-injection-webhook
             - --injection-helper-image={{ .Values.injection.helper.repository }}:{{ .Values.injection.helper.tag | default .Chart.AppVersion }}
+            - --injection-helper-image-pull-policy={{ .Values.injection.helper.pullPolicy }}
             - --injection-control-plane-namespaces={{ prepend .Values.injection.controlPlaneNamespaces .Release.Namespace | uniq | join "," }}
             - --injection-state-dir={{ .Values.injection.helper.stateDir }}
             - --injection-default-mode={{ .Values.injection.defaults.mode }}
@@ -88,11 +89,14 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           ports:
+            {{- $metricsPort := include "berth-operator.bindPort" (dict "name" "metrics.bindAddress" "addr" .Values.metrics.bindAddress) }}
+            {{- if ne $metricsPort "0" }}
             - name: metrics
-              containerPort: {{ trimPrefix ":" .Values.metrics.bindAddress | int }}
+              containerPort: {{ $metricsPort }}
               protocol: TCP
+            {{- end }}
             - name: health
-              containerPort: {{ trimPrefix ":" .Values.healthProbe.bindAddress | int }}
+              containerPort: {{ include "berth-operator.bindPort" (dict "name" "healthProbe.bindAddress" "addr" .Values.healthProbe.bindAddress) }}
               protocol: TCP
             {{- if or .Values.injection.enabled .Values.workloadManagement.enabled }}
             - name: webhook

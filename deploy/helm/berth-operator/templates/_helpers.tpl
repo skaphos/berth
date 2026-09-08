@@ -43,6 +43,30 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
+Port number from a controller-runtime bind address. Accepts ":<port>",
+"<host>:<port>" (including "[::]:<port>"), a bare "<port>", and "0" or ""
+(both disable the listener and yield "0"). Anything else fails rendering:
+a silent misparse would otherwise render an invalid containerPort.
+Usage:
+  {{ include "berth-operator.bindPort" (dict "name" "metrics.bindAddress" "addr" .Values.metrics.bindAddress) }}
+*/}}
+{{- define "berth-operator.bindPort" -}}
+{{- $addr := .addr | toString | trim -}}
+{{- if or (eq $addr "") (eq $addr "0") -}}
+0
+{{- else -}}
+{{- $port := regexReplaceAll "^.*:" $addr "" -}}
+{{- if not (regexMatch "^[0-9]+$" $port) -}}
+{{- fail (printf "%s=%q is not a supported bind address: use \":<port>\", \"<host>:<port>\", or \"0\" to disable the listener" .name $addr) -}}
+{{- end -}}
+{{- if or (lt (int $port) 1) (gt (int $port) 65535) -}}
+{{- fail (printf "%s=%q: port %s is outside 1-65535" .name $addr $port) -}}
+{{- end -}}
+{{- $port -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Path the operator reads the bearer token from. Defaults to the sidecar
 broker's tokenPath when the sidecar is enabled; otherwise honors an
 explicit berth.tokenFile.path.

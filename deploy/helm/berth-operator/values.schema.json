@@ -144,8 +144,6 @@
       }
     },
 
-    "installCRDs": {"type": "boolean"},
-
     "rbac": {
       "type": "object",
       "required": ["create"],
@@ -160,7 +158,7 @@
     "metrics": {
       "type": "object",
       "properties": {
-        "bindAddress": {"type": "string"},
+        "bindAddress": {"type": ["string", "integer"]},
         "secure":      {"type": "boolean"},
         "auth":   {"type": "object", "properties": {"create": {"type": "boolean"}}},
         "reader": {

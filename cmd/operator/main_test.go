@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/skaphos/berth/internal/acquire"
 	"github.com/skaphos/berth/internal/webhook"
 )
@@ -109,6 +111,7 @@ func TestParseConfigInjectorMapping(t *testing.T) {
 		"--berth-insecure-skip-tls-verify=true",
 		"--enable-injection-webhook=true",
 		"--injection-helper-image=ghcr.io/skaphos/berth-acquire:test",
+		"--injection-helper-image-pull-policy=Always",
 		"--injection-control-plane-namespaces= berth-system , kube-system ,, extra ",
 		"--injection-helper-api-key-file=/var/run/berth/token",
 		"--injection-helper-api-key-secret=berth-token",
@@ -131,6 +134,7 @@ func TestParseConfigInjectorMapping(t *testing.T) {
 
 	want := webhook.InjectorConfig{
 		HelperImage:            "ghcr.io/skaphos/berth-acquire:test",
+		ImagePullPolicy:        corev1.PullAlways,
 		APIServer:              "https://berth.example.com:8443",
 		APIKeyFile:             "/var/run/berth/token",
 		APIKeySecretName:       "berth-token",

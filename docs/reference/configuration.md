@@ -101,6 +101,7 @@ ping.
 | `--workload-operator-namespace` | empty | Operator namespace, excluded from target management and admission to permit recovery. |
 | `--enable-injection-webhook` | `false` | Serve the `berth-acquire` pod-injection mutating webhook from the operator. |
 | `--injection-helper-image` | empty | `berth-acquire` image stamped into opted-in Pods. Required when the webhook is enabled. |
+| `--injection-helper-image-pull-policy` | `IfNotPresent` | Pull policy for both injected helper containers: `Always`, `IfNotPresent`, or `Never`. |
 | `--injection-control-plane-namespaces` | `berth-system` | Comma-separated namespaces the webhook never mutates. |
 | `--injection-helper-api-key-file` | empty | Path the injected helpers read the bearer token from, inside the workload Pod. Set together with `--injection-helper-api-key-secret`. |
 | `--injection-helper-api-key-secret` | empty | Secret **in each opted-in workload's namespace** that the webhook mounts at `--injection-helper-api-key-file`. Set together with it. |
@@ -164,6 +165,8 @@ a repository variable or secret.
 | `berth-apiserver` | `metrics.serviceMonitor.*` | Prometheus Operator `ServiceMonitor` (requires the `monitoring.coreos.com` CRDs): `enabled`, `interval`, `scrapeTimeout`, `additionalLabels`, relabelings. |
 | `berth-apiserver` | `metrics.podAnnotations.enabled` | Alternative to a ServiceMonitor: render `prometheus.io/*` scrape annotations on the pod. |
 | `berth-operator` | `clusterID` | Required for cross-cluster singleton deployments. Must differ per cluster. |
+| `berth-operator` | `metrics.bindAddress` | `:<port>`, `<host>:<port>`, or `0` to disable the listener, which also omits the metrics container port. Unsupported syntax fails rendering. |
+| `berth-operator` | CRDs | The BerthLease CRD ships in `crds/`; Helm installs it on first install and never upgrades it. Pass `--skip-crds` to manage it out-of-band. There is no chart value for this. |
 | `berth-operator` | `berth.apiServer` | Central API server URL. |
 | `berth-operator` | `berth.apiKey.*` | Static token Secret source. |
 | `berth-operator` | `berth.tokenFile.path` | Token file path written by a sidecar. |

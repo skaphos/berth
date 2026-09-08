@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -226,6 +227,7 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		operatorUser       string
 		operatorNamespace  string
 		injHelperImage     string
+		injPullPolicy      string
 		injControlPlaneNS  string
 		injAPIKeyFile      string
 		injAPIKeySecret    string
@@ -283,6 +285,8 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		"serve the berth-acquire pod-injection mutating webhook from this operator.")
 	fs.StringVar(&injHelperImage, "injection-helper-image", "",
 		"berth-acquire image injected into opted-in pods. Required when --enable-injection-webhook is set.")
+	fs.StringVar(&injPullPolicy, "injection-helper-image-pull-policy", string(corev1.PullIfNotPresent),
+		"image pull policy for both injected helper containers: Always, IfNotPresent, or Never.")
 	fs.StringVar(&injControlPlaneNS, "injection-control-plane-namespaces", "berth-system",
 		"comma-separated namespaces the webhook never mutates (the Berth control plane).")
 	fs.StringVar(&injAPIKeyFile, "injection-helper-api-key-file", "",
@@ -362,8 +366,9 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 		leaderElectionRetryPeriod:   leaderElectionRetryPeriod,
 
 		injectorConfig: webhook.InjectorConfig{
-			HelperImage: injHelperImage,
-			APIServer:   apiServerURL,
+			HelperImage:     injHelperImage,
+			ImagePullPolicy: corev1.PullPolicy(injPullPolicy),
+			APIServer:       apiServerURL,
 			// Auth/CA file paths and the in-workload-namespace sources the
 			// webhook mounts at them. These are the injected helper's own
 			// paths, distinct from the operator's --berth-ca-bundle-file.

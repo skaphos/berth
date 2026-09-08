@@ -14,8 +14,6 @@ image:
 # clusterID is required and supplied per-release at install time.
 clusterID: ""
 
-installCRDs: true
-
 berth:
   # apiServer is supplied per-release at install time.
   apiServer: ""
