@@ -64,10 +64,16 @@ Usage:
 {{- fail (printf "%s=%q is not a supported bind address: use \":<port>\", \"<host>:<port>\", \"[<ipv6>]:<port>\", a bare \"<port>\", or \"0\" to disable the listener" .name $addr) -}}
 {{- end -}}
 {{- $port := regexReplaceAll "^.*:" $addr "" -}}
+{{- /* Strip leading zeros before conversion: sprig's int parses "08080" as
+       octal and yields 0, and a raw "08080" literal is octal to YAML 1.1. */ -}}
+{{- $port = regexReplaceAll "^0+" $port "" -}}
+{{- if eq $port "" -}}{{- $port = "0" -}}{{- end -}}
 {{- if or (lt (int $port) 1) (gt (int $port) 65535) -}}
 {{- fail (printf "%s=%q: port %s is outside 1-65535" .name $addr $port) -}}
 {{- end -}}
-{{- $port -}}
+{{- /* Emit a normalized decimal so ":08080" renders containerPort: 8080
+       rather than a leading-zero literal that YAML 1.1 may read as octal. */ -}}
+{{- int $port -}}
 {{- end -}}
 {{- end -}}
 

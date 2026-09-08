@@ -36,6 +36,8 @@ func TestChartMetricsBindAddress(t *testing.T) {
 		{name: "ipv6-any", args: []string{"--set", "metrics.bindAddress=[::]:9091"}, wantPort: 9091},
 		{name: "bare-port-string", args: []string{"--set-string", "metrics.bindAddress=9092"}, wantPort: 9092},
 		{name: "bare-port-number", args: []string{"--set", "metrics.bindAddress=9093"}, wantPort: 9093},
+		{name: "leading-zeros-normalized", args: []string{"--set-string", "metrics.bindAddress=:08080"}, wantPort: 8080},
+		{name: "all-zeros-out-of-range", args: []string{"--set-string", "metrics.bindAddress=:000"}, invalidMsg: "outside 1-65535"},
 		{name: "url-rejected", args: []string{"--set", "metrics.bindAddress=http://127.0.0.1:9090"}, invalidMsg: "not a supported bind address"},
 		{name: "unbracketed-ipv6-rejected", args: []string{"--set", "metrics.bindAddress=2001:db8::1:9090"}, invalidMsg: "not a supported bind address"},
 		{name: "trailing-colon-rejected", args: []string{"--set", "metrics.bindAddress=127.0.0.1:"}, invalidMsg: "not a supported bind address"},
