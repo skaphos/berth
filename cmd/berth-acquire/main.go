@@ -204,7 +204,7 @@ func (f *cliFlags) bind(cmd *cobra.Command) {
 	pf.IntVar(&f.enforceGrace, "enforce-grace-seconds", 0, "signal mode: seconds between SIGTERM and SIGKILL")
 	pf.BoolVar(&f.releaseOnDown, "release-on-shutdown", false, "best-effort Release on SIGTERM")
 	pf.StringVar(&f.holderIdentity, "holder-identity", "", "explicit holder identity (overrides the mode-specific default)")
-	pf.StringVar(&f.clusterID, "cluster-id", "", "cluster-distinct identity folded into the runtime-singleton holder default")
+	pf.StringVar(&f.clusterID, "cluster-id", "", "cluster-distinct identity used as the tenant root of the default holder in both modes")
 	pf.StringVar(&f.podNamespace, "pod-namespace", "", "pod namespace (downward API)")
 	pf.StringVar(&f.podName, "pod-name", "", "pod name (downward API)")
 	pf.StringVar(&f.podUID, "pod-uid", "", "pod UID (downward API metadata.uid; required for the runtime holder default)")

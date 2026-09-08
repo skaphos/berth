@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/skaphos/berth/internal/auth"
+	"github.com/skaphos/berth/internal/tenant"
 )
 
 func baseConfig() *Config {
@@ -125,6 +128,80 @@ func TestHolderStartupGatePrefersWorkload(t *testing.T) {
 	want := "prod/deployment:checkout"
 	if got != want {
 		t.Errorf("Holder() = %q, want %q", got, want)
+	}
+}
+
+func TestHolderStartupGateRootsAtClusterID(t *testing.T) {
+	c := baseConfig()
+	c.Mode = ModeStartupGate
+	c.ClusterID = "east"
+	c.WorkloadKind = "deployment"
+	c.WorkloadName = "checkout"
+	c.ApplyDefaults()
+
+	got := c.Holder()
+	// Same tenant root as runtime-singleton (#158), still workload-scoped:
+	// no pod name or UID.
+	want := "east/prod:deployment:checkout"
+	if got != want {
+		t.Errorf("Holder() = %q, want %q", got, want)
+	}
+}
+
+func TestHolderStartupGateFallsBackToPodNameWithClusterID(t *testing.T) {
+	c := baseConfig()
+	c.Mode = ModeStartupGate
+	c.ClusterID = "east"
+	c.ApplyDefaults()
+
+	// Unknown workload: the pod name still supplies a non-empty identity
+	// even though the cluster id and namespace already fill two segments.
+	got := c.Holder()
+	want := "east/prod:checkout-7f6c-j4n8x"
+	if got != want {
+		t.Errorf("Holder() = %q, want %q", got, want)
+	}
+}
+
+// TestHolderAuthorizedByClusterTenantInBothModes is the regression guard for
+// #158: with a cluster-scoped credential (tenant == cluster id) deployed in a
+// namespace whose name differs from the cluster id, the derived default holder
+// must pass holder authorization in *both* modes. Before the fix startup-gate
+// rooted at the namespace, so the same credential that authorized the
+// runtime-singleton sidecar was rejected 403 by the startup-gate init container.
+func TestHolderAuthorizedByClusterTenantInBothModes(t *testing.T) {
+	authz := tenant.NewDefaultAuthorizer()
+	clusterScoped := &auth.Identity{Holder: "east-key", Tenant: "east"}
+	namespaceScoped := &auth.Identity{Holder: "prod-key", Tenant: "prod"}
+
+	for _, mode := range []Mode{ModeStartupGate, ModeRuntimeSingleton} {
+		t.Run(string(mode), func(t *testing.T) {
+			c := baseConfig()
+			c.Mode = mode
+			c.ClusterID = "east"
+			c.WorkloadKind = "deployment"
+			c.WorkloadName = "checkout"
+			c.ApplyDefaults()
+			holder := c.Holder()
+
+			if err := authz.AuthorizeHolder(clusterScoped, holder); err != nil {
+				t.Fatalf("cluster-scoped tenant rejected holder %q: %v", holder, err)
+			}
+			if err := authz.AuthorizeHolder(namespaceScoped, holder); err == nil {
+				t.Fatalf("namespace-scoped tenant unexpectedly authorized cluster-rooted holder %q", holder)
+			}
+
+			// Without a cluster id the namespace is the root, so a
+			// namespace-scoped credential authorizes and the cluster one does not.
+			c.ClusterID = ""
+			holder = c.Holder()
+			if err := authz.AuthorizeHolder(namespaceScoped, holder); err != nil {
+				t.Fatalf("namespace-scoped tenant rejected holder %q: %v", holder, err)
+			}
+			if err := authz.AuthorizeHolder(clusterScoped, holder); err == nil {
+				t.Fatalf("cluster-scoped tenant unexpectedly authorized namespace-rooted holder %q", holder)
+			}
+		})
 	}
 }
 

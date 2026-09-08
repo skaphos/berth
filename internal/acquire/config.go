@@ -191,8 +191,10 @@ func (c *Config) Validate() error {
 // explicit HolderIdentity wins; otherwise the default is mode-specific
 // (see the design doc "Holder Identity Defaulting").
 //
-// Runtime-singleton folds in the Pod UID so different Pod incarnations never
-// share a holder by accident. Startup-gate prefers a workload-level identity
+// Both modes share one tenant-owning root: the cluster id when configured,
+// otherwise the pod namespace. Runtime-singleton then folds in the Pod UID so
+// different Pod incarnations never share a holder by accident. Startup-gate
+// stays workload-level (no pod name or UID when the owning workload is known)
 // because it only proves startup admission.
 func (c *Config) Holder() string {
 	if c.HolderIdentity != "" {
@@ -206,21 +208,19 @@ func (c *Config) Holder() string {
 		}
 	}
 
+	add(c.ClusterID)
+	add(c.PodNamespace)
+	add(c.WorkloadKind)
+	add(c.WorkloadName)
+
 	switch c.Mode {
 	case ModeStartupGate:
-		add(c.PodNamespace)
-		add(c.WorkloadKind)
-		add(c.WorkloadName)
 		// Fall back to pod name if the workload identity is unknown, so we
 		// still produce a non-empty holder.
-		if len(parts) <= 1 {
+		if c.WorkloadKind == "" && c.WorkloadName == "" {
 			add(c.PodName)
 		}
 	default: // runtime-singleton
-		add(c.ClusterID)
-		add(c.PodNamespace)
-		add(c.WorkloadKind)
-		add(c.WorkloadName)
 		if c.PodName != "" {
 			parts = append(parts, "pod", c.PodName)
 		}
@@ -231,10 +231,11 @@ func (c *Config) Holder() string {
 	// the hierarchy with "/" so the derived holder is recognized as *owned* by a
 	// tenant equal to that root — the tenant-ownership boundary is exactly
 	// "<tenant>/" (see internal/tenant.DefaultAuthorizer.AuthorizeHolder). The
-	// root is mode-specific: runtime-singleton roots at the cluster id when set
-	// (falling back to the pod namespace), while startup-gate always roots at
-	// the pod namespace — it never includes the cluster id, even when one is
-	// configured. A ":"-joined root (the earlier format) is owned by no tenant,
+	// root is the same in both modes: the cluster id when set, falling back to
+	// the pod namespace. Rooting startup-gate at the namespace while
+	// runtime-singleton rooted at the cluster id (the earlier behavior, #158)
+	// meant a cluster-scoped credential could authorize one mode but not the
+	// other. A ":"-joined root (an even earlier format) is owned by no tenant,
 	// so an authenticated backend rejects every injected acquire with 403. The
 	// remaining segments stay ":"-joined; in runtime-singleton mode the whole
 	// string is still a unique per-pod identity.

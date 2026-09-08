@@ -358,8 +358,14 @@ segment — e.g. key id == `--cluster-id`.
 
 **Startup gate default (v1)**:
 - Derive from the owning controller of the Pod when available:
-  `namespace` + `kind` + `name`.
-- Example: `prod/deployment:checkout-service`.
+  `cluster identity` (when configured) + `namespace` + `kind` + `name`.
+- Example: `east/prod:deployment:checkout-service` with a cluster identity of
+  `east`; `prod/deployment:checkout-service` without one.
+- The tenant root is the same as in runtime singleton mode so one credential
+  (for example a static key whose id equals `--cluster-id`) authorizes both
+  modes. Before this alignment the startup-gate default always rooted at the
+  namespace, so a cluster-scoped credential was rejected `403` at startup in
+  any namespace whose name differed from the cluster identity.
 - This may allow multiple pods from the same workload to pass startup if they
   share the holder identity. That is acceptable only because startup gate does
   not provide runtime singleton behavior.
