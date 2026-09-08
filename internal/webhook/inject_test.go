@@ -370,6 +370,60 @@ func TestInjectInvalidConfig(t *testing.T) {
 	}
 }
 
+// TestInjectHelperPullPolicyPropagates covers #166: the configured pull
+// policy must reach both injected helper containers for every allowed value,
+// and an unset policy must default to IfNotPresent.
+func TestInjectHelperPullPolicyPropagates(t *testing.T) {
+	for _, policy := range []corev1.PullPolicy{"", corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever} {
+		name := string(policy)
+		if name == "" {
+			name = "default"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := InjectorConfig{
+				HelperImage:            "ghcr.io/skaphos/berth-acquire:test",
+				ImagePullPolicy:        policy,
+				APIServer:              "https://berth.example:8443",
+				ClusterID:              "east",
+				ControlPlaneNamespaces: []string{"berth-system"},
+				DefaultTTLSeconds:      30,
+			}
+			want := policy
+			if want == "" {
+				want = corev1.PullIfNotPresent
+			}
+			pod := optInPod("prod", map[string]string{AnnLeaseName: "checkout", AnnMode: string(acquire.ModeRuntimeSingleton)})
+			if err := NewPodInjector(cfg).Default(context.Background(), pod); err != nil {
+				t.Fatalf("Default: %v", err)
+			}
+			// Both helpers are init containers; the sidecar is a native
+			// sidecar (restartPolicy: Always) rather than a regular container.
+			init := findContainer(pod.Spec.InitContainers, InitContainerName)
+			sidecar := findContainer(pod.Spec.InitContainers, SidecarContainerName)
+			if init == nil || sidecar == nil {
+				t.Fatalf("injected containers missing: init=%v sidecar=%v", init != nil, sidecar != nil)
+			}
+			if init.ImagePullPolicy != want {
+				t.Errorf("init container pull policy = %q, want %q", init.ImagePullPolicy, want)
+			}
+			if sidecar.ImagePullPolicy != want {
+				t.Errorf("sidecar pull policy = %q, want %q", sidecar.ImagePullPolicy, want)
+			}
+		})
+	}
+}
+
+func TestInjectorConfigRejectsUnknownPullPolicy(t *testing.T) {
+	cfg := InjectorConfig{
+		HelperImage:       "ghcr.io/skaphos/berth-acquire:test",
+		ImagePullPolicy:   corev1.PullPolicy("Sometimes"),
+		DefaultTTLSeconds: 30,
+	}
+	if err := cfg.withDefaults().Validate(); err == nil || !strings.Contains(err.Error(), "pull policy") {
+		t.Fatalf("Validate() = %v, want pull policy error", err)
+	}
+}
+
 func TestInjectHolderIdentityAndWorkloadEnv(t *testing.T) {
 	pod := optInPod("prod", map[string]string{
 		AnnLeaseName:         "checkout",

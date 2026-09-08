@@ -10,7 +10,7 @@ spec:
   type: ClusterIP
   ports:
     - name: metrics
-      port: {{ trimPrefix ":" .Values.metrics.bindAddress | int }}
+      port: {{ include "berth-operator.bindPort" (dict "name" "metrics.bindAddress" "addr" .Values.metrics.bindAddress) }}
       targetPort: metrics
       protocol: TCP
       {{- if .Values.metrics.secure }}

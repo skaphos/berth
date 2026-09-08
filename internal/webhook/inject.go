@@ -63,6 +63,14 @@ func (c *InjectorConfig) Validate() error {
 	if c.HelperImage == "" {
 		return fmt.Errorf("injection webhook: helper image is required")
 	}
+	// The policy is stamped onto both injected containers; an unknown value
+	// would be rejected by the API server for every opted-in pod (#166).
+	// Empty means "use the default" (withDefaults fills IfNotPresent).
+	switch c.ImagePullPolicy {
+	case "", corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+	default:
+		return fmt.Errorf("injection webhook: invalid helper image pull policy %q (want Always, IfNotPresent, or Never)", c.ImagePullPolicy)
+	}
 	switch c.DefaultMode {
 	case acquire.ModeStartupGate, acquire.ModeRuntimeSingleton:
 	default:

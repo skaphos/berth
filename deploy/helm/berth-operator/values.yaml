@@ -114,6 +114,8 @@ injection:
   helper:
     repository: ghcr.io/skaphos/berth-acquire
     tag: ""             # defaults to .Chart.AppVersion
+    # Applied to both injected helper containers (init and sidecar) via
+    # --injection-helper-image-pull-policy.
     pullPolicy: IfNotPresent
     # Bearer token for the injected helper. apiKeyFile is the path the helper
     # reads INSIDE the workload pod; apiKeySecret names a Secret IN EACH
@@ -195,10 +197,10 @@ injection:
       existingSecret: ""
       caBundle: ""
 
-# -- Install the BerthLease CRD as part of this chart. Helm only installs
-# CRDs on first install (no upgrade), so toggle off and apply CRDs
-# out-of-band when you need schema changes managed separately.
-installCRDs: true
+# CRDs: the BerthLease CRD ships in this chart's crds/ directory. Helm installs
+# it on first install and never upgrades it; there is no value that changes
+# that. To manage the CRD out-of-band, pass `--skip-crds` to helm install and
+# apply config/crd/berthlease.yaml from the Berth repo yourself.
 
 # -- RBAC granted to the operator's ServiceAccount in this tenant cluster.
 rbac:
@@ -237,6 +239,12 @@ rbac:
 # -- Observability and the metrics endpoint (passed to the controller-runtime
 # manager).
 metrics:
+  # Accepted forms: ":<port>", "<host>:<port>", "[<ipv6>]:<port>", a bare
+  # "<port>" (which is why the schema also allows an integer), or "0" / ""
+  # to disable the listener (the metrics container port is then omitted;
+  # incompatible with serviceMonitor and secure). Ports are normalized to a
+  # decimal integer. Anything else, including URLs and unbracketed IPv6,
+  # fails rendering.
   bindAddress: ":8080"
   # -- Serve /metrics over HTTPS, authenticated via Kubernetes TokenReview and
   # authorized via SubjectAccessReview. Off by default: the endpoint stays plain

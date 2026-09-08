@@ -14,9 +14,13 @@
 
 {{- /* metrics.bindAddress="0" (or empty) disables the metrics listener. That is
        incompatible with a ServiceMonitor (its Service port would render as 0 and
-       fail install) or with secure metrics (nothing to authenticate). */ -}}
-{{- $metricsPort := .Values.metrics.bindAddress | toString | trimPrefix ":" -}}
-{{- $metricsOff := or (eq $metricsPort "0") (eq $metricsPort "") -}}
+       fail install) or with secure metrics (nothing to authenticate). The helper
+       also rejects unsupported address syntax. */ -}}
+{{- $metricsPort := include "berth-operator.bindPort" (dict "name" "metrics.bindAddress" "addr" .Values.metrics.bindAddress) -}}
+{{- $metricsOff := eq $metricsPort "0" -}}
+{{- if eq (include "berth-operator.bindPort" (dict "name" "healthProbe.bindAddress" "addr" .Values.healthProbe.bindAddress)) "0" -}}
+{{- fail "healthProbe.bindAddress must be a real listener (e.g. :8081); the Deployment's liveness and readiness probes target it." -}}
+{{- end -}}
 {{- if and $metricsOff .Values.metrics.serviceMonitor.enabled -}}
 {{- fail "metrics.serviceMonitor.enabled=true but metrics.bindAddress disables the metrics listener (port 0/empty). Set a real metrics.bindAddress (e.g. :8080) or disable the ServiceMonitor." -}}
 {{- end -}}
