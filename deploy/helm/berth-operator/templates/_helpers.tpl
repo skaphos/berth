@@ -57,7 +57,10 @@ Usage:
 {{- if or (eq $addr "") (eq $addr "0") -}}
 0
 {{- else -}}
-{{- if not (regexMatch `^(\[[^\]]*\]|[^:\[\]]*)?:[0-9]+$|^[0-9]+$` $addr) -}}
+{{- /* Brackets must enclose at least one character and no whitespace is
+       allowed anywhere: "[]:9090" or "127.0.0.1 :9090" would render a
+       plausible port and then fail to bind. */ -}}
+{{- if not (regexMatch `^(\[[^\]\s]+\]|[^:\[\]\s]*)?:[0-9]+$|^[0-9]+$` $addr) -}}
 {{- fail (printf "%s=%q is not a supported bind address: use \":<port>\", \"<host>:<port>\", \"[<ipv6>]:<port>\", a bare \"<port>\", or \"0\" to disable the listener" .name $addr) -}}
 {{- end -}}
 {{- $port := regexReplaceAll "^.*:" $addr "" -}}

@@ -144,6 +144,11 @@
       }
     },
 
+    "installCRDs": {
+      "description": "Removed in chart 0.9.0: it never controlled CRD installation. Helm installs crds/ on first install regardless; pass --skip-crds to helm install to manage the CRD out-of-band. Any value here fails validation so a stale override is noticed.",
+      "not": {}
+    },
+
     "rbac": {
       "type": "object",
       "required": ["create"],
