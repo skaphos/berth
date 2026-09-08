@@ -66,8 +66,19 @@ func TestValidate(t *testing.T) {
 		{"bad enforce", func(c *Config) { c.Enforce = "nuke" }, true},
 		{"zero ttl", func(c *Config) { c.TTL = 0 }, true},
 		{"heartbeat >= ttl", func(c *Config) { c.HeartbeatInterval = 30 * time.Second }, true},
+		// Issue #114: a heartbeat merely shorter than the ttl is not enough.
+		{"heartbeat just under ttl", func(c *Config) { c.HeartbeatInterval = 29 * time.Second }, true},
+		{"heartbeat just over half ttl", func(c *Config) { c.HeartbeatInterval = 16 * time.Second }, true},
+		{"heartbeat exactly half ttl", func(c *Config) { c.HeartbeatInterval = 15 * time.Second }, false},
 		{"negative grace", func(c *Config) { c.EnforceGrace = -time.Second }, true},
 		{"no api server", func(c *Config) { c.APIServer = "" }, true},
+		// Issue #115: the bearer token rides on every request, so plaintext
+		// endpoints are refused outright rather than at first use.
+		{"plaintext api server", func(c *Config) { c.APIServer = "http://berth.example:8443" }, true},
+		{"schemeless api server", func(c *Config) { c.APIServer = "berth.example:8443" }, true},
+		{"non-http scheme api server", func(c *Config) { c.APIServer = "ftp://berth.example" }, true},
+		{"api server without host", func(c *Config) { c.APIServer = "https://" }, true},
+		{"unparseable api server", func(c *Config) { c.APIServer = "https://berth.example:%zz" }, true},
 		{"key and key file", func(c *Config) { c.APIKey = "k"; c.APIKeyFile = "/f" }, true},
 		{"signal without target", func(c *Config) { c.Enforce = EnforceSignal }, true},
 		{"signal with target", func(c *Config) { c.Enforce = EnforceSignal; c.SignalTarget = "nginx" }, false},

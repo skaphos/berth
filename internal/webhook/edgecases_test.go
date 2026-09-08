@@ -349,11 +349,24 @@ func TestInjectorConfigValidate(t *testing.T) {
 			c.APIKeyFile = "var/run/berth/token"
 			c.APIKeySecretName = "berth-token"
 		}, true},
-		{"trailing-slash state-dir still collides", func(c *InjectorConfig) {
-			c.StateDir = "/berth/"
-			c.APIKeyFile = "/berth/token"
-			c.APIKeySecretName = "berth-token"
-		}, true},
+		// Was "trailing-slash state-dir still collides", which leaned on the
+		// collision guard normalizing the slash. State-dir must now be a clean
+		// path outright (issue #113), so it is rejected before the collision
+		// check runs; that check stays covered by the case above.
+		{"trailing-slash state-dir", func(c *InjectorConfig) { c.StateDir = "/berth/" }, true},
+		{"dotdot state-dir", func(c *InjectorConfig) { c.StateDir = "/berth/../etc" }, true},
+		{"root state-dir", func(c *InjectorConfig) { c.StateDir = "/" }, true},
+		{"system state-dir etc", func(c *InjectorConfig) { c.StateDir = "/etc" }, true},
+		{"system state-dir var", func(c *InjectorConfig) { c.StateDir = "/var" }, true},
+		{"system state-dir usr", func(c *InjectorConfig) { c.StateDir = "/usr" }, true},
+		// Only exact system directories are reserved; a nested path is fine.
+		{"state-dir under a system dir", func(c *InjectorConfig) { c.StateDir = "/var/lib/berth" }, false},
+		{"plaintext api server", func(c *InjectorConfig) { c.APIServer = "http://berth.example:8443" }, true},
+		{"schemeless api server", func(c *InjectorConfig) { c.APIServer = "berth.example:8443" }, true},
+		{"api server without host", func(c *InjectorConfig) { c.APIServer = "https://" }, true},
+		{"tls api server", func(c *InjectorConfig) { c.APIServer = "https://berth.example:8443" }, false},
+		// Empty stays legal: the URL may come from the pod environment.
+		{"absent api server", func(c *InjectorConfig) { c.APIServer = "" }, false},
 		{"api-key file mounts at root", func(c *InjectorConfig) {
 			c.APIKeyFile = "/token"
 			c.APIKeySecretName = "berth-token"

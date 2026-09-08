@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
 	"time"
 
@@ -172,8 +173,15 @@ func (c *Config) Validate() error {
 	if c.HeartbeatInterval <= 0 {
 		return errors.New("heartbeat interval must be positive")
 	}
-	if c.HeartbeatInterval >= c.TTL {
-		return fmt.Errorf("heartbeat interval (%s) must be less than ttl (%s)", c.HeartbeatInterval, c.TTL)
+	// Strict inequality is not enough. At heartbeat = ttl-1s the margin to
+	// server-side expiry is one second, so any renewal slower than that leaves
+	// the server treating the lease as expired: a transient hiccup becomes
+	// definitive loss, and enforcement or handover fires. Half the TTL leaves
+	// room for a full missed renewal, which is what docs/concepts.md means by
+	// a heartbeat "comfortably shorter than the TTL".
+	if c.HeartbeatInterval > c.TTL/2 {
+		return fmt.Errorf("heartbeat interval (%s) must be at most half the ttl (%s); "+
+			"a heartbeat nearer the ttl leaves no margin to retry a slow renewal", c.HeartbeatInterval, c.TTL)
 	}
 	if c.EnforceGrace < 0 {
 		return errors.New("enforce grace must not be negative")
@@ -181,8 +189,44 @@ func (c *Config) Validate() error {
 	if c.APIServer == "" {
 		return errors.New("api server URL is required")
 	}
+	// The bearer token — an OIDC JWT or a static API key — is attached to
+	// every request unconditionally, and nothing downstream re-checks the
+	// scheme. A plaintext URL therefore puts the credential on the wire from
+	// every injected pod, so refuse it here rather than at first use.
+	if err := ValidateAPIServerURL(c.APIServer); err != nil {
+		return err
+	}
 	if c.APIKey != "" && c.APIKeyFile != "" {
 		return errors.New("api key and api key file are mutually exclusive")
+	}
+	return nil
+}
+
+// ValidateAPIServerURL checks that raw is a usable Berth API server URL over
+// TLS. It is exported so the injection webhook can reject a bad
+// --berth-api-server at operator startup, rather than admitting pods whose
+// helper would fail its own validation one layer later.
+//
+// https is required because the client attaches the bearer token to every
+// request without inspecting the scheme (pkg/client), so an http:// endpoint
+// transmits the credential in cleartext from every pod that was injected with
+// it. There is deliberately no escape hatch: a plaintext lease endpoint has no
+// safe use once a credential is attached to it.
+func ValidateAPIServerURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("api server URL %q is not a valid URL: %w", raw, err)
+	}
+	if u.Scheme != "https" {
+		scheme := u.Scheme
+		if scheme == "" {
+			scheme = "(none)"
+		}
+		return fmt.Errorf("api server URL %q must use https, got scheme %s; "+
+			"the bearer token is attached to every request, so a plaintext endpoint would send it in cleartext", raw, scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("api server URL %q must include a host", raw)
 	}
 	return nil
 }
