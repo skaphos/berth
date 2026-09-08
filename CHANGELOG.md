@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.2](https://github.com/skaphos/berth/compare/v0.4.1...v0.4.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **acquire:** enforce local lease deadlines and safe restart handoffs ([#186](https://github.com/skaphos/berth/issues/186)) ([ebf96af](https://github.com/skaphos/berth/commit/ebf96aff6de4582e4a074f1d22275877ef92306b))
+* **acquire:** root the startup-gate holder at the cluster identity ([#190](https://github.com/skaphos/berth/issues/190)) ([01ec5d0](https://github.com/skaphos/berth/commit/01ec5d029c16c0ae4e965a3a48b216c0a8957e42))
+* **api:** fail closed when authenticator returns a nil identity ([#189](https://github.com/skaphos/berth/issues/189)) ([418fde2](https://github.com/skaphos/berth/commit/418fde2116ca8a711dde6d0a5e1f693e639dff26))
+* **broker:** bound each OIDC token fetch and back off on failure ([#193](https://github.com/skaphos/berth/issues/193)) ([0935235](https://github.com/skaphos/berth/commit/0935235682b6e883a7c4fd92344d90d87b5a25e6))
+* **helm:** metrics port omission, honest CRD controls, and helper pull policy ([#194](https://github.com/skaphos/berth/issues/194)) ([5255772](https://github.com/skaphos/berth/commit/525577232e19d161f02ed55a909c979a14f0aa10))
+* **lease:** stop metadata-only Kubernetes conflicts from ending a lease ([#196](https://github.com/skaphos/berth/issues/196)) ([7452a24](https://github.com/skaphos/berth/commit/7452a241a2c2de46c628858e5fdd104e5ecbd40f)), closes [#121](https://github.com/skaphos/berth/issues/121) [#120](https://github.com/skaphos/berth/issues/120) [#168](https://github.com/skaphos/berth/issues/168)
+* **operator:** patch target workloads with a version-guarded merge patch ([#195](https://github.com/skaphos/berth/issues/195)) ([eb54ba8](https://github.com/skaphos/berth/commit/eb54ba806ce71fa823e45c9a4e167f38e2a0914f))
+* **store:** validate MySQL DSN time parameters to prevent early lease expiry ([#191](https://github.com/skaphos/berth/issues/191)) ([b99a7a0](https://github.com/skaphos/berth/commit/b99a7a003b83c815eaf0e521832ea92dea5f01f2)), closes [#107](https://github.com/skaphos/berth/issues/107)
+* **store:** verify SQL schema at startup when migration is off ([#192](https://github.com/skaphos/berth/issues/192)) ([42f1c6b](https://github.com/skaphos/berth/commit/42f1c6bc2133dd3fc13083e2fa603d36e0a3a327))
+* **webhook:** bound lease-loss restart windows ([#188](https://github.com/skaphos/berth/issues/188)) ([52d05dc](https://github.com/skaphos/berth/commit/52d05dc46e9ee10bd33ff199fb84f786d0340286)), closes [#110](https://github.com/skaphos/berth/issues/110) [#118](https://github.com/skaphos/berth/issues/118)
+
 ## [0.4.1](https://github.com/skaphos/berth/compare/v0.4.0...v0.4.1) (2026-09-07)
 
 
