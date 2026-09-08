@@ -129,7 +129,9 @@ opt-in label/annotation contract and usage.
 | `--oidc-scopes` | empty | Comma-separated OAuth2 scopes. |
 | `--output` | empty | Token output file. Required. Written atomically. |
 | `--refresh-skew` | `60s` | Refresh this long before token expiry. |
-| `--min-refresh-interval` | `30s` | Minimum retry or refresh interval. |
+| `--min-refresh-interval` | `30s` | Minimum refresh interval, and the first retry delay after a failed refresh. |
+| `--fetch-timeout` | `30s` | Deadline for each token request. An endpoint that accepts the request and then stalls is abandoned after this long and retried. |
+| `--max-retry-interval` | `5m` | Cap on the exponential retry backoff after a failed refresh. The last written token file is kept untouched until a refresh succeeds. |
 
 ## SQL Integration Test DSNs
 
