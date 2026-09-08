@@ -69,10 +69,13 @@ func TestRunRenewWrongModeReturns1(t *testing.T) {
 
 func TestRunAcquireTimesOutReturns1(t *testing.T) {
 	// Valid config pointing at an unreachable server; the acquire-timeout
-	// bounds the hold so the command returns rather than blocking.
+	// bounds the hold so the command returns rather than blocking. The scheme
+	// must be https: validation rejects plaintext (issue #115), and because
+	// that also exits 1 this test would still pass while silently stopping
+	// exercising the timeout.
 	getenv := envFrom(map[string]string{
 		acquire.EnvLeaseName:    "checkout",
-		acquire.EnvAPIServer:    "http://127.0.0.1:1",
+		acquire.EnvAPIServer:    "https://127.0.0.1:1",
 		acquire.EnvTTLSeconds:   "30",
 		acquire.EnvPodNamespace: "prod",
 		acquire.EnvPodUID:       "8c21b044-49ae-4db6-9fe3-530fb06cb5ea",
