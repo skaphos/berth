@@ -93,6 +93,80 @@ func TestNewValidatesConfig(t *testing.T) {
 	}
 }
 
+func TestNormalizeMySQLDSN(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		dsn     string
+		wantErr bool
+	}{
+		{"bare dsn gains parseTime and UTC", "berth:secret@tcp(127.0.0.1:3306)/berth", false},
+		{"explicit parseTime and UTC loc accepted", "berth:secret@tcp(127.0.0.1:3306)/berth?parseTime=true&loc=UTC", false},
+		{"explicit parseTime=false is forced on", "berth:secret@tcp(127.0.0.1:3306)/berth?parseTime=false", false},
+		{"other params preserved", "berth:secret@tcp(127.0.0.1:3306)/berth?tls=true&timeout=5s&charset=utf8mb4", false},
+		{"loc=Local rejected", "berth:secret@tcp(127.0.0.1:3306)/berth?loc=Local", true},
+		{"named non-UTC loc rejected", "berth:secret@tcp(127.0.0.1:3306)/berth?parseTime=true&loc=America%2FNew_York", true},
+		{"malformed dsn rejected", "not a dsn ?? /", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := normalizeMySQLDSN(tt.dsn)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("normalizeMySQLDSN(%q) = %q, want error", tt.dsn, got)
+				}
+				if strings.Contains(err.Error(), "secret") {
+					t.Fatalf("error leaked DSN credentials: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizeMySQLDSN(%q): %v", tt.dsn, err)
+			}
+			cfg, err := mysqldriver.ParseDSN(got)
+			if err != nil {
+				t.Fatalf("normalized DSN %q does not parse: %v", got, err)
+			}
+			if !cfg.ParseTime {
+				t.Errorf("normalized DSN %q: parseTime not enabled", got)
+			}
+			if cfg.Loc == nil || cfg.Loc.String() != "UTC" {
+				t.Errorf("normalized DSN %q: loc = %v, want UTC", got, cfg.Loc)
+			}
+			orig, _ := mysqldriver.ParseDSN(tt.dsn)
+			if cfg.User != orig.User || cfg.Passwd != orig.Passwd || cfg.Addr != orig.Addr || cfg.DBName != orig.DBName {
+				t.Errorf("normalized DSN %q changed connection identity from %q", got, tt.dsn)
+			}
+			for k, v := range orig.Params {
+				if cfg.Params[k] != v {
+					t.Errorf("normalized DSN %q dropped param %s=%s", got, k, v)
+				}
+			}
+		})
+	}
+}
+
+func TestNewRejectsMySQLNonUTCLocBeforeConnecting(t *testing.T) {
+	t.Parallel()
+
+	// Port 1 is never listening; the DSN must be rejected on validation alone,
+	// well before any connection attempt or its timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := New(ctx, Config{Driver: DriverMySQL, DSN: "berth:secret@tcp(127.0.0.1:1)/berth?loc=Local"})
+	if err == nil {
+		t.Fatal("expected error for non-UTC loc")
+	}
+	if !strings.Contains(err.Error(), "loc=") {
+		t.Fatalf("error should name the loc parameter, got: %v", err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("validation should not have waited on a connection attempt")
+	}
+}
+
 func TestMySQLDialectUsesReadCommittedTransactions(t *testing.T) {
 	t.Parallel()
 

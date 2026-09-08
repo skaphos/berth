@@ -53,7 +53,14 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("sql store: migrate must be %q or %q", MigrateAuto, MigrateOff)
 	}
 
-	db, err := sql.Open(d.driverName, cfg.DSN)
+	dsn := cfg.DSN
+	if cfg.Driver == DriverMySQL {
+		dsn, err = normalizeMySQLDSN(dsn)
+		if err != nil {
+			return nil, err
+		}
+	}
+	db, err := sql.Open(d.driverName, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("sql store: open %s: %w", cfg.Driver, err)
 	}
@@ -76,6 +83,37 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 		}
 	}
 	return s, nil
+}
+
+// normalizeMySQLDSN validates and normalizes a MySQL/MariaDB DSN so lease
+// timestamps round-trip without zone skew (#107).
+//
+// The schema stores acquired_at/renewed_at as zoneless datetime(6). The driver
+// formats time.Time writes in the DSN's loc, and without parseTime=true reads
+// come back as bare strings that parseTimeString interprets as UTC. With a
+// non-UTC loc the two disagree by the zone offset, so a renewed lease reads
+// back as already expired and a standby can reclaim it while the holder still
+// believes it holds — a split-brain window of up to one heartbeat.
+//
+// loc must therefore be UTC (the driver default) and is rejected otherwise
+// rather than silently overridden, since an explicit value signals intent
+// the store cannot honor. parseTime is forced on so timestamps arrive as
+// time.Time in the DSN location instead of being re-parsed from strings.
+// Every other DSN parameter is preserved. The returned error never includes
+// the DSN itself, which may embed credentials.
+func normalizeMySQLDSN(dsn string) (string, error) {
+	mcfg, err := mysqldriver.ParseDSN(dsn)
+	if err != nil {
+		return "", fmt.Errorf("sql store: parse mysql dsn: %w", err)
+	}
+	if mcfg.Loc != nil && mcfg.Loc.String() != time.UTC.String() {
+		return "", fmt.Errorf("sql store: mysql dsn loc=%q is not supported: lease timestamps are stored "+
+			"as zoneless datetime(6) and must round-trip in UTC; remove the loc parameter or set loc=UTC",
+			mcfg.Loc.String())
+	}
+	mcfg.Loc = time.UTC
+	mcfg.ParseTime = true
+	return mcfg.FormatDSN(), nil
 }
 
 // Close closes the underlying database handle.

@@ -30,7 +30,7 @@ For deployed components, the practical precedence is:
 | `--coordination-kubeconfig` | empty | Kubeconfig for the coordination cluster. Empty means in-cluster config. Only valid with `k8s`. |
 | `--coordination-namespace` | empty | Namespace where Kubernetes-backed lease objects are stored. Required with `k8s`. |
 | `--sql-driver` | empty | `postgres`, `mysql`, or `sqlite`. Required with `sql`. |
-| `--sql-dsn` | empty | SQL DSN. Mutually exclusive with `--sql-dsn-file`. |
+| `--sql-dsn` | empty | SQL DSN. Mutually exclusive with `--sql-dsn-file`. For `mysql`, `loc` must be unset or `UTC`; `parseTime=true` is applied automatically. |
 | `--sql-dsn-file` | empty | File containing the SQL DSN. Read once at startup; restart the API server after credential rotation. Mutually exclusive with `--sql-dsn`. |
 | `--sql-migrate` | empty | `auto` or `off`. Defaults to `auto` for `sql`. |
 | `--auth-mode` | derived | `none`, `static-keys`, or `oidc`. Explicit value wins. |
@@ -51,6 +51,13 @@ SQLite is durable and ACID, but single-writer; use it only with one API server
 replica for edge, dev, or CI deployments. In Kubernetes, mount the SQL DSN from
 a Secret and pass `--sql-dsn-file`; the Helm chart does this from
 `store.sql.dsnSecret`.
+
+For MariaDB/MySQL the store validates the DSN at startup. Lease timestamps are
+stored as zoneless `datetime(6)` and must round-trip in UTC, so a DSN whose
+`loc` parameter names any other zone (including `Local`) is rejected with an
+error naming the parameter. `parseTime=true` is enforced automatically. A
+non-UTC `loc` would make renewed leases read back as already expired and let a
+standby reclaim a lease its holder still believes it holds.
 
 With `--sql-migrate auto` (the default), schema changes are applied
 additively and idempotently at startup — including the `version` column that
