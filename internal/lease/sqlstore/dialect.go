@@ -9,6 +9,13 @@ import (
 
 const columns = "namespace, name, holder, ttl_ms, acquired_at, renewed_at, fencing_token, version"
 
+// verifySQL probes the leases table for every column the store reads and
+// writes without touching a row or mutating anything. The false predicate is
+// portable across all three dialects, and each of them still resolves the
+// table and column names at prepare time, so a missing table or a legacy
+// table without the version column fails here instead of on first use.
+const verifySQL = "SELECT " + columns + " FROM berth_leases WHERE 1 = 0"
+
 type dialect struct {
 	driverName string
 	schema     []string

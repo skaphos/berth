@@ -98,7 +98,8 @@ func run() int {
 			"Only valid with --store-backend=sql.")
 	flag.StringVar(&storeCfg.sqlMigrate, "sql-migrate", "",
 		"schema migration policy: 'auto' (apply pending migrations at startup) or 'off' "+
-			"(fail fast on schema drift). Only valid with --store-backend=sql. "+
+			"(verify the existing schema at startup and refuse to start on drift). "+
+			"Only valid with --store-backend=sql. "+
 			"Defaults to 'auto' when --store-backend=sql.")
 	flag.StringVar(&authMode, "auth-mode", "",
 		"authentication mode: 'none', 'static-keys', or 'oidc'. Defaults to 'static-keys' when "+

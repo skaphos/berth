@@ -271,6 +271,79 @@ func TestSQLiteStorePutCASRequiresMatchingVersion(t *testing.T) {
 	}
 }
 
+// TestSQLiteStoreMigrateOffVerifiesSchema covers #162: with migration off the
+// store must refuse to start over an empty or legacy database instead of
+// passing Ping and failing on the first lease read, must leave the schema
+// untouched while checking, and must accept a compatible schema.
+func TestSQLiteStoreMigrateOffVerifiesSchema(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn := "file:" + sqliteTestName(t) + "?mode=memory&cache=shared"
+
+	// A raw connection that stays open keeps the shared-memory DB alive across
+	// the store opens below.
+	raw, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+	if _, err := raw.ExecContext(ctx, "SELECT 1"); err != nil {
+		t.Fatal(err)
+	}
+	off := Config{Driver: DriverSQLite, DSN: dsn, Migrate: MigrateOff}
+
+	// Empty database: no berth_leases table at all.
+	if _, err := New(ctx, off); err == nil {
+		t.Fatal("migrate=off opened an empty database")
+	} else if !strings.Contains(err.Error(), "berth_leases") {
+		t.Fatalf("error should name the leases table, got: %v", err)
+	}
+	var tables int
+	if err := raw.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE name = 'berth_leases'").Scan(&tables); err != nil {
+		t.Fatal(err)
+	}
+	if tables != 0 {
+		t.Fatal("migrate=off created the leases table")
+	}
+
+	// Legacy schema: table present but the version column is missing.
+	if _, err := raw.ExecContext(ctx, `CREATE TABLE berth_leases (
+		namespace text NOT NULL, name text NOT NULL, holder text NOT NULL,
+		ttl_ms integer NOT NULL, acquired_at text NOT NULL, renewed_at text NOT NULL,
+		fencing_token integer NOT NULL, PRIMARY KEY (namespace, name))`); err != nil {
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	if _, err := New(ctx, off); err == nil {
+		t.Fatal("migrate=off opened a legacy schema")
+	} else if !strings.Contains(err.Error(), "version") {
+		t.Fatalf("error should name the missing column, got: %v", err)
+	}
+	if _, err := raw.ExecContext(ctx, "SELECT version FROM berth_leases WHERE 1 = 0"); err == nil {
+		t.Fatal("migrate=off added the version column")
+	}
+
+	// Compatible schema: migrate=auto upgrades it, then migrate=off accepts it
+	// and the store is fully usable.
+	up, err := New(ctx, Config{Driver: DriverSQLite, DSN: dsn})
+	if err != nil {
+		t.Fatalf("migrate=auto over legacy schema: %v", err)
+	}
+	if err := up.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := New(ctx, off)
+	if err != nil {
+		t.Fatalf("migrate=off rejected a compatible schema: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.Ping(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(ctx, lease.Key{Namespace: "none", Name: "none"}); !errors.Is(err, lease.ErrNotFound) {
+		t.Fatalf("Get on compatible schema = %v, want ErrNotFound", err)
+	}
+}
+
 // TestSQLiteStoreMigratesLegacySchemaInPlace covers upgrade-in-place: a
 // database created from the pre-version schema gains the version column via
 // migrate=auto, its legacy rows read as Version 1, and the alteration is
