@@ -142,7 +142,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `suspend` _boolean_ | Suspend, when non-nil, sets the suspend field on the target workload.<br />Setting this to true pauses the workload; false resumes it. Applies to<br />workload kinds that expose a spec.suspend field, such as CronJob. |  |  |
-| `scale` _[ScaleAction](#scaleaction)_ | Scale, when non-nil, sets the replica count on the target workload's<br />scale subresource. Applies to workload kinds that expose a scale<br />subresource, such as Deployment, StatefulSet, and ReplicaSet. |  |  |
+| `scale` _[ScaleAction](#scaleaction)_ | Scale, when non-nil, sets spec.replicas on the target workload with a<br />version-guarded merge patch. Applies to workload kinds that carry a<br />spec.replicas field, such as Deployment, StatefulSet, and ReplicaSet. |  |  |
 
 
 #### PermittedPod

@@ -13,13 +13,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// targetFieldOwner is the field manager recorded in managedFields for every
+// write the operator makes to a target workload, so server-side-apply-aware
+// tooling attributes spec.replicas, spec.suspend, and the stop fence to Berth
+// rather than to a generic manager.
+const targetFieldOwner = "berth-operator"
+
 // applyAction reads the target referenced by ref from namespace ns, mutates
 // it according to action, and writes it back. Returns nil when action is nil
 // (no-op) or when the target is gone — both are treated as success because
 // neither prevents the lease lifecycle from progressing.
 //
 // The write is itself a no-op when the target already matches the action: the
-// current spec.replicas/spec.suspend are read and the Update is skipped unless
+// current spec.replicas/spec.suspend are read and the patch is skipped unless
 // at least one differs. This keeps held-state heartbeats from re-writing an
 // unchanged target on every reconcile.
 func applyAction(ctx context.Context, c client.Client, ns string, ref *berthv1alpha1.TargetRef, action *berthv1alpha1.LeaseAction) error {
@@ -52,9 +58,12 @@ func applyFencedAction(ctx context.Context, c client.Client, ns string, ref *ber
 	if uid != "" && string(obj.GetUID()) != uid {
 		return errors.New("target UID changed")
 	}
+	// Snapshot before mutating so the patch is computed against exactly what
+	// was read, including its resourceVersion.
+	orig := obj.DeepCopy()
 
 	mutated := false // action selected a field to manage
-	changed := false // obj differs from the live target — an Update is required
+	changed := false // obj differs from the live target — a write is required
 	if action.Suspend != nil {
 		mutated = true
 		cur, found, err := unstructured.NestedBool(obj.Object, "spec", "suspend")
@@ -98,14 +107,34 @@ func applyFencedAction(ctx context.Context, c client.Client, ns string, ref *ber
 	}
 	if !changed {
 		// Target already at the desired state. Skipping the write keeps held-state
-		// heartbeats from re-issuing an Update (and the resulting resourceVersion
+		// heartbeats from re-issuing a patch (and the resulting resourceVersion
 		// churn and spurious watch events) on every reconcile — material at the
 		// 2,000-lease scale target where the operator is client-go QPS-bound.
 		return nil
 	}
 
-	if err := c.Update(ctx, obj); err != nil {
-		return fmt.Errorf("update target %s: %w", key, err)
+	// A JSON merge patch carrying only the fields the action manages, with two
+	// deliberate properties:
+	//
+	//   - Optimistic lock. The patch includes the resourceVersion observed by
+	//     the Get above, so the API server rejects it with a Conflict if the
+	//     target moved in between. This is what makes the stop fence work:
+	//     stopTarget always writes the fence annotation (bumping the target's
+	//     resourceVersion) even when the target is already stopped, so an
+	//     activation write that raced it and is still in flight fails instead
+	//     of resurrecting the workload. An unlocked patch, or a write to the
+	//     scale subresource, would bypass the fence. The cost is a Conflict
+	//     (and a requeue) when an unrelated writer such as an HPA touches the
+	//     target at the same instant; that is the intended trade (#105).
+	//   - Field owner. The write is attributed to targetFieldOwner in
+	//     managedFields rather than to a generic manager.
+	//
+	// Compared to the full-object Update this replaces, the patch sends only
+	// the changed fields, so the operator never rewrites fields it does not
+	// own and the write is attributable.
+	patch := client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})
+	if err := c.Patch(ctx, obj, patch, client.FieldOwner(targetFieldOwner)); err != nil {
+		return fmt.Errorf("patch target %s: %w", key, err)
 	}
 	return nil
 }

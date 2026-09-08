@@ -171,8 +171,8 @@ Each action is one of:
 
 | Action | Effect | Typical target |
 | --- | --- | --- |
-| `scale` | Patches the target's scale subresource (replica count). | `Deployment`, `StatefulSet`, `ReplicaSet` |
-| `suspend` | Patches the target's `spec.suspend`. | `CronJob` |
+| `scale` | Sets the target's `spec.replicas` with a version-guarded merge patch. | `Deployment`, `StatefulSet`, `ReplicaSet` |
+| `suspend` | Sets the target's `spec.suspend` the same way. | `CronJob` |
 
 The operator reconciles the loop for you: acquire/renew, apply `acquireAction`
 when held and `releaseAction` when not, and on deletion do a best-effort release.
