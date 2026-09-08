@@ -36,7 +36,11 @@ type Store struct {
 	dialect dialect
 }
 
-// New opens a SQL-backed lease store and applies the schema when configured.
+// New opens a SQL-backed lease store. With Migrate set to MigrateAuto (the
+// default) it applies the schema and any pending alterations. With MigrateOff
+// it verifies the existing schema instead and fails fast on drift, so an
+// operator who manages the schema out of band learns about a missing table or
+// column at startup rather than on the first lease operation (#162).
 func New(ctx context.Context, cfg Config) (*Store, error) {
 	d, err := dialectFor(cfg.Driver)
 	if err != nil {
@@ -81,8 +85,29 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 			_ = db.Close()
 			return nil, err
 		}
+	} else if err := s.verifySchema(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 	return s, nil
+}
+
+// verifySchema confirms the leases table exposes every column the store
+// depends on, without mutating the database. It runs once at construction
+// when migration is off; ongoing readiness (Ping) stays a constant-cost
+// connection check and never repeats it.
+func (s *Store) verifySchema(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, verifySQL)
+	if err != nil {
+		return fmt.Errorf("sql store: verify schema (migrate=%s): %w; create or upgrade the berth_leases "+
+			"table as documented, or start with migrate=%s to apply the schema automatically",
+			MigrateOff, err, MigrateAuto)
+	}
+	defer func() { _ = rows.Close() }()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sql store: verify schema (migrate=%s): %w", MigrateOff, err)
+	}
+	return nil
 }
 
 // normalizeMySQLDSN validates and normalizes a MySQL/MariaDB DSN so lease

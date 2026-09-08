@@ -4,6 +4,7 @@ package sqlstore
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 
@@ -61,24 +62,36 @@ func testMigratesLegacySchemaInPlace(t *testing.T, driver, dsn, legacySchema, le
 	t.Helper()
 	ctx := context.Background()
 
-	setup, err := New(ctx, Config{Driver: driver, DSN: dsn, Migrate: MigrateOff})
+	// Use a raw handle for DDL: with migration off the store now verifies the
+	// schema at open and would refuse the empty or legacy table built here.
+	d, err := dialectFor(driver)
 	if err != nil {
-		t.Fatalf("open setup store: %v", err)
+		t.Fatal(err)
 	}
-	if _, err := setup.db.ExecContext(ctx, "DROP TABLE IF EXISTS berth_leases"); err != nil {
+	setup, err := sql.Open(d.driverName, dsn)
+	if err != nil {
+		t.Fatalf("open setup handle: %v", err)
+	}
+	if _, err := setup.ExecContext(ctx, "DROP TABLE IF EXISTS berth_leases"); err != nil {
 		_ = setup.Close()
 		t.Fatalf("drop table: %v", err)
 	}
-	if _, err := setup.db.ExecContext(ctx, legacySchema); err != nil {
+	if _, err := setup.ExecContext(ctx, legacySchema); err != nil {
 		_ = setup.Close()
 		t.Fatalf("create legacy schema: %v", err)
 	}
-	if _, err := setup.db.ExecContext(ctx, legacyInsert); err != nil {
+	if _, err := setup.ExecContext(ctx, legacyInsert); err != nil {
 		_ = setup.Close()
 		t.Fatalf("insert legacy row: %v", err)
 	}
 	if err := setup.Close(); err != nil {
 		t.Fatal(err)
+	}
+
+	// migrate=off must refuse the legacy schema at open rather than on first
+	// use (#162).
+	if _, err := New(ctx, Config{Driver: driver, DSN: dsn, Migrate: MigrateOff}); err == nil {
+		t.Fatal("migrate=off opened a legacy schema")
 	}
 
 	for range 2 { // second open proves the alteration is idempotent

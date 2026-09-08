@@ -32,7 +32,7 @@ For deployed components, the practical precedence is:
 | `--sql-driver` | empty | `postgres`, `mysql`, or `sqlite`. Required with `sql`. |
 | `--sql-dsn` | empty | SQL DSN. Mutually exclusive with `--sql-dsn-file`. For `mysql`, `loc` must be unset or `UTC`; `parseTime=true` is applied automatically. |
 | `--sql-dsn-file` | empty | File containing the SQL DSN. Read once at startup; restart the API server after credential rotation. Mutually exclusive with `--sql-dsn`. |
-| `--sql-migrate` | empty | `auto` or `off`. Defaults to `auto` for `sql`. |
+| `--sql-migrate` | empty | `auto` or `off`. Defaults to `auto` for `sql`. With `off` the schema is verified at startup and the server refuses to start on drift. |
 | `--auth-mode` | derived | `none`, `static-keys`, or `oidc`. Explicit value wins. |
 | `--api-keys-file` | empty | Static key file with `<key-id>:<sha256-hex>` lines. Required with `static-keys`. Reloaded on SIGHUP. |
 | `--oidc-issuer-url` | empty | OIDC issuer URL. Required with `oidc`. |
@@ -69,9 +69,13 @@ upgrading, e.g. for Postgres:
 ALTER TABLE berth_leases ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 1;
 ```
 
-(MySQL/MariaDB and SQLite use the same column without `IF NOT EXISTS`.) An
-API server pointed at an unmigrated table fails cleanly on first use rather
-than corrupting lease state.
+(MySQL/MariaDB and SQLite use the same column without `IF NOT EXISTS`.) With
+`off`, the API server verifies at startup that `berth_leases` exists and
+exposes every column it uses, without changing the schema. A missing table or
+an unmigrated table fails startup with an error naming the problem, so drift
+surfaces before the server is marked ready rather than on the first lease
+operation. The check runs once; readiness probes remain a plain connection
+ping.
 
 ## Operator Flags
 
