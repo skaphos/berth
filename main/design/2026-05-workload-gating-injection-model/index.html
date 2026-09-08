@@ -1734,8 +1734,14 @@ therefore set the tenant (static-key id or OIDC claim) equal to that root
 segment — e.g. key id == <code>--cluster-id</code>.</p>
 <p><strong>Startup gate default (v1)</strong>:
 - Derive from the owning controller of the Pod when available:
-  <code>namespace</code> + <code>kind</code> + <code>name</code>.
-- Example: <code>prod/deployment:checkout-service</code>.
+  <code>cluster identity</code> (when configured) + <code>namespace</code> + <code>kind</code> + <code>name</code>.
+- Example: <code>east/prod:deployment:checkout-service</code> with a cluster identity of
+  <code>east</code>; <code>prod/deployment:checkout-service</code> without one.
+- The tenant root is the same as in runtime singleton mode so one credential
+  (for example a static key whose id equals <code>--cluster-id</code>) authorizes both
+  modes. Before this alignment the startup-gate default always rooted at the
+  namespace, so a cluster-scoped credential was rejected <code>403</code> at startup in
+  any namespace whose name differed from the cluster identity.
 - This may allow multiple pods from the same workload to pass startup if they
   share the holder identity. That is acceptable only because startup gate does
   not provide runtime singleton behavior.</p>
