@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -274,7 +275,7 @@ func TestRunLoopFetchesAndWritesToken(t *testing.T) {
 		}
 		cancel()
 	}()
-	rc := runLoop(ctx, cfg, out, 0, 24*time.Hour)
+	rc := runLoop(ctx, cfg, testLoopConfig(out))
 	if rc != 0 {
 		t.Fatalf("runLoop exit = %d, want 0", rc)
 	}
@@ -285,6 +286,193 @@ func TestRunLoopFetchesAndWritesToken(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(got), "jwt-") {
 		t.Fatalf("token file = %q, want a jwt-... value", got)
+	}
+}
+
+// testLoopConfig returns a loop configuration that refreshes once and then
+// waits effectively forever, for tests that cancel after the first write.
+func testLoopConfig(out string) loopConfig {
+	return loopConfig{
+		outputPath:       out,
+		refreshSkew:      0,
+		minRefresh:       24 * time.Hour,
+		fetchTimeout:     5 * time.Second,
+		maxRetryInterval: 24 * time.Hour,
+	}
+}
+
+// TestRunLoopRecoversFromStalledTokenEndpoint covers #159: an endpoint that
+// accepts the request and never answers must be abandoned at the fetch
+// deadline, the last good token file must survive the outage untouched, and
+// the loop must pick up the new token once the endpoint recovers.
+func TestRunLoopRecoversFromStalledTokenEndpoint(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "token")
+	if err := os.WriteFile(out, []byte("previous-good-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	const stalls = 2
+	var calls, stalledCanceled atomic.Int32
+	stop := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Drain the body first: the server only watches for a closed client
+		// connection (and cancels r.Context) once the request body is consumed.
+		_ = r.ParseForm()
+		if calls.Add(1) <= stalls {
+			// Accept the request, then hold it until the client gives up.
+			select {
+			case <-r.Context().Done():
+				stalledCanceled.Add(1)
+			case <-stop:
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "recovered-token",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(stop) }) // runs before srv.Close so stalled handlers can never wedge shutdown
+
+	cfg := &clientcredentials.Config{ClientID: "test", ClientSecret: "secret", TokenURL: srv.URL}
+	lc := loopConfig{
+		outputPath:       out,
+		minRefresh:       20 * time.Millisecond,
+		fetchTimeout:     100 * time.Millisecond,
+		maxRetryInterval: 50 * time.Millisecond,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan int, 1)
+	go func() { done <- runLoop(ctx, cfg, lc) }()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatalf("token file must exist throughout the outage: %v", err)
+		}
+		if string(got) == "recovered-token" {
+			break
+		}
+		if string(got) != "previous-good-token" {
+			t.Fatalf("token file = %q; the last good token must be preserved while the endpoint stalls", got)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("token file = %q, loop never recovered after the endpoint came back", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case rc := <-done:
+		if rc != 0 {
+			t.Fatalf("runLoop exit = %d, want 0", rc)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("runLoop did not exit after cancel")
+	}
+	for stalledCanceled.Load() != stalls {
+		if time.Now().After(deadline) {
+			t.Fatalf("stalled requests canceled = %d, want %d", stalledCanceled.Load(), stalls)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestRunLoopCancelUnblocksStalledFetch covers process shutdown while a fetch
+// is stalled: the in-flight request must be canceled by the process context
+// even though its own deadline is far away, and no token may be written.
+func TestRunLoopCancelUnblocksStalledFetch(t *testing.T) {
+	t.Parallel()
+
+	out := filepath.Join(t.TempDir(), "token")
+	inFlight := make(chan struct{}, 1)
+	stop := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm() // see TestRunLoopRecoversFromStalledTokenEndpoint
+		select {
+		case inFlight <- struct{}{}:
+		default:
+		}
+		select {
+		case <-r.Context().Done():
+		case <-stop:
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(stop) })
+
+	cfg := &clientcredentials.Config{ClientID: "test", ClientSecret: "secret", TokenURL: srv.URL}
+	lc := loopConfig{outputPath: out, minRefresh: time.Hour, fetchTimeout: time.Hour, maxRetryInterval: time.Hour}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() { done <- runLoop(ctx, cfg, lc) }()
+
+	select {
+	case <-inFlight:
+	case <-time.After(5 * time.Second):
+		t.Fatal("token request never reached the endpoint")
+	}
+	cancel()
+	select {
+	case rc := <-done:
+		if rc != 0 {
+			t.Fatalf("runLoop exit = %d, want 0", rc)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("runLoop stayed blocked in a stalled fetch after cancel")
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatalf("a token file was written despite no successful fetch: %v", err)
+	}
+}
+
+func TestNextRetryBackoff(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		current, limit, want time.Duration
+	}{
+		{30 * time.Second, 5 * time.Minute, time.Minute},
+		{2 * time.Minute, 5 * time.Minute, 4 * time.Minute},
+		{4 * time.Minute, 5 * time.Minute, 5 * time.Minute},
+		{5 * time.Minute, 5 * time.Minute, 5 * time.Minute},
+		{time.Duration(1<<62) + 1, 5 * time.Minute, 5 * time.Minute}, // overflow guard
+	}
+	for _, tt := range tests {
+		if got := nextRetry(tt.current, tt.limit); got != tt.want {
+			t.Errorf("nextRetry(%s, %s) = %s, want %s", tt.current, tt.limit, got, tt.want)
+		}
+	}
+}
+
+func TestLoopConfigValidate(t *testing.T) {
+	t.Parallel()
+
+	valid := loopConfig{outputPath: "/t", minRefresh: 30 * time.Second, fetchTimeout: 30 * time.Second, maxRetryInterval: 5 * time.Minute}
+	if err := valid.validate(); err != nil {
+		t.Fatalf("valid config rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*loopConfig){
+		"zero fetch timeout":          func(lc *loopConfig) { lc.fetchTimeout = 0 },
+		"zero min refresh":            func(lc *loopConfig) { lc.minRefresh = 0 },
+		"max retry below min refresh": func(lc *loopConfig) { lc.maxRetryInterval = time.Second },
+		"negative fetch timeout":      func(lc *loopConfig) { lc.fetchTimeout = -time.Second },
+	} {
+		lc := valid
+		mutate(&lc)
+		if err := lc.validate(); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
 	}
 }
 

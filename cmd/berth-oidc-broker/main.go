@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -32,14 +33,46 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
 
 const (
-	defaultRefreshSkew = 60 * time.Second
-	defaultMinRefresh  = 30 * time.Second
-	discoveryTimeout   = 30 * time.Second
+	defaultRefreshSkew  = 60 * time.Second
+	defaultMinRefresh   = 30 * time.Second
+	defaultFetchTimeout = 30 * time.Second
+	defaultMaxRetry     = 5 * time.Minute
+	discoveryTimeout    = 30 * time.Second
 )
+
+// loopConfig tunes the refresh loop; see runLoop.
+type loopConfig struct {
+	outputPath string
+	// refreshSkew is how far before its declared expiry a token is refreshed.
+	refreshSkew time.Duration
+	// minRefresh bounds how often the loop refreshes, and is the first retry
+	// delay after a failure.
+	minRefresh time.Duration
+	// fetchTimeout bounds every individual token request (#159). An endpoint
+	// that accepts the request and then stalls is abandoned after this long
+	// and retried with backoff instead of wedging the loop.
+	fetchTimeout time.Duration
+	// maxRetryInterval caps the exponential retry backoff.
+	maxRetryInterval time.Duration
+}
+
+func (lc loopConfig) validate() error {
+	if lc.fetchTimeout <= 0 {
+		return errors.New("--fetch-timeout must be positive")
+	}
+	if lc.minRefresh <= 0 {
+		return errors.New("--min-refresh-interval must be positive")
+	}
+	if lc.maxRetryInterval < lc.minRefresh {
+		return errors.New("--max-retry-interval must be at least --min-refresh-interval")
+	}
+	return nil
+}
 
 func main() {
 	os.Exit(run())
@@ -57,6 +90,8 @@ func run() int {
 		outputPath       string
 		refreshSkew      time.Duration
 		minRefresh       time.Duration
+		fetchTimeout     time.Duration
+		maxRetryInterval time.Duration
 	)
 	flag.StringVar(&issuerURL, "oidc-issuer-url", "",
 		"OIDC issuer URL (used to discover the token endpoint via /.well-known/openid-configuration)")
@@ -76,7 +111,11 @@ func run() int {
 	flag.DurationVar(&refreshSkew, "refresh-skew", defaultRefreshSkew,
 		"refresh the token this far before its declared expiry")
 	flag.DurationVar(&minRefresh, "min-refresh-interval", defaultMinRefresh,
-		"do not refresh (or retry on failure) more often than this")
+		"do not refresh more often than this; also the first retry delay after a failed refresh")
+	flag.DurationVar(&fetchTimeout, "fetch-timeout", defaultFetchTimeout,
+		"deadline for each token request; a stalled endpoint is abandoned after this long and retried")
+	flag.DurationVar(&maxRetryInterval, "max-retry-interval", defaultMaxRetry,
+		"cap on the exponential retry backoff after a failed refresh")
 	flag.Parse()
 
 	if clientSecret != "" {
@@ -85,6 +124,17 @@ func run() int {
 	}
 
 	if err := validateArgs(clientID, outputPath, issuerURL, tokenURLOverride, clientSecret, clientSecretFile); err != nil {
+		slog.Error("invalid configuration", "error", err)
+		return 2
+	}
+	lc := loopConfig{
+		outputPath:       outputPath,
+		refreshSkew:      refreshSkew,
+		minRefresh:       minRefresh,
+		fetchTimeout:     fetchTimeout,
+		maxRetryInterval: maxRetryInterval,
+	}
+	if err := lc.validate(); err != nil {
 		slog.Error("invalid configuration", "error", err)
 		return 2
 	}
@@ -118,37 +168,71 @@ func run() int {
 		"token_url", tokenURL,
 		"output", outputPath,
 		"refresh_skew", refreshSkew,
-		"min_refresh", minRefresh)
+		"min_refresh", minRefresh,
+		"fetch_timeout", fetchTimeout,
+		"max_retry_interval", maxRetryInterval)
 
-	return runLoop(ctx, cfg, outputPath, refreshSkew, minRefresh)
+	return runLoop(ctx, cfg, lc)
 }
 
-func runLoop(ctx context.Context, cfg *clientcredentials.Config, outputPath string, refreshSkew, minRefresh time.Duration) int {
+// runLoop refreshes the token until ctx is canceled. Every fetch gets its own
+// deadline so a token endpoint that accepts the request and then stalls cannot
+// wedge the sole rotation loop (#159). Failures retry with exponential backoff
+// from minRefresh up to maxRetryInterval, and the previously written token
+// file is left untouched so the operator keeps using the last good credential
+// until it expires.
+func runLoop(ctx context.Context, cfg *clientcredentials.Config, lc loopConfig) int {
+	// Bound the transport as well, independent of the per-attempt context, so
+	// a stalled connection never outlives one fetch attempt.
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, &http.Client{Timeout: lc.fetchTimeout})
+	retry := lc.minRefresh
 	for {
 		if ctx.Err() != nil {
 			return 0
 		}
-		token, err := cfg.Token(ctx)
+		token, err := fetchToken(ctx, cfg, lc.fetchTimeout)
+		if err == nil {
+			if werr := writeTokenAtomic(lc.outputPath, token.AccessToken); werr != nil {
+				err = fmt.Errorf("write token file %q: %w", lc.outputPath, werr)
+			}
+		}
 		if err != nil {
-			slog.Error("fetch token", "error", err)
-			if !sleep(ctx, minRefresh) {
+			slog.Error("token refresh failed; keeping the last written token", "error", err, "retry_in", retry)
+			if !sleep(ctx, retry) {
 				return 0
 			}
+			retry = nextRetry(retry, lc.maxRetryInterval)
 			continue
 		}
-		if err := writeTokenAtomic(outputPath, token.AccessToken); err != nil {
-			slog.Error("write token file", "error", err, "path", outputPath)
-			if !sleep(ctx, minRefresh) {
-				return 0
-			}
-			continue
-		}
-		wait := nextRefresh(token.Expiry, refreshSkew, minRefresh)
+		retry = lc.minRefresh
+		wait := nextRefresh(token.Expiry, lc.refreshSkew, lc.minRefresh)
 		slog.Info("token refreshed", "expires_at", token.Expiry, "next_refresh_in", wait)
 		if !sleep(ctx, wait) {
 			return 0
 		}
 	}
+}
+
+// fetchToken performs one client-credentials grant bounded by timeout. The
+// deadline derives from ctx, so process shutdown also cancels an in-flight
+// request promptly.
+func fetchToken(ctx context.Context, cfg *clientcredentials.Config, timeout time.Duration) (*oauth2.Token, error) {
+	fctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	token, err := cfg.Token(fctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetch token: %w", err)
+	}
+	return token, nil
+}
+
+// nextRetry doubles the retry delay, capped at limit.
+func nextRetry(current, limit time.Duration) time.Duration {
+	next := current * 2
+	if next <= 0 || next > limit {
+		return limit
+	}
+	return next
 }
 
 // nextRefresh computes how long to wait before the next refresh. A
