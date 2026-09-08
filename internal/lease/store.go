@@ -117,5 +117,15 @@ type Store interface {
 	// record's Version equals expectedVersion, and stores the record with
 	// Version expectedVersion+1. The caller-supplied record.Version is
 	// ignored. Returns [ErrConflict] when the predicate does not hold.
+	//
+	// Version is the whole predicate. An implementation layered on a backend
+	// with its own concurrency token (Kubernetes metadata.resourceVersion, an
+	// SQL row version) must not surface that token's collisions as
+	// [ErrConflict] while the record Version still matches: a writer touching
+	// only backend metadata Berth does not own has not changed lease
+	// ownership, and [Manager.Renew] reads every conflict as lease loss.
+	// Implementations resolve such collisions internally — re-read, revalidate
+	// expectedVersion, retry within a bounded budget — and report
+	// [ErrConflict] only for a genuine Version change or an exhausted budget.
 	Put(ctx context.Context, expectedVersion int64, record *Record) error
 }

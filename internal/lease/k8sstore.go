@@ -110,10 +110,33 @@ func (s *K8sLeaseStore) List(ctx context.Context) ([]Record, error) {
 	return out, nil
 }
 
+// maxPutUpdateAttempts bounds Put's re-read loop for an update whose Berth
+// record version still matches after a Kubernetes-level conflict. See
+// [K8sLeaseStore.Put].
+const maxPutUpdateAttempts = 4
+
 // Put implements [Store]. expectedVersion=0 creates; expectedVersion>0
 // updates only when the current Lease's version annotation equals
 // expectedVersion, with the update additionally guarded by the
 // resourceVersion captured in the same read.
+//
+// Those two guards do not mean the same thing. The version annotation is
+// Berth's compare-and-swap predicate ([Record.Version]), bumped only by a
+// Berth write. metadata.resourceVersion is a Kubernetes storage artifact that
+// *any* writer bumps, including one touching only metadata Berth does not own
+// — a label applied by a policy controller, an annotation added by a backup
+// tool. Such a write landing between the Get and the Update below fails the
+// Update with 409 even though the record, its holder and its fencing token
+// are all unchanged. Reporting that as [ErrConflict] would cost the holder its
+// lease for no reason, because [Manager.Renew] reads a conflict as lease loss.
+//
+// A 409 is therefore retried, bounded, and only after re-reading: the fresh
+// object must still carry expectedVersion, or the conflict came from a real
+// Berth write and [ErrConflict] stands. Re-applying onto the fresh object also
+// preserves whatever external metadata the interleaved writer added. The
+// version predicate is never relaxed and never compared by fencing token, so a
+// genuine racing write — reclaim, release, or a concurrent renewal — still
+// wins exactly as it did before.
 func (s *K8sLeaseStore) Put(ctx context.Context, expectedVersion int64, rec *Record) error {
 	if rec == nil {
 		return ErrConflict
@@ -131,24 +154,33 @@ func (s *K8sLeaseStore) Put(ctx context.Context, expectedVersion int64, rec *Rec
 		return nil
 	}
 
-	cur, err := leases.Get(ctx, k8sLeaseName(rec.Key), metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
+	for range maxPutUpdateAttempts {
+		// Checked per attempt rather than left to the client: a caller that
+		// gave up must not have its write retried, and not every client
+		// honours cancellation on the wire.
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("k8s lease store: put %s: %w", rec.Key, err)
+		}
+		cur, err := leases.Get(ctx, k8sLeaseName(rec.Key), metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return ErrConflict
+			}
+			return fmt.Errorf("k8s lease store: get %s for put: %w", rec.Key, err)
+		}
+		if versionFromLease(cur) != expectedVersion {
 			return ErrConflict
 		}
-		return fmt.Errorf("k8s lease store: get %s for put: %w", rec.Key, err)
-	}
-	if versionFromLease(cur) != expectedVersion {
-		return ErrConflict
-	}
-	applyRecordToLease(cur, rec, expectedVersion+1)
-	if _, err := leases.Update(ctx, cur, metav1.UpdateOptions{}); err != nil {
-		if apierrors.IsConflict(err) {
-			return ErrConflict
+		applyRecordToLease(cur, rec, expectedVersion+1)
+		if _, err := leases.Update(ctx, cur, metav1.UpdateOptions{}); err == nil {
+			return nil
+		} else if !apierrors.IsConflict(err) {
+			return fmt.Errorf("k8s lease store: update %s: %w", rec.Key, err)
 		}
-		return fmt.Errorf("k8s lease store: update %s: %w", rec.Key, err)
 	}
-	return nil
+	// Budget exhausted against a persistently contended object. The caller
+	// must re-read and decide for itself; a conflict keeps that safe.
+	return ErrConflict
 }
 
 // k8sLeaseName encodes a Berth Key as a coordination.k8s.io Lease name. The

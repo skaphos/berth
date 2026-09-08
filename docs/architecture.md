@@ -191,6 +191,18 @@ racing a standby's reclaim loses deterministically, whichever order the
 writes arrive in. The fencing token is a domain value, not the concurrency
 predicate.
 
+The record version is also the *whole* predicate. Backends layer their own
+concurrency token underneath it — Kubernetes `metadata.resourceVersion`, an
+SQL row version — and those move for writes that have nothing to do with lease
+ownership, such as a policy controller labelling a `Lease` object. A backend
+must resolve those collisions internally (re-read, revalidate the expected
+record version, retry within a bounded budget) and report a conflict only for a
+genuine version change or an exhausted budget. Surfacing them directly would
+cost a healthy holder its lease, because renewal reads any conflict as lease
+loss. When a renewal does lose, the API server reports the holder, fencing
+token, and expiry read *after* the conflict, so the response names the writer
+that actually won the key rather than the one that held it beforehand.
+
 TTL expiry is enforced lazily during acquire and renew. A background
 `TTLEnforcer` sweeps expired records into tombstones after a grace window,
 reclaiming the holder/TTL state a never-reacquired key would otherwise keep
