@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,11 +22,11 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-// newCountingClient wraps a fake client and counts Update calls against
-// unstructured targets (i.e. applyAction's writes). Lease status writes go
-// through Status().Update and finalizer writes use a typed *BerthLease, so
-// neither is counted.
-func newCountingClient(t *testing.T, scheme *runtime.Scheme, targetUpdates *int, objs ...ctrlclient.Object) ctrlclient.WithWatch {
+// newCountingClient wraps a fake client and counts writes (Patch or Update)
+// against unstructured targets (i.e. applyAction's writes). Lease status
+// writes go through Status().Update and finalizer writes use a typed
+// *BerthLease, so neither is counted.
+func newCountingClient(t *testing.T, scheme *runtime.Scheme, targetWrites *int, objs ...ctrlclient.Object) ctrlclient.WithWatch {
 	t.Helper()
 	return fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -34,12 +35,86 @@ func newCountingClient(t *testing.T, scheme *runtime.Scheme, targetUpdates *int,
 		WithInterceptorFuncs(interceptor.Funcs{
 			Update: func(ctx context.Context, cl ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.UpdateOption) error {
 				if _, ok := obj.(*unstructured.Unstructured); ok {
-					*targetUpdates++
+					*targetWrites++
 				}
 				return cl.Update(ctx, obj, opts...)
 			},
+			Patch: func(ctx context.Context, cl ctrlclient.WithWatch, obj ctrlclient.Object, patch ctrlclient.Patch, opts ...ctrlclient.PatchOption) error {
+				if _, ok := obj.(*unstructured.Unstructured); ok {
+					*targetWrites++
+				}
+				return cl.Patch(ctx, obj, patch, opts...)
+			},
 		}).
 		Build()
+}
+
+// TestApplyActionPatchesWithOptimisticLockAndFieldOwner covers #105: the
+// target write must be a merge patch of only the managed fields, attributed to
+// the berth-operator field manager, and carrying the observed resourceVersion
+// so the stop fence can invalidate it. It must never be a full-object Update.
+func TestApplyActionPatchesWithOptimisticLockAndFieldOwner(t *testing.T) {
+	t.Parallel()
+	scheme := newScheme(t)
+	type patchRecord struct {
+		typ   types.PatchType
+		data  string
+		owner string
+	}
+	var updates int
+	var patches []patchRecord
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(newDeployment(0)).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, cl ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.UpdateOption) error {
+				if _, ok := obj.(*unstructured.Unstructured); ok {
+					updates++
+				}
+				return cl.Update(ctx, obj, opts...)
+			},
+			Patch: func(ctx context.Context, cl ctrlclient.WithWatch, obj ctrlclient.Object, patch ctrlclient.Patch, opts ...ctrlclient.PatchOption) error {
+				if _, ok := obj.(*unstructured.Unstructured); ok {
+					data, err := patch.Data(obj)
+					if err != nil {
+						return err
+					}
+					po := &ctrlclient.PatchOptions{}
+					po.ApplyOptions(opts)
+					patches = append(patches, patchRecord{typ: patch.Type(), data: string(data), owner: po.FieldManager})
+				}
+				return cl.Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		Build()
+
+	err := applyAction(context.Background(), c, "ns", deploymentTarget(),
+		&berthv1alpha1.LeaseAction{Scale: &berthv1alpha1.ScaleAction{Replicas: 3}})
+	if err != nil {
+		t.Fatalf("applyAction: %v", err)
+	}
+	if updates != 0 {
+		t.Fatalf("target Update count = %d, want 0 (writes must be patches)", updates)
+	}
+	if len(patches) != 1 {
+		t.Fatalf("target Patch count = %d, want 1", len(patches))
+	}
+	p := patches[0]
+	if p.typ != types.MergePatchType {
+		t.Errorf("patch type = %q, want %q", p.typ, types.MergePatchType)
+	}
+	if p.owner != targetFieldOwner {
+		t.Errorf("field manager = %q, want %q", p.owner, targetFieldOwner)
+	}
+	if !strings.Contains(p.data, `"resourceVersion"`) {
+		t.Errorf("patch lacks the optimistic-lock resourceVersion: %s", p.data)
+	}
+	if !strings.Contains(p.data, `"replicas":3`) {
+		t.Errorf("patch lacks the replica change: %s", p.data)
+	}
+	if strings.Contains(p.data, `"template"`) || strings.Contains(p.data, `"selector"`) {
+		t.Errorf("patch carries unmanaged fields: %s", p.data)
+	}
 }
 
 func newCronJob(name string, suspend *bool) *batchv1.CronJob {

@@ -71,11 +71,11 @@ func TestFailedStopRetainsUnhealthyOwnership(t *testing.T) {
 			base := testClient(t, l, newDeployment(3))
 			stopErr := errors.New("target update denied")
 			fail := true
-			c := interceptor.NewClient(base, interceptor.Funcs{Update: func(ctx context.Context, c ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.UpdateOption) error {
+			c := interceptor.NewClient(base, interceptor.Funcs{Patch: func(ctx context.Context, c ctrlclient.WithWatch, obj ctrlclient.Object, patch ctrlclient.Patch, opts ...ctrlclient.PatchOption) error {
 				if fail && obj.GetObjectKind().GroupVersionKind().Kind == "Deployment" {
 					return stopErr
 				}
-				return c.Update(ctx, obj, opts...)
+				return c.Patch(ctx, obj, patch, opts...)
 			}})
 			lc := &fakeLeaseClient{acquireResult: berthclient.AcquireResult{Holder: "cluster-west"}}
 			r := testReconciler(c, lc)
@@ -404,7 +404,7 @@ func TestStoppingFencesDelayedTargetActivation(t *testing.T) {
 	l := heldLease()
 	base := testClient(t, l, newDeployment(0))
 	started, proceed := make(chan struct{}), make(chan struct{})
-	c := interceptor.NewClient(base, interceptor.Funcs{Update: func(ctx context.Context, c ctrlclient.WithWatch, obj ctrlclient.Object, opts ...ctrlclient.UpdateOption) error {
+	c := interceptor.NewClient(base, interceptor.Funcs{Patch: func(ctx context.Context, c ctrlclient.WithWatch, obj ctrlclient.Object, patch ctrlclient.Patch, opts ...ctrlclient.PatchOption) error {
 		if u, ok := obj.(*unstructured.Unstructured); ok {
 			n, _, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
 			if n > 0 {
@@ -412,7 +412,7 @@ func TestStoppingFencesDelayedTargetActivation(t *testing.T) {
 				<-proceed
 			}
 		}
-		return c.Update(ctx, obj, opts...)
+		return c.Patch(ctx, obj, patch, opts...)
 	}})
 	result := make(chan error, 1)
 	go func() {

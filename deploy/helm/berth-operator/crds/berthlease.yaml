@@ -46,9 +46,9 @@ spec:
                 properties:
                   scale:
                     description: |-
-                      Scale, when non-nil, sets the replica count on the target workload's
-                      scale subresource. Applies to workload kinds that expose a scale
-                      subresource, such as Deployment, StatefulSet, and ReplicaSet.
+                      Scale, when non-nil, sets spec.replicas on the target workload with a
+                      version-guarded merge patch. Applies to workload kinds that carry a
+                      spec.replicas field, such as Deployment, StatefulSet, and ReplicaSet.
                     properties:
                       replicas:
                         description: |-
@@ -93,9 +93,9 @@ spec:
                 properties:
                   scale:
                     description: |-
-                      Scale, when non-nil, sets the replica count on the target workload's
-                      scale subresource. Applies to workload kinds that expose a scale
-                      subresource, such as Deployment, StatefulSet, and ReplicaSet.
+                      Scale, when non-nil, sets spec.replicas on the target workload with a
+                      version-guarded merge patch. Applies to workload kinds that carry a
+                      spec.replicas field, such as Deployment, StatefulSet, and ReplicaSet.
                     properties:
                       replicas:
                         description: |-

@@ -249,6 +249,17 @@ Held leases converge targets at their heartbeat cadence, skipping unchanged
 activation writes. Stopping writes a target version fence even when already
 scaled down, invalidating activation updates that may still be in flight.
 
+Every target write is a JSON merge patch of only the managed fields
+(`spec.replicas`, `spec.suspend`, and the stop-fence annotation), attributed to
+the `berth-operator` field manager and carrying the resourceVersion observed
+when the target was read. That optimistic lock is deliberate: the fence works
+because a stale activation fails with a conflict instead of resurrecting a
+stopped workload. The trade is that an unrelated writer such as a
+HorizontalPodAutoscaler touching the target at the same instant also produces a
+conflict, which the reconciler retries on its next requeue. The operator does
+not use the scale subresource, so its RBAC needs only read verbs and `patch` on
+the target kinds.
+
 Managed mode additionally watches Pods and Jobs to authorize new gated Pods and
 clean up inert late creates after lease deletion. Security-sensitive ownership,
 ancestry and Pod reads use a direct API client. Status updates use resourceVersion

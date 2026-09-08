@@ -68,9 +68,9 @@ type LeaseAction struct {
 	// workload kinds that expose a spec.suspend field, such as CronJob.
 	Suspend *bool `json:"suspend,omitempty"`
 
-	// Scale, when non-nil, sets the replica count on the target workload's
-	// scale subresource. Applies to workload kinds that expose a scale
-	// subresource, such as Deployment, StatefulSet, and ReplicaSet.
+	// Scale, when non-nil, sets spec.replicas on the target workload with a
+	// version-guarded merge patch. Applies to workload kinds that carry a
+	// spec.replicas field, such as Deployment, StatefulSet, and ReplicaSet.
 	Scale *ScaleAction `json:"scale,omitempty"`
 }
 
