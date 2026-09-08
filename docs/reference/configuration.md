@@ -89,7 +89,7 @@ ping.
 | `--leader-election-lease-duration` | `15s` | Duration non-leaders wait before force-acquiring leadership. |
 | `--leader-election-renew-deadline` | `10s` | Duration the leader retries refreshing its lease before giving up. |
 | `--leader-election-retry-period` | `2s` | Interval between leader-election attempts. |
-| `--berth-api-server` | empty | API server base URL. Required. Must be `https://` with a host: the bearer token is attached to every helper request, so a plaintext URL would send it in cleartext. Rejected at operator startup. |
+| `--berth-api-server` | empty | API server base URL. Required. Must be `https://` with a real hostname: the operator and every injected helper attach a bearer token to each request, so a plaintext URL would send it in cleartext. Rejected when the operator parses its flags, so the check applies whether or not the injection webhook is enabled. |
 | `--berth-api-key` | empty | Static bearer token. Mutually exclusive with `--berth-api-key-file`. |
 | `--berth-api-key-file` | empty | File containing bearer token. Re-read with a short cache for sidecar rotation. |
 | `--cluster-id` | empty | Cluster-distinct holder identity. Overrides `spec.holderIdentity` when set. |

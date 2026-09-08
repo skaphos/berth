@@ -28,6 +28,30 @@ func TestParseConfigRequiresAPIServer(t *testing.T) {
 	}
 }
 
+// TestParseConfigRequiresTLSAPIServer covers issue #115 at the operator's own
+// boundary. The operator builds a credentialed lease client from this URL
+// whether or not the injection webhook is enabled, so the check cannot live
+// in the webhook's config validation alone — gating it there would leave the
+// operator's own traffic sending its bearer token in cleartext.
+func TestParseConfigRequiresTLSAPIServer(t *testing.T) {
+	for _, raw := range []string{
+		"http://berth.example.com:8443",
+		"berth.example.com:8443",
+		"https://",
+		"https://:8443",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := parseConfig(newTestFlagSet(), []string{"--berth-api-server=" + raw}); err == nil {
+				t.Fatalf("parseConfig with --berth-api-server=%q: want error, got nil", raw)
+			}
+		})
+	}
+	// The webhook stays disabled here: the rejection must not depend on it.
+	if _, err := parseConfig(newTestFlagSet(), []string{"--berth-api-server=https://berth.example.com:8443"}); err != nil {
+		t.Fatalf("a well-formed https URL must be accepted: %v", err)
+	}
+}
+
 func TestParseConfigRejectsMutuallyExclusiveKeys(t *testing.T) {
 	_, err := parseConfig(newTestFlagSet(), []string{
 		"--berth-api-server=https://berth.example.com:8443",

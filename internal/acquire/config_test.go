@@ -78,6 +78,9 @@ func TestValidate(t *testing.T) {
 		{"schemeless api server", func(c *Config) { c.APIServer = "berth.example:8443" }, true},
 		{"non-http scheme api server", func(c *Config) { c.APIServer = "ftp://berth.example" }, true},
 		{"api server without host", func(c *Config) { c.APIServer = "https://" }, true},
+		// url.Parse reads this as Host ":8443" with an empty hostname, so a
+		// Host check alone would let a URL through that no request can reach.
+		{"api server with port but no host", func(c *Config) { c.APIServer = "https://:8443" }, true},
 		{"unparseable api server", func(c *Config) { c.APIServer = "https://berth.example:%zz" }, true},
 		{"key and key file", func(c *Config) { c.APIKey = "k"; c.APIKeyFile = "/f" }, true},
 		{"signal without target", func(c *Config) { c.Enforce = EnforceSignal }, true},

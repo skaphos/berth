@@ -364,6 +364,7 @@ func TestInjectorConfigValidate(t *testing.T) {
 		{"plaintext api server", func(c *InjectorConfig) { c.APIServer = "http://berth.example:8443" }, true},
 		{"schemeless api server", func(c *InjectorConfig) { c.APIServer = "berth.example:8443" }, true},
 		{"api server without host", func(c *InjectorConfig) { c.APIServer = "https://" }, true},
+		{"api server with port but no host", func(c *InjectorConfig) { c.APIServer = "https://:8443" }, true},
 		{"tls api server", func(c *InjectorConfig) { c.APIServer = "https://berth.example:8443" }, false},
 		// Empty stays legal: the URL may come from the pod environment.
 		{"absent api server", func(c *InjectorConfig) { c.APIServer = "" }, false},

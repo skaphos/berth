@@ -225,7 +225,10 @@ func ValidateAPIServerURL(raw string) error {
 		return fmt.Errorf("api server URL %q must use https, got scheme %s; "+
 			"the bearer token is attached to every request, so a plaintext endpoint would send it in cleartext", raw, scheme)
 	}
-	if u.Host == "" {
+	// Hostname(), not Host: url.Parse reads "https://:8443" as Host ":8443"
+	// with an empty hostname, so a Host check alone accepts a port-only URL
+	// that no request can ever reach.
+	if u.Hostname() == "" {
 		return fmt.Errorf("api server URL %q must include a host", raw)
 	}
 	return nil
