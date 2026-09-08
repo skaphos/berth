@@ -196,11 +196,7 @@ func (m *Manager) Renew(ctx context.Context, key Key, holder string, token int32
 	next.TTL = ttl
 	if err := m.store.Put(ctx, cur.Version, &next); err != nil {
 		if errors.Is(err, ErrConflict) {
-			return AcquireResult{
-				Acquired:     false,
-				Holder:       cur.Holder,
-				FencingToken: cur.FencingToken,
-			}, nil
+			return m.renewalLost(ctx, key, cur), nil
 		}
 		return AcquireResult{}, fmt.Errorf("renew: put: %w", err)
 	}
@@ -211,6 +207,30 @@ func (m *Manager) Renew(ctx context.Context, key Key, holder string, token int32
 		ExpiresAt:    next.ExpiresAt(),
 		AcquiredAt:   next.AcquiredAt,
 	}, nil
+}
+
+// renewalLost builds the not-acquired result for a renewal that lost its
+// compare-and-swap. The read taken before the write is stale by definition —
+// some other writer won the key — so re-read to report the winner rather than
+// the holder that was there beforehand, and populate ExpiresAt/AcquiredAt like
+// every other not-acquired path so callers rendering "held by X until Y" get
+// real times instead of zero values.
+//
+// A failed or absent re-read falls back to the stale record: the outcome is
+// lease loss either way, and the previous holder is more useful to report than
+// nothing. Errors are deliberately swallowed for that reason.
+func (m *Manager) renewalLost(ctx context.Context, key Key, stale *Record) AcquireResult {
+	cur, err := m.store.Get(ctx, key)
+	if err != nil || cur == nil {
+		cur = stale
+	}
+	return AcquireResult{
+		Acquired:     false,
+		Holder:       cur.Holder,
+		FencingToken: cur.FencingToken,
+		ExpiresAt:    cur.ExpiresAt(),
+		AcquiredAt:   cur.AcquiredAt,
+	}
 }
 
 // Release voluntarily releases a lease held by holder under fencing token.

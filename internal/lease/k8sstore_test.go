@@ -277,11 +277,13 @@ func TestK8sStoreEncodesNameAndAnnotates(t *testing.T) {
 	}
 }
 
-// TestK8sStoreSurvivesAlreadyExistsRace verifies that two concurrent
-// creators don't both succeed. The fake clientset's Create is the only
-// path that natively enforces uniqueness, so this test exercises the race
-// at the Create boundary.
-func TestK8sStoreSurvivesAlreadyExistsRace(t *testing.T) {
+// TestK8sStorePutCreateSurfacesAlreadyExists verifies that a create losing to
+// an existing object is reported as ErrConflict. The two creates here are
+// sequential: the fake clientset enforces uniqueness at Create, but it does
+// not implement resourceVersion concurrency, so it cannot establish what a
+// real apiserver does under simultaneous writers. That guarantee is covered
+// by TestK8sConcurrentCASAPIStorage against envtest.
+func TestK8sStorePutCreateSurfacesAlreadyExists(t *testing.T) {
 	t.Parallel()
 
 	store, _ := newK8sStore(t)
@@ -291,7 +293,7 @@ func TestK8sStoreSurvivesAlreadyExistsRace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Simulate a second creator. AlreadyExists must surface as ErrConflict.
+	// A second creator for the same key. AlreadyExists must surface as ErrConflict.
 	err := store.Put(context.Background(), 0, rec)
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("err = %v, want ErrConflict (or wrapping AlreadyExists)", err)
