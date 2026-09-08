@@ -1271,12 +1271,12 @@ for each transition:</p>
 <tbody>
 <tr>
 <td><code>scale</code></td>
-<td>Patches the target's scale subresource (replica count).</td>
+<td>Sets the target's <code>spec.replicas</code> with a version-guarded merge patch.</td>
 <td><code>Deployment</code>, <code>StatefulSet</code>, <code>ReplicaSet</code></td>
 </tr>
 <tr>
 <td><code>suspend</code></td>
-<td>Patches the target's <code>spec.suspend</code>.</td>
+<td>Sets the target's <code>spec.suspend</code> the same way.</td>
 <td><code>CronJob</code></td>
 </tr>
 </tbody>

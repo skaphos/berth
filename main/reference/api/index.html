@@ -1392,7 +1392,7 @@ be set on a single action.</p>
 </tr>
 <tr>
 <td><code>scale</code> <em><a href="#scaleaction">ScaleAction</a></em></td>
-<td>Scale, when non-nil, sets the replica count on the target workload's<br />scale subresource. Applies to workload kinds that expose a scale<br />subresource, such as Deployment, StatefulSet, and ReplicaSet.</td>
+<td>Scale, when non-nil, sets spec.replicas on the target workload with a<br />version-guarded merge patch. Applies to workload kinds that carry a<br />spec.replicas field, such as Deployment, StatefulSet, and ReplicaSet.</td>
 <td></td>
 <td></td>
 </tr>
