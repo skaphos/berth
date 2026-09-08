@@ -467,6 +467,7 @@ func TestLoopConfigValidate(t *testing.T) {
 		"zero min refresh":            func(lc *loopConfig) { lc.minRefresh = 0 },
 		"max retry below min refresh": func(lc *loopConfig) { lc.maxRetryInterval = time.Second },
 		"negative fetch timeout":      func(lc *loopConfig) { lc.fetchTimeout = -time.Second },
+		"negative refresh skew":       func(lc *loopConfig) { lc.refreshSkew = -time.Second },
 	} {
 		lc := valid
 		mutate(&lc)

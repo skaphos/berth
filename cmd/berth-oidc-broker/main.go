@@ -62,6 +62,9 @@ type loopConfig struct {
 }
 
 func (lc loopConfig) validate() error {
+	if lc.refreshSkew < 0 {
+		return errors.New("--refresh-skew must not be negative")
+	}
 	if lc.fetchTimeout <= 0 {
 		return errors.New("--fetch-timeout must be positive")
 	}
@@ -197,6 +200,11 @@ func runLoop(ctx context.Context, cfg *clientcredentials.Config, lc loopConfig) 
 			}
 		}
 		if err != nil {
+			if ctx.Err() != nil {
+				// Shutdown raced the fetch or write; that is a clean exit,
+				// not a refresh failure worth logging.
+				return 0
+			}
 			slog.Error("token refresh failed; keeping the last written token", "error", err, "retry_in", retry)
 			if !sleep(ctx, retry) {
 				return 0
