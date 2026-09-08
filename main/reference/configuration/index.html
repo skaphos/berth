@@ -1249,6 +1249,11 @@ ping.</p>
 <td><code>berth-acquire</code> image stamped into opted-in Pods. Required when the webhook is enabled.</td>
 </tr>
 <tr>
+<td><code>--injection-helper-image-pull-policy</code></td>
+<td><code>IfNotPresent</code></td>
+<td>Pull policy for both injected helper containers: <code>Always</code>, <code>IfNotPresent</code>, or <code>Never</code>.</td>
+</tr>
+<tr>
 <td><code>--injection-control-plane-namespaces</code></td>
 <td><code>berth-system</code></td>
 <td>Comma-separated namespaces the webhook never mutates.</td>
@@ -1473,6 +1478,16 @@ a repository variable or secret.</p>
 <td><code>berth-operator</code></td>
 <td><code>clusterID</code></td>
 <td>Required for cross-cluster singleton deployments. Must differ per cluster.</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td><code>metrics.bindAddress</code></td>
+<td><code>:&lt;port&gt;</code>, <code>&lt;host&gt;:&lt;port&gt;</code>, <code>[&lt;ipv6&gt;]:&lt;port&gt;</code>, a bare <code>&lt;port&gt;</code> (string or integer), or <code>0</code> / <code>""</code> to disable the listener, which also omits the metrics container port. Ports are normalized to a decimal integer. Anything else, including URLs and unbracketed IPv6, fails rendering.</td>
+</tr>
+<tr>
+<td><code>berth-operator</code></td>
+<td>CRDs</td>
+<td>The BerthLease CRD ships in <code>crds/</code>; Helm installs it on first install and never upgrades it. Pass <code>--skip-crds</code> to manage it out-of-band. There is no chart value for this.</td>
 </tr>
 <tr>
 <td><code>berth-operator</code></td>
