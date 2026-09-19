@@ -197,14 +197,14 @@ inputs; it does not migrate deployed databases or publish application images.
 | Component | Baseline |
 | --- | --- |
 | Go | 1.27.1 |
-| Kubernetes libraries / controller-runtime | 0.37.0 / 0.25.0 |
+| Kubernetes libraries / controller-runtime | 0.37.0 / 0.25.1 |
 | controller-gen / staticcheck / golangci-lint | 0.22.0 / 0.8.1 / 2.13.2 |
-| govulncheck / goimports | 1.7.0 / 0.49.0 |
+| govulncheck / goimports | 1.8.0 / 0.50.0 |
 | CI Python / stable Ubuntu runner | 3.14.7 / 24.04 |
-| Helm / kind / Kubernetes test nodes | 4.2.4 / 0.33.0 / 1.37.0 |
-| cert-manager / kube-prometheus-stack test infrastructure | 1.21.1 / 90.0.0 |
+| Helm / kind / Kubernetes test nodes | 4.3.0 / 0.33.0 / 1.37.0 |
+| cert-manager / kube-prometheus-stack test infrastructure | 1.21.2 / 90.0.0 |
 | Disposable load-test PostgreSQL | 18.6 Alpine |
-| Buildx / BuildKit / cosign / Syft | 0.37.0 / 0.33.0 / 3.1.3 / 1.51.1 |
+| Buildx / BuildKit / cosign / Syft | 0.37.1 / 0.33.0 / 3.1.3 / 1.52.0 |
 
 Action references and container images remain pinned to immutable commits and
 image digests. Recheck publisher releases when refreshing; release-please owns
