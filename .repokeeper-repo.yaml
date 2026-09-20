@@ -1,0 +1,11 @@
+apiVersion: repokeeper/v1
+kind: RepoMetadata
+repo_id: github.com/skaphos/berth
+name: Berth
+labels:
+    kind: tool
+    org: skaphos
+    role: distributed-leases
+    tool: berth
+entrypoints:
+    readme: README.md
