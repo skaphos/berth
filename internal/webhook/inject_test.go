@@ -358,6 +358,11 @@ func TestInjectInvalidConfig(t *testing.T) {
 		{"negative ttl", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "-5"}},
 		{"negative heartbeat", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "30", AnnHeartbeatSeconds: "-5"}},
 		{"heartbeat >= ttl", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "10", AnnHeartbeatSeconds: "10"}},
+		// Issue #114: the annotation path enforces the same half-TTL margin as
+		// acquire.Config.Validate, so an injected pod cannot be admitted with a
+		// configuration the helper would then reject.
+		{"heartbeat just under ttl", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "30", AnnHeartbeatSeconds: "29"}},
+		{"heartbeat just over half ttl", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "30", AnnHeartbeatSeconds: "16"}},
 		{"bad release-on-shutdown", map[string]string{AnnLeaseName: "x", AnnReleaseOnShutdown: "maybe"}},
 	}
 	for _, tt := range tests {
@@ -367,6 +372,16 @@ func TestInjectInvalidConfig(t *testing.T) {
 				t.Fatalf("expected validation error for %s", tt.name)
 			}
 		})
+	}
+}
+
+// TestInjectAcceptsHeartbeatAtHalfTTL pins the other side of the issue #114
+// boundary: the half-TTL bound is inclusive, so the largest safe heartbeat is
+// still admitted rather than the rule quietly costing a valid configuration.
+func TestInjectAcceptsHeartbeatAtHalfTTL(t *testing.T) {
+	pod := optInPod("prod", map[string]string{AnnLeaseName: "x", AnnTTLSeconds: "30", AnnHeartbeatSeconds: "15"})
+	if err := testInjector().Default(context.Background(), pod); err != nil {
+		t.Fatalf("heartbeat at exactly half the ttl must be admitted: %v", err)
 	}
 }
 

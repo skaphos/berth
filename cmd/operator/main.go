@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -332,6 +333,14 @@ func parseConfig(fs *flag.FlagSet, args []string) (*operatorConfig, error) {
 
 	if apiServerURL == "" {
 		return nil, errors.New("--berth-api-server is required")
+	}
+	// Checked here rather than only in the injection webhook's config: the
+	// operator's own lease client uses this URL with the same credentials
+	// attached, and it is built whether or not the webhook is enabled. Gating
+	// the check on --enable-webhook would leave the operator's own traffic
+	// sending its bearer token in cleartext.
+	if err := acquire.ValidateAPIServerURL(apiServerURL); err != nil {
+		return nil, fmt.Errorf("--berth-api-server: %w", err)
 	}
 	if apiKey != "" && apiKeyFile != "" {
 		return nil, errors.New("--berth-api-key and --berth-api-key-file are mutually exclusive")

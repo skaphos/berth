@@ -89,7 +89,7 @@ ping.
 | `--leader-election-lease-duration` | `15s` | Duration non-leaders wait before force-acquiring leadership. |
 | `--leader-election-renew-deadline` | `10s` | Duration the leader retries refreshing its lease before giving up. |
 | `--leader-election-retry-period` | `2s` | Interval between leader-election attempts. |
-| `--berth-api-server` | empty | API server base URL. Required. |
+| `--berth-api-server` | empty | API server base URL. Required. Must be `https://` with a real hostname: the operator and every injected helper attach a bearer token to each request, so a plaintext URL would send it in cleartext. Rejected when the operator parses its flags, so the check applies whether or not the injection webhook is enabled. |
 | `--berth-api-key` | empty | Static bearer token. Mutually exclusive with `--berth-api-key-file`. |
 | `--berth-api-key-file` | empty | File containing bearer token. Re-read with a short cache for sidecar rotation. |
 | `--cluster-id` | empty | Cluster-distinct holder identity. Overrides `spec.holderIdentity` when set. |
@@ -109,7 +109,7 @@ ping.
 | `--injection-helper-ca-bundle-file` | empty | Path the injected helpers read the API server CA from. Only needed when TLS is not satisfied by system trust. Set together with `--injection-helper-ca-bundle-configmap`. |
 | `--injection-helper-ca-bundle-configmap` | empty | ConfigMap in each opted-in workload's namespace that the webhook mounts at `--injection-helper-ca-bundle-file`. Set together with it. |
 | `--injection-helper-ca-bundle-key` | `ca.crt` | Data key within that ConfigMap holding the CA bundle. |
-| `--injection-state-dir` | `/berth` | Shared-volume mount path used by the injected init container and sidecar. Must be absolute. |
+| `--injection-state-dir` | `/berth` | Shared-volume mount path used by the injected init container and sidecar. Must be absolute, already clean (no trailing slash, `.`, or `..`), not `/`, and not a system directory such as `/etc`, `/usr`, or `/var` — the volume would hide the image's own contents there. Nested paths like `/var/lib/berth` are fine. |
 | `--injection-default-mode` | `runtime-singleton` | Default `berth.skaphos.io/mode` for Pods that omit the annotation. |
 | `--injection-default-enforce` | `probe` | Default `berth.skaphos.io/enforce` for Pods that omit the annotation. |
 | `--injection-default-ttl-seconds` | `30` | Default `berth.skaphos.io/ttl-seconds` for Pods that omit the annotation. |
