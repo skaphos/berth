@@ -189,17 +189,17 @@ tagging. For 0.4.1, follow [the upgrade instructions](releases/0.4.1.md).
 
 ## Dependency refresh baseline
 
-The September 2026 refresh requires Go 1.27.1 for both application and development
+The October 2026 refresh requires Go 1.27.2 for both application and development
 tool modules. The Docker builders use that same release. Runtime containers use
 Debian 13 distroless static images with numeric UID/GID 65532. This updates build
 inputs; it does not migrate deployed databases or publish application images.
 
 | Component | Baseline |
 | --- | --- |
-| Go | 1.27.1 |
-| Kubernetes libraries / controller-runtime | 0.37.0 / 0.25.1 |
-| controller-gen / staticcheck / golangci-lint | 0.22.0 / 0.8.1 / 2.13.2 |
-| govulncheck / goimports | 1.8.0 / 0.50.0 |
+| Go | 1.27.2 |
+| Kubernetes libraries / controller-runtime | 0.37.1 / 0.25.2 |
+| controller-gen / staticcheck / golangci-lint | 0.22.0 / 0.8.1 / 2.14.0 |
+| govulncheck / goimports | 1.8.0 / 0.51.0 |
 | CI Python / stable Ubuntu runner | 3.14.7 / 24.04 |
 | Helm / kind / Kubernetes test nodes | 4.3.0 / 0.33.0 / 1.37.0 |
 | cert-manager / kube-prometheus-stack test infrastructure | 1.21.2 / 90.0.0 |
