@@ -90,8 +90,18 @@ func (c *InjectorConfig) Validate() error {
 	// PodSpecs (or broken enforcement) for every opted-in pod. Fail fast here
 	// instead. Defaulting runs before Validate, so this only trips on an
 	// explicit bad --injection-state-dir.
-	if !path.IsAbs(c.StateDir) {
-		return fmt.Errorf("injection webhook: state-dir must be an absolute path, got %q", c.StateDir)
+	if err := validateMountableDir("state-dir", c.StateDir); err != nil {
+		return err
+	}
+	// The API server URL is stamped into every injected helper's environment.
+	// Checking it here turns an operator typo into one startup failure with a
+	// clear message, instead of a helper that fails its own validation inside
+	// each opted-in pod. Empty is allowed: the URL can come from elsewhere in
+	// the pod's environment (see the appendIf on EnvAPIServer below).
+	if c.APIServer != "" {
+		if err := acquire.ValidateAPIServerURL(c.APIServer); err != nil {
+			return fmt.Errorf("injection webhook: %w", err)
+		}
 	}
 	// An auth file path is only useful if the webhook can mount a source at it;
 	// otherwise the helper points at a path that does not exist (SKA-444).
@@ -130,6 +140,39 @@ func (c *InjectorConfig) Validate() error {
 	}
 	if c.APIKeyFile != "" && c.CABundleFile != "" && path.Dir(c.APIKeyFile) == path.Dir(c.CABundleFile) {
 		return fmt.Errorf("injection webhook: api-key and ca-bundle files must be in different directories (both %q)", path.Dir(c.APIKeyFile))
+	}
+	return nil
+}
+
+// systemMountPaths are directories whose contents the workload image needs
+// intact. StateDir becomes the mountPath of an emptyDir, so mounting it over
+// one of these hides the image's own files in every opted-in pod — /etc would
+// take DNS and user resolution with it, /usr the binaries. Exact matches only:
+// /var/lib/berth is a perfectly good state dir, /var is not.
+var systemMountPaths = map[string]struct{}{
+	"/bin": {}, "/boot": {}, "/dev": {}, "/etc": {}, "/lib": {}, "/lib64": {},
+	"/proc": {}, "/root": {}, "/sbin": {}, "/sys": {}, "/usr": {}, "/var": {},
+}
+
+// validateMountableDir checks that p is usable as the shared state volume's
+// mountPath. It must be absolute and already clean — a trailing slash or a "."
+// or ".." segment would make the mountPath diverge from the marker paths built
+// by joining onto it — must not be the container root, and must not be a
+// system directory the image depends on. StateDir is operator-set rather than
+// attacker-reachable, but a bad value lands in every opted-in pod, so it earns
+// the same scrutiny as the auth-file paths below.
+func validateMountableDir(field, p string) error {
+	if !path.IsAbs(p) {
+		return fmt.Errorf("injection webhook: %s must be an absolute path, got %q", field, p)
+	}
+	if path.Clean(p) != p {
+		return fmt.Errorf("injection webhook: %s must be a clean path with no trailing slash, %q, or %q segments, got %q", field, ".", "..", p)
+	}
+	if p == "/" {
+		return fmt.Errorf("injection webhook: %s must not be the container root %q", field, p)
+	}
+	if _, reserved := systemMountPaths[p]; reserved {
+		return fmt.Errorf("injection webhook: %s must not be the system directory %q; mounting the shared state volume there hides the image's own contents in every opted-in pod", field, p)
 	}
 	return nil
 }
@@ -496,8 +539,13 @@ func (r resolved) validate() error {
 	if r.heartbeatSeconds < 0 {
 		return fmt.Errorf("%s must not be negative", AnnHeartbeatSeconds)
 	}
-	if r.heartbeatSeconds > 0 && r.heartbeatSeconds >= r.ttlSeconds {
-		return fmt.Errorf("%s (%d) must be less than %s (%d)", AnnHeartbeatSeconds, r.heartbeatSeconds, AnnTTLSeconds, r.ttlSeconds)
+	// Mirrors acquire.Config.Validate: at most half the TTL, so one renewal
+	// slower than a heartbeat interval still cannot expire the lease. Compare
+	// by halving the TTL rather than doubling the heartbeat so a large
+	// annotation value cannot overflow the comparison.
+	if r.heartbeatSeconds > 0 && r.heartbeatSeconds > r.ttlSeconds/2 {
+		return fmt.Errorf("%s (%d) must be at most half of %s (%d); a heartbeat nearer the ttl leaves no margin to retry a slow renewal",
+			AnnHeartbeatSeconds, r.heartbeatSeconds, AnnTTLSeconds, r.ttlSeconds)
 	}
 	if r.enforceGrace < 0 {
 		return fmt.Errorf("%s must not be negative", AnnEnforceGraceSeconds)

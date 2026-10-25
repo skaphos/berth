@@ -215,9 +215,11 @@ func TestSuccessfulRenewRefreshesTheMarker(t *testing.T) {
 }
 
 // The safety margin behind the one-TTL bound is structural, not a matter of
-// choosing good defaults: validation refuses a heartbeat that is not
-// strictly shorter than the TTL, so a correctly-configured holder cannot
-// age its own marker past the bound.
+// choosing good defaults: validation refuses a heartbeat above half the TTL,
+// so a correctly-configured holder cannot age its own marker past the bound.
+// Half rather than merely "shorter" (issue #114) — at heartbeat = ttl-1s the
+// margin is one second, and any renewal slower than that expires the lease
+// server-side, turning a hiccup into definitive loss.
 func TestValidationGuaranteesHeartbeatMarginUnderTTL(t *testing.T) {
 	base := func(hb time.Duration) *Config {
 		return &Config{
@@ -233,14 +235,14 @@ func TestValidationGuaranteesHeartbeatMarginUnderTTL(t *testing.T) {
 		}
 	}
 
-	for _, hb := range []time.Duration{10 * time.Second, 29 * time.Second} {
+	for _, hb := range []time.Duration{10 * time.Second, 15 * time.Second} {
 		if err := base(hb).Validate(); err != nil {
-			t.Errorf("heartbeat %s under a 30s ttl must be accepted: %v", hb, err)
+			t.Errorf("heartbeat %s within half a 30s ttl must be accepted: %v", hb, err)
 		}
 	}
-	for _, hb := range []time.Duration{30 * time.Second, time.Minute} {
+	for _, hb := range []time.Duration{16 * time.Second, 29 * time.Second, 30 * time.Second, time.Minute} {
 		if err := base(hb).Validate(); err == nil {
-			t.Errorf("heartbeat %s at or above the 30s ttl must be rejected; "+
+			t.Errorf("heartbeat %s above half the 30s ttl must be rejected; "+
 				"the one-TTL freshness bound relies on this margin", hb)
 		}
 	}

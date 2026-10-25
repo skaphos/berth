@@ -81,7 +81,13 @@ Two durations govern a lease's lifetime:
   becomes available to others.
 - **Heartbeat** (`heartbeatIntervalSeconds`) — how often the holder renews. The
   heartbeat must be comfortably shorter than the TTL so a renewal or two can be
-  lost without losing the lease.
+  lost without losing the lease. "Comfortably" is enforced, not advisory: a
+  heartbeat above **half the TTL** is rejected, both by the injection webhook at
+  admission and by the helper's own validation. At `heartbeat = ttl - 1s` the
+  margin to server-side expiry is one second, so any renewal slower than that
+  leaves the server treating the lease as expired — a transient hiccup becomes
+  definitive loss, and enforcement or handover fires. Unset, the heartbeat
+  defaults to `ttl/3`.
 
 A standby that does *not* hold the lease keeps retrying acquisition on an
 interval of **`min(heartbeat, ttl/3)`**. So worst-case failover time is bounded
