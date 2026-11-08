@@ -32,7 +32,7 @@ jobs:
           version: v4.3.0
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.14.7"
 
@@ -61,7 +61,7 @@ jobs:
           version: v4.3.0
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.14.7"
 
@@ -79,7 +79,7 @@ jobs:
           docker build -f Dockerfile.broker -t berth-oidc-broker:ci .
 
       - name: Create kind cluster
-        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa  # v1.15.1
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376  # v1.15.2
         with:
           wait: 120s
           version: v0.33.0
